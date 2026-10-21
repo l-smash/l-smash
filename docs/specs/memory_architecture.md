@@ -10,7 +10,7 @@ Media container multiplexing and demultiplexing workloads exhibit two fundamenta
    - Store hundreds of thousands to millions of fixed-size, homogeneous value records (4 to 32 bytes each).
    - Previously, storing these tables in doubly-linked node lists (`lsmash_entry_list_t`) required **two separate heap allocations per entry** (`sizeof(lsmash_entry_t) == 24` bytes for the node plus `malloc(sizeof(entry))` for the payload, plus allocator metadata overhead) and degraded random-access lookup to $O(N)$ pointer chasing whenever access patterns deviated from strictly sequential traversal.
 
-To address both workloads cleanly in standard C99, L-SMASH employs a **Hybrid Container Architecture** paired with a built-in **C99 Debug Memory Auditor (`LSMASH_DEBUG_ALLOC`)**.
+To address both workloads cleanly in standard C11, L-SMASH employs a **Hybrid Container Architecture** paired with a built-in **C11 Debug Memory Auditor (`LSMASH_DEBUG_ALLOC`)**.
 
 ---
 
@@ -26,7 +26,7 @@ Polymorphic Box lists and dual-ownership Box registries continue to use `lsmash_
 These lists contain a small number of polymorphic heap-allocated Box structs where each node holds an owning or non-owning `void *data` pointer to a variable-sized `isom_box_t` derivative.
 
 ### 2.2 High-Volume Paged Tables (`lsm_list_t`)
-All high-volume homogeneous value tables use the **C99 Paged Block Array (`lsm_list_t`)**:
+All high-volume homogeneous value tables use the **C11 Paged Block Array (`lsm_list_t`)**:
 
 | Subsystem | Parent Struct / Box | Field Name | Element Type | `sizeof(Element)` |
 | :--- | :--- | :--- | :--- | :--- |
@@ -56,7 +56,7 @@ Small bounded parameter lists in `codecs/` and `importer/` (such as H.264 SPS/PP
 
 ---
 
-## 3. C99 Paged Block Array (`lsm_list_t`) Specification
+## 3. C11 Paged Block Array (`lsm_list_t`) Specification
 
 ### 3.1 Data Structure (`common/list.h`)
 ```c
@@ -107,7 +107,7 @@ typedef struct
     /* Advance to next entry: */
     stts_data = (isom_stts_entry_t *)lsm_list_cursor_next( &stts_cur );
     ```
-- **Single-Loop C99 Iteration Macros**:
+- **Single-Loop Iteration Macros**:
   ```c
   #define LSM_LIST_FOR_EACH( var, list_ptr ) \
       for( uint32_t lsm_idx_##var = 0; \
@@ -141,7 +141,7 @@ When `lsmash_resize_multiple_buffers( multiple_buffer, new_buffer_size )` is cal
 
 ---
 
-## 5. C99 Debug Memory Auditor (`common/alloc.{c,h}`)
+## 5. C11 Debug Memory Auditor (`common/alloc.{c,h}`)
 
 When configured with `--enable-debug-alloc` (or compiled with `-DLSMASH_DEBUG_ALLOC`, which `make test` enables automatically), all `lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, and `lsmash_freep` calls are routed through `common/alloc.c`:
 

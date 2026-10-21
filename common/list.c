@@ -252,7 +252,7 @@ void *lsmash_list_get_entry_data
 }
 
 /*---------------------------------------------------------------------------
- * C99 Paged Block Array (lsm_list_t) Implementation
+ * C11 Paged Block Array (lsm_list_t) Implementation
  *
  * `list_ensure_page` grows only the outer pointer directory (`list->pages`)
  * geometrically while allocating each 256-element page block (`pages[p]`) once.

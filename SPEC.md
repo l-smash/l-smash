@@ -2,13 +2,13 @@
 
 ## 1. Project Identity & Design Philosophy
 
-**L-SMASH** (*Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*) is a pure C99 library (`liblsmash`) and command-line toolset (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) for reading, writing, remuxing, and inspecting **ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12)** and **QuickTime File Format (QTFF)** media containers.
+**L-SMASH** (*Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*) is a C11 library (`liblsmash`, with public header `lsmash.h` maintaining strict C99 and C++ compatibility) and command-line toolset (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) for reading, writing, remuxing, and inspecting **ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12)** and **QuickTime File Format (QTFF)** media containers.
 
 ### 1.1 Strict Compliance with International Standards
 L-SMASH is designed around strict compliance with the international standards governing each container and codec format:
 - **Strict Separation of ISOBMFF and QTFF**: Even though ISOBMFF (`mp41`, `mp42`, `isom`, `iso2`–`iso6`) and QuickTime (`qt  `) share the same ancestral box/atom framing, their semantics, sample entry layouts, channel layout descriptors, and parameter boxes differ significantly. L-SMASH never conflates QTFF-only constructs with ISOBMFF constructs, and refuses to generate non-conformant, cross-polluted container structures.
 - **No Unstandardized Extensions in Pure ISOBMFF**: Proprietary QuickTime Sound Description v1/v2 fields (`lpcm` flags, `chan` atoms, `wave` decompression atoms) are restricted to QuickTime compatibility modes (`file->qt_compatible`). Pure ISOBMFF files use standardized ISO/IEC 14496-12 and ISO/IEC 23003-5 constructs (`ipcm`, `fpcm`, `pcmC`, `chnl`, `srat`, `AudioSampleEntryV1`).
-- **Zero External Runtime Dependencies**: All container and elementary stream parsers (including H.264/AVC, H.265/HEVC, AOM AV1 OBU, SMPTE VC-1, AAC/ADTS, Xiph FLAC, AC-3/E-AC-3, DTS, and WAVE/LPCM) are self-contained in standard C99 (`common/`, `core/`, `codecs/`, `importer/`).
+- **Zero External Runtime Dependencies**: All container and elementary stream parsers (including H.264/AVC, H.265/HEVC, AOM AV1 OBU, SMPTE VC-1, AAC/ADTS, Xiph FLAC, AC-3/E-AC-3, DTS, and WAVE/LPCM) are self-contained in standard C11 (`common/`, `core/`, `codecs/`, `importer/`).
 
 ---
 
@@ -44,20 +44,17 @@ Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMO
 - `lsmash_multiple_buffers_t` (`common/multibuf.{c,h}`) manages a contiguous bank of `number_of_buffers` fixed-size buffers (`buffer_size` bytes each). When resizing via `lsmash_resize_multiple_buffers()`, buffers are re-strided cleanly: on expansion, buffers are moved in reverse index order (`number_of_buffers - 1` down to `1`) after `lsmash_realloc` and newly exposed tail bytes are zero-initialized; on shrinkage, buffers are compacted in forward index order (`1` up to `number_of_buffers - 1`) before `lsmash_realloc`.
 - All integer serialization in `common/bytes.c` uses explicit `uint64_t` casts before bit shifts $\ge 32$ bits (`lsmash_bs_get_be64`, `lsmash_bs_get_le64`) to prevent 32-bit signed integer promotion undefined behavior.
 
-### 2.4 Symbol Naming Conventions & Specification Syntax Identifiers
-
-#### Symbol Naming Conventions
-To maintain clear module boundaries without breaking external callers of `<lsmash.h>`, symbols follow a structured naming convention across three visibility scopes:
-- **Public API (`lsmash_*`)**: Exported library functions, types, and macros declared in `lsmash.h` and exposed via `liblsmash.ver`. Existing public symbol names are strictly preserved for ABI/API compatibility.
-- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_box_add_trak()`, `lsm_box_default_non_existing_trak()`, `lsm_file_check_compat_flags()`, `lsm_fragment_flush_pooled_samples()`, `lsm_timeline_get_dts()`, `lsm_read_box()`, `lsm_write_box()`, `lsm_print_set_box_printer()`, `lsm_stbl_get_sample_count()`, `lsm_sample_pool_push()`, `lsm_track_get_trak()`, `lsm_movie_check_initializer_present()`).
-- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `box_remove_trak()`, `file_clear_compat_flags()`, `fragment_append_track_run()`, `timeline_construct()`, `read_trak()`, `write_trak()`, `print_trak()`, `summary_allocate_opaque()`, `meta_add_metadata()`, `chapter_read_simple_chapter()`, `stbl_add_ctts_entry()`, `sample_append()`, `track_get_edts()`, `movie_update_chunk_offset()`).
-
-#### Preservation of Specification Syntax Identifiers
-When a struct field, constant, or helper represents a syntax element defined by an international specification (ISO/IEC 14496-12, ISO/IEC 23003-5,ISO/IEC 23091-3, or AOM AV1), **the exact identifier spelling and casing from the official specification are preserved** so that the C source code can be cross-referenced directly against the standard text:
-- **ISO/IEC 23003-5 (`pcmC`)**: `format_flags`, `PCM_sample_size`
-- **ISO/IEC 14496-12 (`chnl`)**: `stream_structure`, `definedLayout`, `speaker_position`, `azimuth`, `elevation`, `omittedChannelsMap`, `object_count`
-- **ISO/IEC 14496-12 (`srat`)**: `sampling_rate`
-- **AOM AV1 Specification**: `seq_profile`, `seq_level_idx`, `seq_tier`, `high_bitdepth`, `twelve_bit`, `mono_chrome`, `color_description_present_flag`, `subsampling_x`, `subsampling_y`, `chroma_sample_position`, `SeenFrameHeader`, `show_existing_frame`, `frame_to_show_map_idx`, `refresh_frame_flags`, `OrderHintBits`, `TileColsLog2`, `TileRowsLog2`, `NumTiles`, `TileNum`, `CodedLossless`, `AllLossless`, etc.
+### 2.4 Coding Style, Header Policy & Symbol Naming Conventions
+The official coding style, formatting standards, translation unit header rules, and Git contribution policies are defined in **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)**. Key invariants:
+- **Language Standard**: Standard C11 (`-std=c11 -pedantic`) for library internals, CLI tools, and tests; public header `lsmash.h` maintains strict C99 and C++ compatibility.
+- **Header Order & Guard Policy**: Every `.c` starts with `#include "common/internal.h" /* must be placed first */`. Internal headers do not use `#ifndef ... #define ... #endif` include guards.
+- **Formatting**: 4 spaces indentation (no tabs), Allman-style braces on separate lines, interior spaces inside parentheses `if( cond )`, and pointer asterisk on the variable name `isom_box_t *box`.
+- **Symbol Visibility**:
+  - Public API (`lsmash_*`): Declared in `lsmash.h` and exported via `liblsmash.ver`.
+  - Internal Shared (`lsm_<module>_*`): Non-`static` functions shared across compilation units (`lsm_stbl_*`, `lsm_sample_*`, `lsm_track_*`, `lsm_movie_*`, `lsm_box_*`, etc.).
+  - File-Local (`<module>_*`): `static` functions private to a single `.c` file (`stbl_*`, `sample_*`, `track_*`, etc.).
+- **Specification Syntax Identifiers**: Exact spelling, casing, CamelCase, and underscores from international standards (ISO/IEC, QTFF, AV1) are strictly preserved (e.g. `pcmC` `format_flags`, `chnl` `stream_structure`, `btrt` `bufferSizeDB`) for bidirectional `grep` searchability against official specification texts.
+- **Git Policy**: Strictly linear history (zero merge commits; no GitHub Web UI merges; author-preserving cherry-picks and fast-forwards only) and no hosting-specific issue/PR numbers in commit messages or code.
 
 ### 2.5 Compile-Time `static const` Dispatch Tables
 All Box and Codec dispatch tables across `core/` and `codecs/` are defined as **compile-time `static const` arrays** sized automatically by the compiler (`sizeof(table) / sizeof(table[0])`), with zero runtime initialization state:
@@ -78,45 +75,47 @@ This guarantees thread safety across concurrent `lsmash_root_t` instances, place
 Detailed specifications for each major subsystem reside in `docs/specs/` and are indexed in Section 4:
 
 1. **Built-In AOM AV1 OBU Parser (`codecs/av1.{c,h}`, `importer/ivf_imp.c`)**:
-   - Self-contained C99 implementation of the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0), with no external `obuparse` dependency.
+   - Self-contained C11 implementation of the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0), with no external `obuparse` dependency.
    - Full `uncompressed_header()` parsing through `tile_info()`, `quantization_params()`, `segmentation_params()`, `loop_filter_params()`, `cdef_params()`, `lr_params()`, `read_tx_mode()`, `skip_mode_params()`, and `global_motion_params()`, plus multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` tracking, `stss` Sync Sample vs. `OPEN_RAP` classification, and sample OBU whitelisting.
 2. **ISO/IEC 23003-5 LPCM & ISO/IEC 14496-12 Audio Signaling (`core/`, `codecs/description.c`, `importer/wave_imp.c`)**:
    - Support for uncompressed integer (`ipcm`: 16/24/32-bit big/little-endian) and floating-point (`fpcm`: 32/64-bit IEEE 754) audio in standard and multi-track Fragmented ISOBMFF (`moof`/`traf`/`trun`), including `pcmC`, `chnl`, `srat`, and ISOBMFF `AudioSampleEntryV1`.
    - `trun` default sample duration/size compaction across multiple tracks in `core/fragment.c`, plus `WAVE_FORMAT_EXTENSIBLE` and `WAVE_FORMAT_IEEE_FLOAT` support in `importer/wave_imp.c`.
 3. **Hybrid Container Architecture & Paged Block Arrays (`common/alloc.{c,h}`, `common/list.{c,h}`, `core/`)**:
-   - Built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
-   - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C99 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
+   - Built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
+   - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C11 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
 4. **Core Container Engine Module Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)**:
    - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit, together with the unified symbol naming across `core/`, `codecs/`, and `importer/`.
-5. **Xiph FLAC (`fLaC` / `dfLa`) & Box Reader Hardening (`codecs/flac.{c,h}`, `importer/flac_imp.c`, `core/read.c`)**:
+5. **Xiph FLAC (`fLaC` / `dfLa`) & Box Reader Hardening (`codecs/flac.c`, `importer/flac_imp.c`, `core/read.c`)**:
    - Full RFC 9639 and FLAC-in-ISOBMFF encapsulation (`fLaC` Sample Entry and `dfLa` `FLACSpecificBox` containing `STREAMINFO` and metadata blocks), table-driven CRC-8 frame header verification, variable/fixed block size timestamp accumulation, and raw `.flac` stream reconstruction on demultiplexing.
    - Box reader hardening in `core/read.c` enforcing `ISOM_MAX_BOX_NESTING_LEVEL` (64 levels), child box boundary checks against remaining parent box bytes, and integer overflow guards.
 
 ---
 
-## 4. Detailed Specification Index (`docs/specs/`)
+## 4. Detailed Specification Index (`docs/specs/` & `docs/`)
 
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.0`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.0`) |
-| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.23.0`) |
-| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.23.0`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.0`) |
+| [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.1`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.1`) |
+| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.23.1`) |
+| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.23.1`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.1`) |
 
 ---
 
 ## 5. Build, Toolchain & Verification
 
-- **Toolchain**: POSIX `sh` + GNU `make` + C99 compiler (`gcc` or `clang`). On Windows, verified with the MSYS2 MinGW64 toolchain (`x86_64-w64-mingw32-gcc`).
+- **Toolchain**: POSIX `sh` + GNU `make` + C11 compiler (`gcc` or `clang`). On Windows, verified with the MSYS2 MinGW64 toolchain (`x86_64-w64-mingw32-gcc`).
 - **Build & Test Command**:
   ```sh
   ./configure
   make -j8 all test
   ```
 - **Quality Requirements**:
-  1. Zero compiler warnings under `-Wall -Wextra -std=c99` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
-  2. All 15 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
+  2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
+  3. All 15 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 

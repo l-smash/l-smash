@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,9 +41,9 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.17.0` – `v2.23.0`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.1`)
 
-### 3.1 `v2.17.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
+### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
 - **`codecs/av1.{c,h}` & `importer/ivf_imp.c`**: Replaced the external `obuparse` dependency with a built-in C99 AV1 OBU parser compliant with the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0):
   - Implemented `av1_get_uvlc()`, `av1_get_leb128()`, `av1_show_leb128()`, `av1_get_su()`, and `av1_get_ns()`.
@@ -51,7 +51,7 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
   - Implemented multi-tile `OBU_FRAME` and `OBU_TILE_GROUP` tracking (`TileNum`, `tg_start`, `tg_end`), `show_existing_frame` keyframe reference slot refresh, `stss` Sync Sample vs. `OPEN_RAP` classification, sample OBU whitelisting, and ITU-T T.35 HDR10+ metadata detection.
 - **`configure`, `Makefile`, `tests/test_main.c`**: Removed `--enable-obuparse` and added the self-contained synthetic test runner (`make test`).
 
-### 3.2 `v2.19.0`: C99 Memory Auditor & ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`/`chnl`/`srat`)
+### 3.2 `v2.22.0`: C99 Memory Auditor & ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`/`chnl`/`srat`)
 - **`common/alloc.{c,h}` & `common/internal.h`**: Implemented the built-in C99 memory audit mechanism (`--enable-debug-alloc` / `-DLSMASH_DEBUG_ALLOC`) featuring `#ptr`/`#size` expression capture, 64-byte aligned intrusive headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and `lsm_alloc_verify_no_leaks()`.
 - **`core/box.{c,h}`, `core/read.c`, `core/write.c`, `core/print.c`, `codecs/description.c`, `lsmash.h`**:
   - Converted `fullbox_type_table` in `core/box.c` to an unbounded `static const` array.
@@ -63,20 +63,20 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
   - Added automatic `trun` compaction when all samples in a track run match `tfhd->default_sample_duration`, `default_sample_size`, and `default_sample_flags`.
 - **`importer/wave_imp.c`**: Added support for `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`), 24/32/64-bit PCM/Float, sampling rates $> 65535\text{ Hz}$, and Microsoft `dwChannelMask` to ISO/IEC 14496-12 `chnl` mapping.
 
-### 3.3 `v2.20.0`: C99 Paged Block Array (`lsm_list_t`) & Sample Table Migration
+### 3.3 `v2.22.0` (Development): C99 Paged Block Array (`lsm_list_t`) & Sample Table Migration
 - **`common/list.{c,h}`**: Implemented `lsm_list_t`, a C99 Paged Block Array storing elements contiguously in $2^8 = 256$-element pages with $O(1)$ bit-shift lookup (`lsm_list_at`, `lsm_list_get`), 100% element pointer stability on append, lockstep multi-table cursors (`lsm_list_cursor_t`), and single-loop C99 iteration macros (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`).
 - **`core/timeline.c`, `core/fragment.{c,h}`, `core/isom.c`, `core/read.c`, `core/write.c`, `core/print.c`, `codecs/*`**:
   - Migrated all high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`, `co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timeline tables (`info_list`, `bunch_list`, `chunk_list`) from `lsmash_entry_list_t` to `lsm_list_t`.
   - Fixed a latent pointer-invalidation hazard in `isom_add_roll_group_entry()` / `isom_deduplicate_roll_group()` by storing 1-based group indices (`roll_group_number`, `prev_group_number`, `first_sample_defined`) in `isom_roll_pool_entry_t` instead of raw pointers into `sbgp->list`.
 
-### 3.4 `v2.21.0`: Compile-Time `static const` Dispatch Tables, `emsg` Reader Fix & User Documentation
+### 3.4 `v2.22.0` (Development): Compile-Time `static const` Dispatch Tables, `emsg` Reader Fix & User Documentation
 - **`core/read.c`, `core/write.c`, `core/print.c`, `core/summary.c`, `codecs/description.c`, `codecs/dts.c`**: Converted all remaining lazy runtime-initialized `static` dispatch tables to compile-time `static const` arrays.
 - **`core/read.c`, `core/box.c`, `common/bits.{c,h}`**:
   - Fixed `isom_read_emsg()` (`core/read.c:735`) to check `if( !emsg->value )`, added an explicit `pos > box->size` underflow guard before computing `emsg->message_data_length`, and updated `isom_remove_emsg()` (`core/box.c`) to free `scheme_id_uri`, `value`, and `message_data`.
   - Documented the non-owning borrow contract of `lsmash_bits_t` in `common/bits.{c,h}`.
 - **`README.md` & `USAGE.md`**: Added English project overview (`README.md`) and user/C API manual (`USAGE.md`), and documented the `core/isom.{c,h}` 4-module decomposition design in `SPEC.md`.
 
-### 3.5 `v2.21.1`: Codec, Metadata, Build, `multibuf` Resize & `--compact-size-table` Fixes
+### 3.5 `v2.22.1`: Codec, Metadata, Build, `multibuf` Resize & `--compact-size-table` Fixes
 - **Integrated Upstream Contributor Fixes (Preserving Original Git Author Attributions)**:
   1. **NALU Exp-Golomb EOF & Overflow Handling** (`Xinyue Lu <i@7086.in>`): Fixed infinite loop in `nalu_get_codeNum()` (`codecs/nalu.c`) on EOF or $\ge 64$ leading zero bits.
   2. **MP3 `nBlockSize` Calculation** (`Xinyue Lu <i@7086.in>`): Fixed MP3 `nBlockSize` integer division truncation in `waveform_audio_update_bitrate()` (`codecs/qt_wfex.c`), plus added a `cbSize < 12` bounds check before writing `MPEGLAYER3WAVEFORMAT` fields.
@@ -88,7 +88,7 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **`common/multibuf.c`**: Rewrote `lsmash_resize_multiple_buffers()` to check for integer multiplication overflow, compact buffers in forward order before `lsmash_realloc` when shrinking, and move buffers in reverse order after `lsmash_realloc` (zero-filling newly exposed tail bytes) when expanding.
 - **`cli/muxer.c`**: Moved `else if( !strcasecmp( argv[i], "--compact-size-table" ) )` out of the `--language` conditional block into the top-level option loop in `parse_global_options()`.
 
-### 3.6 `v2.22.0`: Decomposition of `core/isom.c` into `stbl`, `sample`, `track`, and `movie` Modules & `core/` Symbol Naming Unification
+### 3.6 `v2.22.2`: Decomposition of `core/isom.c` into `stbl`, `sample`, `track`, and `movie` Modules & `core/` Symbol Naming Unification
 - **Elimination of `core/isom.c` and 4-Module Logical Decomposition**:
   - Decomposed the monolithic `core/isom.c` (~4,150 lines) along ISOBMFF logical hierarchy boundaries into four dedicated modules and removed `core/isom.c`:
     1. **`core/stbl.{c,h}`** (*Sample Table & Sample Grouping Engine*): `stts`, `ctts`, `cslg`, `stsz`/`stz2` compaction, `stsc`, `stco`/`co64` 64-bit promotion, `stss`, `stps`, `sdtp`, `btrt`/`esds` bitrate calculation, and `sgpd`/`sbgp` (`rap `, `roll`, `prol`) state machines and roll-group deduplication (`lsm_stbl_*`, `static stbl_*`).
@@ -116,3 +116,11 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
   - Hardened `core/read.c` with a maximum box nesting depth guard (`ISOM_MAX_BOX_NESTING_LEVEL = 64`), child box size vs. parent boundary validation, FullBox header minimum size validation, `read_chan()` `numberChannelDescriptions` payload bounds check, `read_qt_color_table()` `uint32_t` loop index promotion, `read_trun()` / `read_tfra()` `box->size` loop guards, and `codecs/hevc.c` prefix SEI `nalUnitLength >= 3` check, accompanied by negative test cases in `tests/test_main.c`.
 - **Documentation Categorization (`README.md`, `USAGE.md`, `SPEC.md`, `docs/specs/*.md`)**:
   - Reorganized `README.md` and `USAGE.md` to cleanly separate `Video Codecs`, `Audio Codecs` (including Xiph FLAC `fLaC`/`dfLa`), `Timed Text & Subtitles` (`tx3g`+`ftab` and QuickTime `text`), and `Sample Entry Extensions, HDR, Spatial Media & Metadata` (explicitly distinguishing Apple iTunes `meta`/`ilst`, QuickTime/iTunes reference chapter tracks `tref.chap`, and Nero `chpl` chapters).
+
+### 3.8 `v2.23.1`: C11 Transition, Public Header C99/C++ Compatibility, Internal Header Cleanup & Coding Style Specification
+- **C11 Transition, Public Header C99/C++ Compatibility & Internal Header Cleanup**:
+  - Updated `configure` build standard to `-std=c11 -pedantic`, permitting C11 features (`_Static_assert`, anonymous structs/unions, `max_align_t`) across internal modules (`common/`, `core/`, `codecs/`, `importer/`, `cli/`, `tests/`), while strictly preserving C99 (`-std=c99 -pedantic`) and C++ compatibility for public header `lsmash.h`.
+  - Added compile-time invariant validation using `_Static_assert` in `common/list.h` (`LSM_LIST_PAGE_SIZE` power-of-two check) and `core/box_default.c` (`ISOM_BASEBOX_COMMON` struct offset consistency check).
+  - Audited all internal headers across `common/`, `core/`, `codecs/`, `importer/`, and `cli/`, removing redundant `#ifndef ... #define ... #endif` include guards in accordance with L-SMASH design conventions (reserving header guards strictly for public `lsmash.h`), and removed duplicate header inclusion in `importer/ivf_imp.c`.
+  - Documented technical and historical background comments in `core/stbl.c` (`lsm_stbl_calculate_bitrate_description`) on `btrt`/`esds` 1-second sliding window consumption bitrate calculation.
+  - Created standalone official coding guidelines in `docs/CODING_STYLE.md` and synchronized `SPEC.md`, `README.md`, and subsystem specifications.

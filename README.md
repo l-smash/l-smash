@@ -2,7 +2,7 @@
 
 **L-SMASH** — *Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*
 
-L-SMASH is a lightweight, high-performance, zero-external-dependency **Pure C99** media container library (`liblsmash`) and command-line toolset for reading, writing, remultiplexing, and inspecting **ISO Base Media File Format (ISOBMFF)** and **QuickTime File Format (QTFF)** files.
+L-SMASH is a lightweight, high-performance, zero-external-dependency **C11** media container library (`liblsmash`, with public header `lsmash.h` maintaining strict C99 and C++ compatibility) and command-line toolset for reading, writing, remultiplexing, and inspecting **ISO Base Media File Format (ISOBMFF)** and **QuickTime File Format (QTFF)** files.
 
 Designed for strict compliance with international standards, L-SMASH maintains a clean separation between ISOBMFF and QTFF binary layouts and refuses to emit non-conformant, cross-polluted container structures.
 
@@ -73,17 +73,17 @@ Designed for strict compliance with international standards, L-SMASH maintains a
   3. **Nero Chapter List (`moov.udta.chpl`)**: A single table-based FullBox (`chpl`) stored directly inside `moov.udta` listing chapter start timestamps ($100\text{ ns}$ units) and UTF-8 chapter title strings (supported in `.mp4`/`.m4v`/`.m4a` alongside or independently of reference chapter tracks).
 
 ### Architecture Highlights
-- **C99 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in $2^8 = 256$-element pages, providing $O(1)$ bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
+- **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in $2^8 = 256$-element pages, providing $O(1)$ bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
-- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 15 synthetic test suites requiring zero external media files.
+- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 15 synthetic test suites requiring zero external media files.
 
 ---
 
 ## Build Instructions & Self-Contained Test Suite
 
 ### Prerequisites
-- A standard **C99 compiler** (`gcc` or `clang`)
+- A standard **C11 compiler** (`gcc` or `clang`)
 - POSIX `sh`, GNU `make`, `ar`, `ranlib`
 - **Zero external library dependencies**
 
@@ -126,7 +126,7 @@ make -j8 lib
 
 ### Running the Self-Contained Test Suite
 
-L-SMASH provides a self-contained C99 unit and integration test suite (`tests/test_main.c`) compiled with `-DLSMASH_DEBUG_ALLOC` (active memory canary, use-after-free poisoning, and zero-leak audit). It synthesizes all bitstreams in memory and requires **no external test files**:
+L-SMASH provides a self-contained C11 unit and integration test suite (`tests/test_main.c`) compiled with `-DLSMASH_DEBUG_ALLOC` (active memory canary, use-after-free poisoning, and zero-leak audit). It synthesizes all bitstreams in memory and requires **no external test files**:
 
 ```sh
 make test
@@ -172,10 +172,11 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 
 | Document | Contents |
 | :--- | :--- |
-| **[`USAGE.md`](USAGE.md)** | Complete user guide for `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end C99 code examples. |
+| **[`USAGE.md`](USAGE.md)** | Complete user guide for `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
 | **[`SPEC.md`](SPEC.md)** | Master Architecture & Specification Index (strict standard compliance principles, `box_default` Sentinel Box Architecture, Dual-List Box ownership, symbol naming conventions, and specification syntax identifier preservation). |
+| **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)** | Official C11 coding style, Allman layout conventions, internal header policy, symbol prefixes, and Git contribution guidelines. |
 | **[`docs/HISTORY.md`](docs/HISTORY.md)** | Project history, branch lineage (`master`, `av1`, `vimeo`, `dev`), and architectural evolution. |
-| **[`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md)** | C99 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
+| **[`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
 | **[`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md)** | Built-in AV1 OBU parser and AV1-ISOBMFF v1.2.0 specification. |
 | **[`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md)** | ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`) and ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`) in standard and Fragmented ISOBMFF specification. |
 | **[`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |

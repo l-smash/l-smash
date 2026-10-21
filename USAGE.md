@@ -19,7 +19,7 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
    - [3.4 Audio Sample Entry Setup (AAC & ISO/IEC 23003-5 LPCM)](#34-audio-sample-entry-setup-aac--isoiec-23003-5-lpcm)
    - [3.5 Standard vs. Fragmented Multiplexing](#35-standard-vs-fragmented-multiplexing)
    - [3.6 Demultiplexing & Media Timeline Reconstruction](#36-demultiplexing--media-timeline-reconstruction)
-   - [3.7 Complete End-to-End C99 Example](#37-complete-end-to-end-c99-example)
+   - [3.7 Complete End-to-End C API Example](#37-complete-end-to-end-c-api-example)
 
 ---
 
@@ -549,9 +549,9 @@ lsmash_destroy_root( root );
 
 ---
 
-### 3.7 Complete End-to-End C99 Example
+### 3.7 Complete End-to-End C API Example
 
-The following self-contained C99 program muxes a 24-bit $96\text{ kHz}$ Stereo ISO/IEC 23003-5 `ipcm` audio track into a Fragmented MP4 file and reads it back via the media timeline API:
+The following self-contained C program (fully compatible with standard C99, C11, and C++) muxes a 24-bit $96\text{ kHz}$ Stereo ISO/IEC 23003-5 `ipcm` audio track into a Fragmented MP4 file and reads it back via the media timeline API:
 
 ```c
 #include <stdio.h>

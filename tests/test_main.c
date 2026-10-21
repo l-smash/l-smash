@@ -949,7 +949,7 @@ static int test_ivf_mux_demux_roundtrip( void )
 }
 
 /*---------------------------------------------------------------------------
- * Test 5: C99 Self-Contained Memory Audit Allocator Verification
+ * Test 5: Self-Contained Memory Audit Allocator Verification
  *---------------------------------------------------------------------------*/
 static int test_memory_audit_allocator( void )
 {
@@ -2055,7 +2055,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
 }
 
 /*---------------------------------------------------------------------------
- * Test 10: C99 Paged Block Array (lsm_list_t) & Unified Accessor / Iterator
+ * Test 10: Paged Block Array (lsm_list_t) & Unified Accessor / Iterator
  *---------------------------------------------------------------------------*/
 typedef struct
 {

@@ -2,10 +2,10 @@
 
 ## 1. Overview & Principles
 
-L-SMASH provides a self-contained C99 unit and integration test suite (`tests/test_main.c`) executed via `make test`:
+L-SMASH provides a self-contained C11 unit and integration test suite (`tests/test_main.c`) executed via `make test`:
 1. **Zero External Test Media Dependencies**:
    - All test bitstreams—including AV1 Open Bitstream Units (OBUs), IVF containers, RIFF WAVE (`WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, `WAVE_FORMAT_EXTENSIBLE`) files, standard and Fragmented MP4 movies, and binary-patched malformed containers—are synthesized programmatically in memory or temporary files and cleaned up upon completion.
-2. **Active C99 Memory Audit (`-DLSMASH_DEBUG_ALLOC`)**:
+2. **Active C11 Memory Audit (`-DLSMASH_DEBUG_ALLOC`)**:
    - The `tests/test_main` binary is compiled with `-DLSMASH_DEBUG_ALLOC` and linked against `liblsmash.a`.
    - Every test suite is wrapped in the `RUN_TEST( test_fn )` macro, which executes `lsm_alloc_verify_no_leaks()` and asserts `lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0` immediately after each suite completes.
 3. **Positive & Negative Coverage**:

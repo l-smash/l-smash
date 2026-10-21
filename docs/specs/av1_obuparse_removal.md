@@ -2,7 +2,7 @@
 
 ## 1. Overview & Motivation
 
-L-SMASH provides a self-contained, zero-dependency C99 implementation of the **Alliance for Open Media (AOM) AV1** bitstream parser (`codecs/av1.{c,h}`) and IVF elementary stream importer (`importer/ivf_imp.c`), compliant with:
+L-SMASH provides a self-contained, zero-dependency C11 implementation of the **Alliance for Open Media (AOM) AV1** bitstream parser (`codecs/av1.{c,h}`) and IVF elementary stream importer (`importer/ivf_imp.c`), compliant with:
 - **AV1 Bitstream & Decoding Process Specification** (Version 1.0.0 with Errata 1)
 - **AV1 Codec ISO Media File Format Binding Specification** (v1.2.0, 12 December 2019)
 
