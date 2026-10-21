@@ -28,7 +28,12 @@
 
 #include "core/box.h"
 #include "codecs/av1.h"
+#include "codecs/nalu.h"
 #include "importer/importer.h"
+
+int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index );
+int wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
+int opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
 
 static int g_tests_run    = 0;
 static int g_tests_failed = 0;
@@ -3355,6 +3360,381 @@ static int test_malformed_boxes_and_sample_tables( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 14: the implementation Multi-Buffer Resize & Open PR Regressions
+ *---------------------------------------------------------------------------*/
+static int test_multibuf_resize_and_codec_regressions( void )
+{
+    /* 14a. lsmash_multiple_buffers_t Creation, Expansion, Shrinkage & Data Integrity */
+    {
+        TEST_ASSERT( lsmash_create_multiple_buffers( 0, 32 ) == NULL, "14a: reject 0 buffers" );
+        TEST_ASSERT( lsmash_create_multiple_buffers( 4, 0 ) == NULL, "14a: reject 0 buffer_size" );
+        TEST_ASSERT( lsmash_create_multiple_buffers( 0x100000, 0x10000 ) == NULL, "14a: reject uint32 overflow" );
+
+        lsmash_multiple_buffers_t *bank = lsmash_create_multiple_buffers( 4, 32 );
+        TEST_ASSERT( bank != NULL && bank->number_of_buffers == 4 && bank->buffer_size == 32,
+                     "14a: create 4x32 multiple buffers" );
+        TEST_ASSERT( lsmash_withdraw_buffer( bank, 0 ) == NULL, "14a: reject buffer_number 0" );
+        TEST_ASSERT( lsmash_withdraw_buffer( bank, 5 ) == NULL, "14a: reject buffer_number > 4" );
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 0 ) == NULL, "14a: reject resize to 0" );
+
+        /* Fill each of the 4 buffers with a unique byte pattern */
+        for( uint32_t b = 1; b <= 4; b++ )
+        {
+            uint8_t *buf = (uint8_t *)lsmash_withdraw_buffer( bank, b );
+            TEST_ASSERT( buf != NULL, "14a: withdraw buffer 1..4" );
+            for( uint32_t k = 0; k < 32; k++ )
+                buf[k] = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
+        }
+
+        /* No-op resize to same size */
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 32 ) == bank, "14a: same-size resize is no-op" );
+
+        /* Expand from 32 to 96 bytes per buffer */
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 96 ) == bank && bank->buffer_size == 96,
+                     "14a: expand multiple buffers from 32 to 96 bytes" );
+        for( uint32_t b = 1; b <= 4; b++ )
+        {
+            uint8_t *buf = (uint8_t *)lsmash_withdraw_buffer( bank, b );
+            TEST_ASSERT( buf != NULL, "14a: withdraw expanded buffer" );
+            for( uint32_t k = 0; k < 32; k++ )
+            {
+                uint8_t expected = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
+                TEST_ASSERT( buf[k] == expected,
+                             "14a: expanded buffer preserves exact original data in [0..31] across all 4 buffers" );
+            }
+            for( uint32_t k = 32; k < 96; k++ )
+            {
+                TEST_ASSERT( buf[k] == 0, "14a: expanded tail [32..95] is zero-initialized" );
+                buf[k] = (uint8_t)((b * 29U + k) & 0xFFU);
+            }
+        }
+
+        /* Shrink from 96 to 20 bytes per buffer */
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 20 ) == bank && bank->buffer_size == 20,
+                     "14a: shrink multiple buffers from 96 to 20 bytes" );
+        for( uint32_t b = 1; b <= 4; b++ )
+        {
+            uint8_t *buf = (uint8_t *)lsmash_withdraw_buffer( bank, b );
+            TEST_ASSERT( buf != NULL, "14a: withdraw shrunk buffer" );
+            for( uint32_t k = 0; k < 20; k++ )
+            {
+                uint8_t expected = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
+                TEST_ASSERT( buf[k] == expected,
+                             "14a: shrunk buffer preserves exact prefix [0..19] across all 4 buffers" );
+            }
+        }
+
+        lsmash_destroy_multiple_buffers( bank );
+    }
+
+    /* 14b. nalu_get_codeNum Exp-Golomb Valid Decoding, EOF & >=64 Zero Bits Non-Hang */
+    {
+        /* Valid Exp-Golomb codes packed into 1 byte:
+         * '1' (0) + '010' (1) + '011' (2) + '1' (0) = 0b10100111 = 0xA7 */
+        uint8_t valid_eg[1] = { 0xA7 };
+        lsmash_bits_t *bits = lsmash_bits_adhoc_create();
+        TEST_ASSERT( bits != NULL, "14b: create adhoc bits" );
+        TEST_ASSERT( lsmash_bits_import_data( bits, valid_eg, sizeof(valid_eg) ) == 0, "14b: import valid Exp-Golomb" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 1, "14b: Exp-Golomb '010' -> 1" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 2, "14b: Exp-Golomb '011' -> 2" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
+        lsmash_bits_adhoc_cleanup( bits );
+
+        /* Truncated 1-byte all-zero stream -> hits EOB and returns 0 without infinite loop */
+        uint8_t eof_zeros[1] = { 0x00 };
+        bits = lsmash_bits_adhoc_create();
+        TEST_ASSERT( lsmash_bits_import_data( bits, eof_zeros, sizeof(eof_zeros) ) == 0, "14b: import 1 zero byte" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 1,
+                     "14b: nalu_get_codeNum terminates on EOB and returns 0" );
+        lsmash_bits_adhoc_cleanup( bits );
+
+        /* 16-byte all-zero stream (128 zero bits) -> hits leadingZeroBits >= 64 before EOB and returns 0 */
+        uint8_t long_zeros[16] = { 0 };
+        bits = lsmash_bits_adhoc_create();
+        TEST_ASSERT( lsmash_bits_import_data( bits, long_zeros, sizeof(long_zeros) ) == 0, "14b: import 16 zero bytes" );
+        TEST_ASSERT( nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 0,
+                     "14b: nalu_get_codeNum terminates at 64 leading zero bits without hanging" );
+        lsmash_bits_adhoc_cleanup( bits );
+    }
+
+    /* 14c. MP3 nBlockSize Calculation in waveform_audio_update_bitrate */
+    {
+        /* Build a minimal in-memory stbl + mdhd with a QT_CODEC_TYPE_FULLMP3_AUDIO sample entry and MPEGLAYER3WAVEFORMAT */
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        const char *tmp_mov = "tests/tmp_wfex_mp3.mov";
+        TEST_ASSERT( lsmash_open_file( tmp_mov, 0, &param ) == 0, "14c: open tmp mov" );
+        param.major_brand = ISOM_BRAND_TYPE_QT;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "14c: set file" );
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        movie_param.timescale = 600;
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_param ) == 0, "14c: set movie params" );
+        uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+        TEST_ASSERT( tid == 1, "14c: create audio track" );
+        isom_trak_t *trak = (isom_trak_t *)file->moov->trak_list.head->data;
+        isom_mdhd_t *mdhd = trak->mdia->mdhd;
+        mdhd->timescale   = 48000;
+        mdhd->duration    = 1152;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+
+        isom_audio_entry_t *mp3_entry = isom_add_audio_description( stbl->stsd, QT_CODEC_TYPE_FULLMP3_AUDIO );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( mp3_entry ), "14c: add .mp3 audio description" );
+        isom_wave_t *wave = isom_add_wave( mp3_entry );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( wave ), "14c: add wave box" );
+
+        /* MPEGLAYER3WAVEFORMAT: 8 (box header) + 18 (WAVEFORMATEX) + 12 (cbSize=12) = 38 bytes
+         * Note: isom_add_extension_binary takes ownership of wfex_buf and frees it on root destruction. */
+        uint8_t *wfex_buf = (uint8_t *)lsmash_malloc_zero( 38 );
+        TEST_ASSERT( wfex_buf != NULL, "14c: alloc wfex_buf" );
+        put_be32( &wfex_buf[0], 38 );
+        put_be32( &wfex_buf[4], QT_CODEC_TYPE_FULLMP3_AUDIO.fourcc );
+        uint8_t *ex = &wfex_buf[8];
+        put_le16( &ex[0],  0x0055 ); /* wFormatTag = WAVE_FORMAT_MPEGLAYER3 */
+        put_le16( &ex[2],  2 );      /* nChannels = 2 */
+        put_le32( &ex[4],  48000 );  /* nSamplesPerSec = 48000 */
+        put_le16( &ex[16], 12 );     /* cbSize = 12 */
+        put_le16( &ex[26], 1 );      /* nFramesPerBlock = 1 */
+        TEST_ASSERT( isom_add_extension_binary( wave, QT_CODEC_TYPE_FULLMP3_AUDIO, 0, wfex_buf, 38 ) == 0,
+                     "14c: attach MPEGLAYER3WAVEFORMAT binary box" );
+
+        /* Add 1 sample of 384 bytes with duration 1152 at 48000 Hz -> avgBitrate = 384 * 8 * 48000 / 1152 = 128000 bps */
+        isom_stts_t *stts = stbl->stts;
+        isom_stsz_t *stsz = stbl->stsz;
+        isom_stsc_t *stsc = stbl->stsc;
+        isom_stts_entry_t *stts_e = (isom_stts_entry_t *)lsm_list_append( stts->list );
+        stts_e->sample_count = 1;
+        stts_e->sample_delta = 1152;
+        stsz->sample_size  = 384;
+        stsz->sample_count = 1;
+        isom_stsc_entry_t *stsc_e = (isom_stsc_entry_t *)lsm_list_append( stsc->list );
+        stsc_e->first_chunk              = 1;
+        stsc_e->samples_per_chunk        = 1;
+        stsc_e->sample_description_index = 1;
+
+        TEST_ASSERT( waveform_audio_update_bitrate( stbl, mdhd, 1 ) == 0,
+                     "14c: waveform_audio_update_bitrate succeeds" );
+        isom_box_t *wave_ext = isom_get_extension_box( &wave->extensions, QT_CODEC_TYPE_FULLMP3_AUDIO );
+        TEST_ASSERT( wave_ext != NULL && wave_ext->binary != NULL, "14c: get updated wave_ext" );
+        uint16_t nBlockSize = LSMASH_GET_LE16( &wave_ext->binary[8 + 24] );
+        /* 144 * 128000 / 48000 = 384 (previously truncated to 144 * (128000 / 48000) = 288!) */
+        TEST_ASSERT( nBlockSize == 384, "14c: MP3 nBlockSize is 384 (not 288 from premature integer division)" );
+
+        /* Also verify cbSize < 12 is rejected without out-of-bounds write */
+        put_le16( &wave_ext->binary[8 + 16], 4 );
+        TEST_ASSERT( waveform_audio_update_bitrate( stbl, mdhd, 1 ) == LSMASH_ERR_INVALID_DATA,
+                     "14c: waveform_audio_update_bitrate rejects MP3 wfex with cbSize < 12" );
+
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+        remove( tmp_mov );
+    }
+
+    /* 14d. WMA cbSize 16-bit LE Reading & Bounds Check in wma_print_codec_specific */
+    {
+        uint8_t wma_bin[36] = { 0 };
+        put_be32( &wma_bin[0], 36 );
+        put_be32( &wma_bin[4], LSMASH_4CC( 'w', 'f', 'e', 'x' ) );
+        uint8_t *d = &wma_bin[8];
+        put_le16( &d[0],  0x0161 ); /* WAVE_FORMAT_TAG_ID_WMA_V2 */
+        put_le16( &d[2],  2 );
+        put_le32( &d[4],  44100 );
+        put_le32( &d[8],  16000 );
+        put_le16( &d[12], 743 );
+        put_le16( &d[14], 16 );
+        put_le16( &d[16], 10 );     /* cbSize = 10 in LE16 */
+        put_le32( &d[18], 2048 );   /* dwSamplesPerBlock */
+
+        isom_box_t box = { 0 };
+        box.manager = LSMASH_BINARY_CODED_BOX;
+        box.type    = ISOM_BOX_TYPE_WFEX;
+        box.size    = 36;
+        box.binary  = wma_bin;
+
+        const char *tmp_wma_dump = "tests/tmp_wma_dump.txt";
+        FILE *fp = fopen( tmp_wma_dump, "wb" );
+        TEST_ASSERT( fp != NULL, "14d: open tmp_wma_dump" );
+        TEST_ASSERT( wma_print_codec_specific( fp, NULL, &box, 0 ) == 0,
+                     "14d: wma_print_codec_specific succeeds for valid WMA v2 wfex" );
+        /* Now set cbSize = 0x010A (266 in LE16, whose low byte is 10) while box.size remains 36 */
+        put_le16( &d[16], 0x010A );
+        TEST_ASSERT( wma_print_codec_specific( fp, NULL, &box, 0 ) == LSMASH_ERR_INVALID_DATA,
+                     "14d: wma_print_codec_specific reads 16-bit LE cbSize=266 and rejects truncated box" );
+        fclose( fp );
+        remove( tmp_wma_dump );
+    }
+
+    /* 14e. Opus 2ch & 8ch Channel Order Lookup in opus_print_codec_specific */
+    {
+        lsmash_opus_specific_parameters_t opus_param = { 0 };
+        opus_param.Version              = 0;
+        opus_param.OutputChannelCount   = 8;
+        opus_param.PreSkip              = 312;
+        opus_param.InputSampleRate      = 48000;
+        opus_param.OutputGain           = 0;
+        opus_param.ChannelMappingFamily = 1;
+        opus_param.StreamCount          = 5;
+        opus_param.CoupledCount         = 3;
+        for( uint8_t i = 0; i < 8; i++ )
+            opus_param.ChannelMapping[i] = i;
+
+        uint32_t dops_len = 0;
+        uint8_t *dops_bin = lsmash_create_opus_specific_info( &opus_param, &dops_len );
+        TEST_ASSERT( dops_bin != NULL && dops_len == 29, "14e: create 8ch dOps box" );
+
+        lsmash_file_t dummy_file = { 0 };
+        isom_box_t box = { 0 };
+        box.manager = LSMASH_BINARY_CODED_BOX;
+        box.type    = ISOM_BOX_TYPE_DOPS;
+        box.size    = dops_len;
+        box.binary  = dops_bin;
+
+        const char *tmp_opus_dump = "tests/tmp_opus_dump.txt";
+        FILE *fp = fopen( tmp_opus_dump, "wb" );
+        TEST_ASSERT( fp != NULL, "14e: open tmp_opus_dump" );
+        TEST_ASSERT( opus_print_codec_specific( fp, &dummy_file, &box, 0 ) == 0,
+                     "14e: opus_print_codec_specific succeeds for 8ch ChannelMappingFamily=1" );
+        fclose( fp );
+        lsmash_free( dops_bin );
+
+        FILE *rfp = fopen( tmp_opus_dump, "rb" );
+        TEST_ASSERT( rfp != NULL, "14e: open opus dump for read" );
+        fseek( rfp, 0, SEEK_END );
+        size_t dump_len = (size_t)ftell( rfp );
+        fseek( rfp, 0, SEEK_SET );
+        char *dump_str = (char *)lsmash_malloc_zero( dump_len + 1 );
+        TEST_ASSERT( dump_str != NULL && fread( dump_str, 1, dump_len, rfp ) == dump_len, "14e: read opus dump" );
+        fclose( rfp );
+        TEST_ASSERT( strstr( dump_str, "1 -> 1: front center" ) != NULL,
+                     "14e: 8ch Opus channel 1 printed as 'front center' (not 'fron center')" );
+        TEST_ASSERT( strstr( dump_str, "7 -> 7: LFE" ) != NULL,
+                     "14e: 8ch Opus channel 7 printed as 'LFE' via channel_order[OutputChannelCount - 1]" );
+        lsmash_free( dump_str );
+        remove( tmp_opus_dump );
+    }
+
+    /* 14f. Custom iTunes Metadata Retrieval Type & lsmash_count_tyrant_chapter */
+    {
+        TEST_ASSERT( lsmash_count_tyrant_chapter( NULL ) == 0,
+                     "14f: lsmash_count_tyrant_chapter(NULL) safely returns 0 without NULL deref" );
+
+        const char *chap_path = "tests/tmp_tyrant_chapters.txt";
+        const char *m4a_path  = "tests/tmp_itunes_meta.m4a";
+        FILE *cfp = fopen( chap_path, "wb" );
+        TEST_ASSERT( cfp != NULL, "14f: create chapter file" );
+        fprintf( cfp, "CHAPTER01=00:00:00.000\nCHAPTER01NAME=Intro\nCHAPTER02=00:00:01.000\nCHAPTER02NAME=Main\n" );
+        fclose( cfp );
+
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( m4a_path, 0, &mux_param ) == 0, "14f: open m4a for mux" );
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_M4A, ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+        mux_param.major_brand = ISOM_BRAND_TYPE_M4A;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "14f: set m4a file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        lsmash_set_movie_parameters( mux_root, &movie_param );
+
+        uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( mux_root, tid, &track_param );
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale = 1000;
+        lsmash_set_media_parameters( mux_root, tid, &media_param );
+
+        lsmash_video_summary_t *vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, tid, vsum ) == 1, "14f: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum );
+
+        for( uint32_t i = 0; i < 2; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 8 );
+            memset( s->data, (int)(i + 1), 8 );
+            s->dts   = (uint64_t)i * 1000;
+            s->cts   = (uint64_t)i * 1000;
+            s->index = 1;
+            s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            TEST_ASSERT( lsmash_append_sample( mux_root, tid, s ) == 0, "14f: append sample" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, tid, 1000 ) == 0, "14f: flush samples" );
+        TEST_ASSERT( lsmash_update_track_duration( mux_root, tid, 1000 ) == 0, "14f: update duration" );
+
+        /* Set 2 chapters in chpl */
+        TEST_ASSERT( lsmash_set_tyrant_chapter( mux_root, (char *)chap_path, 0 ) == 0, "14f: set tyrant chapter" );
+
+        /* Set custom STRING and custom INTEGER iTunes metadata */
+        lsmash_itunes_metadata_t custom_str = { 0 };
+        custom_str.item         = ITUNES_METADATA_ITEM_CUSTOM;
+        custom_str.type         = ITUNES_METADATA_TYPE_STRING;
+        custom_str.meaning      = "com.apple.iTunes";
+        custom_str.name         = "CUSTOM_TAG_STR";
+        custom_str.value.string = "L-SMASH Custom String";
+        TEST_ASSERT( lsmash_set_itunes_metadata( mux_root, custom_str ) == 0, "14f: set custom string metadata" );
+
+        lsmash_itunes_metadata_t custom_int = { 0 };
+        custom_int.item          = ITUNES_METADATA_ITEM_CUSTOM;
+        custom_int.type          = ITUNES_METADATA_TYPE_INTEGER;
+        custom_int.meaning       = "com.apple.iTunes";
+        custom_int.name          = "CUSTOM_TAG_INT";
+        custom_int.value.integer = 20261021ULL;
+        TEST_ASSERT( lsmash_set_itunes_metadata( mux_root, custom_int ) == 0, "14f: set custom int metadata" );
+
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "14f: finish m4a" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+        remove( chap_path );
+
+        /* Reopen and verify lsmash_count_tyrant_chapter & lsmash_get_itunes_metadata */
+        lsmash_root_t *demux_root = lsmash_create_root();
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( m4a_path, 1, &demux_param ) == 0, "14f: open m4a for read" );
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "14f: read m4a" );
+
+        TEST_ASSERT( lsmash_count_tyrant_chapter( demux_root ) == 2,
+                     "14f: lsmash_count_tyrant_chapter returns 2" );
+        double chap_ts = -1.0;
+        char *chap_name = lsmash_get_tyrant_chapter( demux_root, 2, &chap_ts );
+        TEST_ASSERT( chap_name != NULL && strcmp( chap_name, "Main" ) == 0 && chap_ts == 1.0,
+                     "14f: lsmash_get_tyrant_chapter(2) matches 'Main' at 1.0s" );
+
+        TEST_ASSERT( lsmash_count_itunes_metadata( demux_root ) == 2, "14f: count_itunes_metadata == 2" );
+
+        lsmash_itunes_metadata_t got_str = { 0 };
+        TEST_ASSERT( lsmash_get_itunes_metadata( demux_root, 1, &got_str ) == 0, "14f: get custom string metadata" );
+        TEST_ASSERT( got_str.item == ITUNES_METADATA_ITEM_CUSTOM
+                  && got_str.type == ITUNES_METADATA_TYPE_STRING
+                  && got_str.value.string != NULL
+                  && strcmp( got_str.value.string, "L-SMASH Custom String" ) == 0,
+                     "14f: custom string metadata retrieved with ITUNES_METADATA_TYPE_STRING" );
+        lsmash_cleanup_itunes_metadata( &got_str );
+
+        lsmash_itunes_metadata_t got_int = { 0 };
+        TEST_ASSERT( lsmash_get_itunes_metadata( demux_root, 2, &got_int ) == 0, "14f: get custom int metadata" );
+        TEST_ASSERT( got_int.item == ITUNES_METADATA_ITEM_CUSTOM
+                  && got_int.type == ITUNES_METADATA_TYPE_INTEGER
+                  && got_int.value.integer == 20261021ULL,
+                     "14f: custom integer metadata retrieved with ITUNES_METADATA_TYPE_INTEGER" );
+        lsmash_cleanup_itunes_metadata( &got_int );
+
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+        remove( m4a_path );
+    }
+
+    printf( "[PASS] test_multibuf_resize_and_codec_regressions\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -3393,6 +3773,7 @@ int main( void )
     RUN_TEST( test_multitrack_fragmented_lpcm_roundtrip );
     RUN_TEST( test_wave_importer_isobmff_lpcm );
     RUN_TEST( test_malformed_boxes_and_sample_tables );
+    RUN_TEST( test_multibuf_resize_and_codec_regressions );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
