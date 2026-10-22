@@ -108,6 +108,7 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
 | [`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
 | [`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.7`) |
 | [`docs/TESTING.md`](docs/TESTING.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.7`) |
+| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, HRD/VBV Leaky Bucket model, HE-AAC filterbank delays) | Synchronized (`v2.23.7`) |
 
 ---
 
@@ -248,6 +249,101 @@ All modules in `codecs/` and `importer/` enforce the identical symbol naming hie
 | `codecs/flac.{c,h}` | `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header`, `lsm_flac_construct_specific_parameters`, `lsm_flac_copy_codec_specific`, `lsm_flac_print_codec_specific` | `flac_read_utf8_uint64`, `flac_put_specific_Metadata_blocks`, `flac_print_*` |
 | `codecs/a52.{c,h}` / `codecs/dts.{c,h}` / `codecs/alac.{c,h}` / `codecs/opus.{c,h}` / `codecs/mp4a.{c,h}` / `codecs/mp4v.{c,h}` / `codecs/mp4sys.{c,h}` / `codecs/vc1.{c,h}` / `codecs/wma.{c,h}` / `codecs/qt_wfex.{c,h}` | `lsm_a52_*`, `lsm_dts_*`, `lsm_alac_*`, `lsm_opus_*`, `lsm_mp4a_*`, `lsm_mp4v_*`, `lsm_mp4sys_*`, `lsm_vc1_*`, `lsm_wma_*`, `lsm_qt_wfex_*` | `a52_*`, `dts_*`, `alac_*`, `opus_*`, `mp4a_*`, `mp4v_*`, `mp4sys_*`, `vc1_*`, `wma_*`, `qt_wfex_*` |
 | `importer/importer.{c,h}` & `importer/*_imp.c` | `lsm_importer_make_fake_movie`, `lsm_importer_make_fake_track`, `lsm_importer_setup_fake_track`, `lsm_importer_break_fake_movie`, `lsm_importer_mark_resume_pos`, `lsm_importer_construct_timeline_by_walk`, `lsm_importer_construct_timeline_by_walk_filtered` *(Non-public: `lsmash_importer_*` are excluded from `liblsmash.ver` by `configure` and are internal symbols for CLI tool transition only, not part of the shared library ABI)* | `importer_has_isobmff_signature`, `importer_get_sample_entry_index`, `a52_imp_*`, `adts_imp_*`, `als_imp_*`, `amr_imp_*`, `dts_imp_*`, `flac_imp_*`, `isobm_imp_*`, `ivf_imp_*`, `mp3_imp_*`, `nalu_imp_*`, `vc1_imp_*`, `wave_imp_*` |
+
+### 6.5 Timestamp Generation Algorithms (`DTS -> PTS` & `PTS -> DTS`)
+
+#### 6.5.1 Generating PTS from DTS in Classical Reordering (MPEG-1/2 Video, MPEG-4 Visual & SMPTE VC-1)
+In MPEG-1/2 Video (ITU-T H.262 | ISO/IEC 13818-2 Section 6.1.1.11), MPEG-4 Visual / Part 2 (ISO/IEC 14496-2), and SMPTE VC-1 (SMPTE 421M Section 5.4), the decoder reorder buffer holds at most two reference pictures (`max_num_reorder_pics <= 1`). When an elementary stream provides frames in decoding order with strictly increasing decoding timestamps `In[i].DTS` (`i = 0, 1, ..., n`), presentation timestamps `Out[i].PTS` (`CTS`) are derived deterministically from each frame's coding type:
+
+- **Picture Type Classification for Reordering**:
+  1. **Reference / Anchor Pictures (Subject to Reorder Buffer Delay)**:
+     - **MPEG-1/2 Video**: `I`-pictures and `P`-pictures.
+     - **MPEG-4 Visual**: `I-VOP`, `P-VOP`, and `S(GMC)-VOP` (Sprite / Global Motion Compensation VOP).
+     - **SMPTE VC-1**: `I`-pictures, `P`-pictures, and **Skipped pictures** (coded as minimal-payload `P`-pictures that repeat the prior reference picture and advance the reference buffer slot identically to a `P`-picture).
+  2. **Non-Reference Pictures (Output Immediately Without Reorder Buffer Storage)**:
+     - **MPEG-1/2 Video**: `B`-pictures.
+     - **MPEG-4 Visual**: `B-VOP`.
+     - **SMPTE VC-1**: `B`-pictures and **`BI`-pictures** (`BI`-pictures are intra-coded like `I`-pictures, but cannot be used as a reference for subsequent pictures and therefore bypass the reorder buffer just like `B`-pictures).
+
+- **Derivation Rules**:
+  1. **Streams without B-pictures (`low_delay == 1` / `max_b_frames == 0`)**:
+     No reorder delay is applied; every picture is presented immediately upon decoding:
+
+         Out[i].PTS = In[i].DTS
+
+  2. **Streams with B-pictures (`low_delay == 0`)**:
+     The reorder buffer delays output by 1 picture step so that no sample violates causality (`PTS >= DTS`). When shifted by the initial 1-picture reorder delay so that `Out[i].PTS >= In[i].DTS` holds everywhere:
+     - **If picture `i` is a Reference Picture (`I`, `P`, `S(GMC)`, or `Skipped`)**: it enters the reorder buffer upon decoding and is output only when the **next Reference Picture `k` (`k > i`)** is decoded (or at end-of-sequence); its presentation timestamp is therefore:
+
+           Out[i].PTS = In[k].DTS
+
+     - **If picture `i` is a Non-Reference Picture (`B` or `BI`)**: its backward reference picture is already in the reorder buffer, so it is output immediately upon decoding:
+
+           Out[i].PTS = In[i].DTS
+
+     Example (`I0 P3 B1 B2 P6 B4 B5` in decoding order):
+
+         Decoding index i:       0 (I0)  1 (P3)  2 (B1)  3 (B2)  4 (P6)  5 (B4)  6 (B5)
+         In[i].DTS (ticks):      0       1       2       3       4       5       6
+         Out[i].PTS (unshifted): 0       3       1       2       6       4       5
+         Out[i].PTS (PTS>=DTS):  1       4       2       3       7       5       6
+
+#### 6.5.2 Generating DTS from PTS for Arbitrary Reorder Delay `D` (Ring-Buffer Algorithm & Proof)
+For codecs supporting hierarchical B-pyramids with an arbitrary reorder delay of `D` frames (`D >= 0`, such as H.264/AVC and HEVC), or when applying an external VFR timecode file (`cli/timelineeditor.c`), L-SMASH (like `libx264`) synthesizes `Out[j].DTS` from the input presentation timestamps `In[j].PTS` and the reorder delay `D`.
+
+A valid container timeline requires two invariants for every sample `j`:
+1. **Causality (`PTS >= DTS`)**: `Out[j].PTS >= Out[j].DTS`.
+2. **Strict Monotonicity of `DTS`**: `Out[j].DTS > Out[j - 1].DTS` for all `j >= 1`.
+
+Let `In[j].PTS` (`j = 0, 1, 2, ..., n`, with `0 <= D <= n`) denote the strictly monotonically increasing sequence of presentation timestamps (`In[0].PTS < In[1].PTS < ... < In[n].PTS`, tracked through a sorted ring buffer of `D + 1` entries). Define the initial composition delay:
+
+    T_delay = In[D].PTS - In[0].PTS
+
+The algorithm computes `Out[j].DTS` across two regimes:
+
+    For 0 <= j <= D  (startup regime):       Out[j].DTS = In[j].PTS - T_delay
+    For j > D        (steady-state regime):  Out[j].DTS = In[j - D].PTS
+
+*(Note: Adding the constant offset `+T_delay` to both `Out[j].PTS` and `Out[j].DTS` makes `Out[0].DTS = In[0].PTS >= 0` while preserving `Out[j].PTS - Out[j].DTS` and `Out[j].DTS - Out[j - 1].DTS` identically.)*
+
+**Mathematical Proof of Invariants (1) and (2)**:
+- **`[i]` Startup regime (`0 <= j <= D`)**:
+  - Since `In[0].PTS < In[1].PTS < ... < In[D].PTS` and `D >= 0`, we have `T_delay = In[D].PTS - In[0].PTS >= 0`.
+  - For every `j` in `0 <= j <= D`:
+
+        Out[j].PTS - Out[j].DTS = In[j].PTS - (In[j].PTS - T_delay)
+                                = T_delay >= 0
+        ==> Out[j].PTS >= Out[j].DTS.
+
+  - For every `j` in `1 <= j <= D`:
+
+        Out[j].DTS - Out[j - 1].DTS = (In[j].PTS - T_delay) - (In[j - 1].PTS - T_delay)
+                                    = In[j].PTS - In[j - 1].PTS > 0
+        ==> Out[j].DTS > Out[j - 1].DTS.
+
+- **`[ii]` Steady-state regime (`j > D`)**:
+  - For `D == 0`, `Out[j].DTS = In[j].PTS = Out[j].PTS`. For `D >= 1`, since `j > j - D` and `In` is strictly increasing, `In[j].PTS > In[j - D].PTS`:
+
+        Out[j].PTS = In[j].PTS >= In[j - D].PTS = Out[j].DTS
+        ==> Out[j].PTS >= Out[j].DTS.
+
+  - For every `j >= D + 2`, both `j` and `j - 1` satisfy `j - 1 > D`, so:
+
+        Out[j].DTS - Out[j - 1].DTS = In[j - D].PTS - In[j - 1 - D].PTS > 0
+        ==> Out[j].DTS > Out[j - 1].DTS.
+
+- **`[iii]` Boundary transition from `j = D` to `j = D + 1`**:
+  - Evaluating `Out[D].DTS` at `j = D` (startup regime) and `Out[D + 1].DTS` at `j = D + 1` (steady-state regime):
+
+        Out[D].DTS     = In[D].PTS - (In[D].PTS - In[0].PTS) = In[0].PTS
+        Out[D + 1].DTS = In[(D + 1) - D].PTS                 = In[1].PTS
+
+  - Because `In[0].PTS < In[1].PTS` by strict monotonicity of the input sequence:
+
+        Out[D].DTS == In[0].PTS < In[1].PTS == Out[D + 1].DTS
+        ==> Out[D + 1].DTS > Out[D].DTS.
+
+Combining `[i]`, `[ii]`, and `[iii]`, the generated `Out[j].DTS` sequence satisfies `PTS >= DTS` and strict monotonicity for all `0 <= j <= n`. **`Q.E.D.`**
 
 ---
 

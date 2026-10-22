@@ -100,6 +100,20 @@ NALU-based video codecs encapsulate variable-length Network Abstraction Layer Un
 - **Dolby Vision (`dvcC` / `dvvC`)**: Parses Dolby Vision RPU headers and serializes `DOVIConfigurationBox` (`dvcC` for Profiles ≤ 7, `dvvC` for Profile 8+) with `dv_version_major/minor`, `dv_profile`, `dv_level`, `rpu_present_flag`, `el_present_flag`, `bl_present_flag`, and `dv_bl_signal_compatibility_id`. Adds the `dby1` compatible brand.
 - **Layered HEVC (`lhvC`)**: Serializes `LHEVCConfigurationBox` containing multi-layer parameter set arrays for stereoscopic 3D and multiview video profiles.
 
+
+### 2.5 Out-of-Band (`avc1` / `hvc1`) vs. In-Band (`avc3` / `hev1`) Parameter Set Storage
+ISO/IEC 14496-15 defines two distinct pairs of sample entry FourCCs for H.264/AVC and H.265/HEVC:
+
+| Feature | `avc1` / `hvc1` (Out-of-Band Only) | `avc3` / `hev1` (In-Band Allowed) |
+| :--- | :--- | :--- |
+| **SPS / PPS / VPS in Sample Entry (`avcC` / `hvcC`)** | **Mandatory** (all parameter sets required by samples referencing this entry must be present in `avcC` / `hvcC`, with `array_completeness = 1` in `hvcC`) | Optional / partial (`avcC` / `hvcC` may contain initial or zero parameter sets, with `array_completeness = 0` in `hvcC`) |
+| **SPS / PPS / VPS inside Sample Data (`mdat`)** | **Strictly Forbidden** by ISO/IEC 14496-15 | **Permitted** (parameter set NAL units may be stored in-band inside access units in `mdat`) |
+| **Mid-Stream Parameter Set / Resolution Change** | Requires appending a **new Sample Entry** to `stsd` and switching `sample->index` (`sample_description_index` in `stsc`) | Can update parameter sets in-band at a random access point without adding a new `stsd` entry |
+
+When importing raw H.264 or HEVC Annex-B streams (`importer/nalu_imp.c`), L-SMASH emits **`avc1`** and **`hvc1`** for broad hardware and player compatibility:
+- All `VPS`, `SPS`, `PPS` (and declarative prefix SEI such as Mastering Display Colour Volume in HEVC) NAL units are stripped from the access unit payloads and stored in `avcC` / `hvcC`.
+- When a parameter set changes mid-stream, the importer signals `IMPORTER_CHANGE`. Both the muxer and the Media Timeline walker (`lsm_importer_construct_timeline_by_walk_filtered()`) compare the updated summary via `lsmash_compare_summary()`, append a new `avc1` / `hvc1` Sample Entry to `stsd`, and advance `sample->index` for subsequent samples.
+
 ---
 
 ## 3. OBU-Based Video (`codecs/av1`, `importer/ivf_imp`)
@@ -228,7 +242,9 @@ Imports raw MPEG-4 Audio Lossless Coding (ALS) streams, verifies ALS frame heade
 - **Fake Box & Media Timeline**: `mp4a` + `esds` fake entry and the sequential walk. Each random access unit is a sample, whether its size is in the stream (`ra_flag == 1`, the 4-byte size field is not part of the sample) or in the header (`ra_flag == 2`). When `random_access == 0` the whole remainder of the stream is the only sample, which the importer holds in the byte stream buffer, so `get_accessunit` fills the buffer again if the Media Timeline has moved the stream position and emptied it. The last sample duration is the total number of samples minus the preceding frames.
 
 ### 5.4 MPEG-1/2 Audio Layer III / MP3 (`importer/mp3_imp.c`)
-- **Fake Box & Media Timeline**: `mp4a` + `esds` fake entry (Legacy Interface, no `DecoderSpecificInfo`) and the sequential walk. A sample is a whole frame including its 4-byte header at the file offset where it is stored, ID3v2 / ID3v1 / APE tags are skipped, a Xing / Info / VBRI frame is not a sample, and the pre-roll distance caused by the bit reservoir is recorded as the sequential reader reports it.- **Frame Sync**: Locks onto sync words (`0xFFE` / `0xFFF`), decoding MPEG audio version (MPEG-1, MPEG-2, MPEG-2.5), layer, bitrate index, sample rate index, and padding bit.
+- **Fake Box & Media Timeline**: `mp4a` + `esds` fake entry (Legacy Interface, no `DecoderSpecificInfo`) and the sequential walk. A sample is a whole frame including its 4-byte header at the file offset where it is stored, ID3v2 / ID3v1 / APE tags are skipped, a Xing / Info / VBRI frame is not a sample, and the pre-roll distance caused by the bit reservoir is recorded as the sequential reader reports it.
+
+- **Frame Sync**: Locks onto sync words (`0xFFE` / `0xFFF`), decoding MPEG audio version (MPEG-1, MPEG-2, MPEG-2.5), layer, bitrate index, sample rate index, and padding bit.
 - **Frame Sizing**:
   ```c
   /* MPEG-1 (1152 samples/frame) */

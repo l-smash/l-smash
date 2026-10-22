@@ -179,6 +179,7 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 | **[`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
 | **[`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md)** | Comprehensive architecture and container binding specification for all video and audio codecs and stream importers (`codecs/*`, `importer/*`). |
 | **[`docs/TESTING.md`](docs/TESTING.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |
+| **[`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md)** | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, HRD/VBV Leaky Bucket model, HE-AAC filterbank delays). |
 
 ---
 
