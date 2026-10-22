@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.6` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.7` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.6` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.6`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.7`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -163,3 +163,17 @@ Prior to the `v2.21.0`–`v2.23.6` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **Defects found by the new tests**: `lsm_mp4sys_setup_summary_from_DecoderSpecificInfo()` failed when `DecoderSpecificInfo` was absent, as it is for the Legacy Interface MP3, because `mp4sys_export_DecoderSpecificInfo()` did not set the length to 0 for a missing descriptor, so `lsmash_get_summary()` returned NULL for an MP3 sample entry. `lsm_mp4a_remove_AudioSpecificConfig()` did not free the raw `ALSSpecificConfig` data kept by the ALS configuration. For `random_access == 0`, the ALS importer reads the whole stream from its byte stream buffer, which is emptied by a seek, so `get_accessunit` now fills it again.
 - **Tests**: added suite 20 `test_read_file_audio_raw_streams`. Suite 18 now uses a synthetic H.264 Annex-B stream as the unsupported raw stream. `make test` now runs 20 suites (148,846 assertions).
 - **Documentation**: `SPEC.md`, `README.md`, `docs/specs/codecs_and_importers.md` and `docs/specs/testing_strategy.md` describe the flavor decision, the common walk, the resume position and suite 20.
+
+
+### 3.14 `v2.23.7`: Fake Boxes and Media Timeline for H.264, HEVC and VC-1 Video Importers & HEVC Parser Fixes
+- **H.264, HEVC and VC-1 Advanced Profile through the unified file API** (`importer/nalu_imp.c`, `importer/vc1_imp.c`, `importer/importer.{c,h}`, `core/timeline.{c,h}`): all remaining raw video stream importers now build a fake `moov` / `trak` / `stsd` (`avc1` + `avcC`, `hvc1` + `hvcC`, `vc-1` + `dvc1`) in their probe via `lsm_importer_setup_fake_track()` and provide `construct_timeline` via `lsm_importer_construct_timeline_by_walk_filtered()`. Every importer in `importer_func_table` now supports `lsmash_read_file()` -> `lsmash_construct_timeline()` -> `lsmash_get_sample_from_media_timeline()`.
+
+- **Stateless sample filters & `timebase` scaling**: raw Annex-B NALU access units (with 3- or 4-byte start codes, trailing zero bytes, AUD, filler data and parameter set NALUs stripped from samples) and VC-1 EBDUs (with inter-EBDU zero padding stripped) are reconstructed on demand from the underlying stream bytes via stateless sample filters registered with `lsm_timeline_set_sample_filter()`. Sequential reader timestamps counted in `timebase` units are scaled by `timestamp_scale = summary->timebase` into the media timescale during the Timeline walk, and `IMPORTER_CHANGE` returned either via `walker.status` or the `get_accessunit` return code appends new sample entries on mid-stream parameter set changes.
+
+- **Defects found by the new tests** (`codecs/hevc.{c,h}`):
+  1. `lsm_hevc_find_au_delimit_by_nalu_type()` previously checked only `prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31 || prev_nalu_type == HEVC_NALU_TYPE_UNSPEC62`, failing to detect a new access unit boundary when an Access Unit Delimiter (`AUD`) or parameter set followed a `SUFFIX_SEI`, `FD` (Filler Data), or `UNSPEC63` NALU.
+  2. `SIZEOF_PPS_EXCLUDING_HEAP` in `codecs/hevc.h` was defined as `(sizeof(hevc_pps_t) - offsetof(hevc_pps_t, col_alloc_size))` (48 bytes on 64-bit targets) instead of `offsetof(hevc_pps_t, col_alloc_size)` (16 bytes), zeroing out `pps->col_alloc_size`, `pps->row_alloc_size` and `pps->colWidth` whenever a PPS was re-parsed and leaking `pps->colWidth`.
+
+- **Tests**: updated suite 18 (`test_read_file_fake_box_and_raw_stream_acceptance`) and added suite 21 `test_read_file_video_raw_streams` covering H.264 (including mid-stream SPS/resolution change), HEVC (mastering display SEI, prefix/suffix SEI, filler data) and VC-1 Advanced Profile. `make test` now runs 21 suites (149,621 assertions) with zero memory leaks.
+
+- **Documentation**: synchronized `SPEC.md`, `README.md`, `docs/HISTORY.md`, `docs/specs/codecs_and_importers.md` and `docs/specs/testing_strategy.md` to `v2.23.7`.
