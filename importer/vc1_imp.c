@@ -2,6 +2,7 @@
  * vc1_imp.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -34,12 +35,24 @@
     SMPTE RP 2025-2007
 ***************************************************************************/
 #include "codecs/vc1.h"
+#include "core/timeline.h"
+
+/* The Media Timeline gets a sample from the file range that its access unit occupies. The range starts at the start code of
+ * the first EBDU of the access unit and ends right before the start code of the first EBDU of the next access unit, hence the
+ * ranges of the access units never overlap and have no gap. */
+typedef struct
+{
+    uint64_t start;     /* file offset of the first EBDU of the access unit which is being collected */
+    uint64_t pos;       /* file offset of the first byte of the access unit that get_accessunit has got last */
+    uint32_t length;    /* number of the bytes of the access unit that get_accessunit has got last, 0 if invalid */
+} vc1_au_range_t;
 
 typedef struct
 {
     vc1_info_t             info;
     vc1_sequence_header_t  first_sequence;
     lsmash_media_ts_list_t ts_list;
+    vc1_au_range_t         au_range;
     uint8_t  composition_reordering_present;
     uint32_t max_au_length;
     uint32_t num_undecodable;
@@ -74,10 +87,17 @@ static vc1_importer_t *vc1_imp_create( importer_t *importer )
     return vc1_imp;
 }
 
-static int vc1_imp_complete_au( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture, int probe )
+/* end is the file offset where the access unit ends, that is, where the next access unit starts. */
+static int vc1_imp_complete_au( vc1_importer_t *vc1_imp, int probe, uint64_t end )
 {
+    vc1_access_unit_t  *access_unit = &vc1_imp->info.access_unit;
+    vc1_picture_info_t *picture     = &vc1_imp->info.picture;
     if( !picture->present )
         return 0;
+    vc1_au_range_t *range = &vc1_imp->au_range;
+    range->pos    = range->start;
+    range->length = (end > range->start && end - range->start <= UINT32_MAX) ? (uint32_t)(end - range->start) : 0;
+    range->start  = end;
     if( !probe )
         memcpy( access_unit->data, access_unit->incomplete_data, access_unit->incomplete_data_length );
     access_unit->data_length = access_unit->incomplete_data_length;
@@ -130,7 +150,8 @@ static int vc1_imp_get_access_unit_internal( importer_t *importer, int probe )
         {
             /* For the last EBDU.
              * This EBDU already has been appended into the latest access unit and parsed. */
-            vc1_imp_complete_au( access_unit, &info->picture, probe );
+            /* The importer is at the end of the stream, which is the end of the last access unit. */
+            vc1_imp_complete_au( vc1_imp, probe, lsmash_bs_get_stream_pos( bs ) );
             return vc1_imp_get_au_internal_succeeded( vc1_imp );
         }
         else if( bdu_type == 0xFF )
@@ -156,7 +177,7 @@ static int vc1_imp_get_access_unit_internal( importer_t *importer, int probe )
             /* Complete the current access unit if encountered delimiter of current access unit. */
             if( lsm_vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
                 /* The last video coded EBDU belongs to the access unit you want at this time. */
-                complete_au = vc1_imp_complete_au( access_unit, &info->picture, probe );
+                complete_au = vc1_imp_complete_au( vc1_imp, probe, info->ebdu_head_pos );
             /* Increase the buffer if needed. */
             uint64_t possible_au_length = access_unit->incomplete_data_length + ebdu_length;
             if( sb->bank->buffer_size < possible_au_length
@@ -250,7 +271,7 @@ static int vc1_imp_get_access_unit_internal( importer_t *importer, int probe )
         /* If there is no more data in the stream, and flushed chunk of EBDUs, flush it as complete AU here. */
         else if( access_unit->incomplete_data_length && access_unit->data_length == 0 )
         {
-            vc1_imp_complete_au( access_unit, &info->picture, probe );
+            vc1_imp_complete_au( vc1_imp, probe, next_ebdu_head_pos );
             return vc1_imp_get_au_internal_succeeded( vc1_imp );
         }
         if( complete_au )
@@ -285,6 +306,11 @@ static int vc1_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
         importer->status = IMPORTER_ERROR;
         return err;
     }
+    if( info->access_unit.data_length && !vc1_imp->au_range.length )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_INVALID_DATA;
+    }
     lsmash_sample_t *sample = lsmash_create_sample( vc1_imp->max_au_length );
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -307,6 +333,10 @@ static int vc1_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     if( access_unit->random_accessible )
         /* All random access point is a sync sample even if it's an open RAP. */
         sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    /* The sample is the concatenation of the EBDUs of the access unit, while the file range that the access unit occupies
+     * also has the zero bytes which are put between EBDUs. The Media Timeline gets the sample from the stored bytes. */
+    sample->pos = vc1_imp->au_range.pos;
+    importer->sample_raw_length = vc1_imp->au_range.length;
     sample->length = access_unit->data_length;
     memcpy( sample->data, access_unit->data, access_unit->data_length );
     return current_status;
@@ -475,6 +505,13 @@ static int vc1_imp_probe( importer_t *importer )
             err = LSMASH_ERR_IO;
             goto fail;
         }
+        /* Leading zero bytes that run out without any start code mean that this is not a VC-1 stream. Without this check,
+         * a stream consisting of zero bytes only would keep this loop going beyond the end of the stream. */
+        if( lsmash_bs_is_end( bs, first_ebdu_head_pos + VC1_START_CODE_PREFIX_LENGTH - 1 ) )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
         /* The first EBDU in decoding order of the stream shall have start code (0x000001). */
         if( 0x000001 == lsmash_bs_show_be24( bs, first_ebdu_head_pos ) )
             break;
@@ -516,6 +553,20 @@ static int vc1_imp_probe( importer_t *importer )
     info->access_unit.data               = temp_access_unit;
     info->access_unit.incomplete_data    = temp_incomplete_access_unit;
     memset( &info->picture, 0, sizeof(vc1_picture_info_t) );
+    vc1_imp->au_range = (vc1_au_range_t){ .start = first_ebdu_head_pos };
+    /* Make fake movie, track and sample entry (vc-1 + dvc1) so that this raw stream is readable
+     * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
+     * The media timescale is the frame rate numerator and a time stamp counted in the denominator, which is the timebase of the
+     * summary, is converted into it by multiplying the timebase, exactly as the muxer does. If the sequence header does not
+     * tell the frame rate, there is no timescale to refer to, so that a time stamp is counted in frames: a frame lasts 1. */
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK,
+                                              summary->timescale ? summary->timescale : 1,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+        goto fail;
+    importer->timestamp_scale = summary->timescale ? summary->timebase : 1;
+    /* The stream position is at the first start code, which is where the sequential reader starts. */
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     vc1_imp_remove( vc1_imp );
@@ -536,6 +587,46 @@ static uint32_t vc1_imp_get_last_delta( importer_t *importer, uint32_t track_num
          : UINT32_MAX;    /* arbitrary */
 }
 
+/* Convert the file range of an access unit into the sample: the zero bytes that precede a start code or the end of the access
+ * unit are not a part of any EBDU, since an EBDU never ends with a zero byte. This follows the way lsm_vc1_find_next_start_code_prefix()
+ * delimits EBDUs. The sample is never larger than the stored bytes, so that the conversion is done in place. */
+static int vc1_imp_filter_sample( lsmash_sample_t *sample, const void *context )
+{
+    uint8_t *data     = sample->data;
+    uint32_t size     = sample->length;
+    uint32_t out      = 0;
+    uint32_t i        = 0;
+    while( i < size )
+    {
+        if( i + VC1_START_CODE_LENGTH > size || data[i] != 0 || data[i + 1] != 0 || data[i + 2] != 1 )
+            return LSMASH_ERR_INVALID_DATA;
+        uint32_t next = i + VC1_START_CODE_LENGTH;
+        while( next + VC1_START_CODE_PREFIX_LENGTH <= size && !(data[next] == 0 && data[next + 1] == 0 && data[next + 2] == 1) )
+            ++next;
+        uint32_t end      = next + VC1_START_CODE_PREFIX_LENGTH <= size ? next : size;
+        uint32_t ebdu_end = end;
+        while( ebdu_end > i + VC1_START_CODE_LENGTH && data[ebdu_end - 1] == 0 )
+            --ebdu_end;
+        memmove( data + out, data + i, ebdu_end - i );
+        out += ebdu_end - i;
+        i    = end;
+    }
+    sample->length = out;
+    return 0;
+}
+
+/* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
+ * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
+ * from the sequential reader. */
+static int vc1_imp_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    static const importer_raw_sample_filter_t raw_filter =
+    {
+        .filter = vc1_imp_filter_sample
+    };
+    return lsm_importer_construct_timeline_by_walk_filtered( importer, track_number, &raw_filter );
+}
+
 const importer_functions vc1_importer =
 {
     { "VC-1", offsetof( importer_t, log_level ) },
@@ -543,5 +634,6 @@ const importer_functions vc1_importer =
     vc1_imp_probe,
     vc1_imp_get_accessunit,
     vc1_imp_get_last_delta,
-    vc1_imp_cleanup
+    vc1_imp_cleanup,
+    vc1_imp_construct_timeline
 };

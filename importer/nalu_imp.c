@@ -2,6 +2,7 @@
  * nalu_imp.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -36,6 +37,176 @@
 ***************************************************************************/
 #include "codecs/h264.h"
 #include "codecs/nalu.h"
+#include "core/timeline.h"
+
+/* Both of the importers expose the stream through the Media Timeline. A sample of the stream is a Length-Prefixed NAL unit
+ * sequence, while the file stores an Annex B byte stream, so that the Media Timeline reads the whole range of the file that
+ * an access unit occupies and a sample filter converts it into the sample. The range starts at the start code of the first
+ * NAL unit of the access unit and ends right before the start code of the first NAL unit of the next access unit, hence the
+ * ranges of the access units never overlap and have no gap. */
+typedef struct
+{
+    uint64_t start;     /* file offset of the first NAL unit of the access unit which is being collected */
+    uint64_t pos;       /* file offset of the first byte of the access unit that get_accessunit has got last */
+    uint32_t length;    /* number of the bytes of the access unit that get_accessunit has got last, 0 if invalid */
+} nalu_au_range_t;
+
+/* Fix the range of the access unit that has just been completed. The next access unit starts where this one ends. */
+static void nalu_imp_complete_au_range( nalu_au_range_t *range, uint64_t end )
+{
+    range->pos    = range->start;
+    range->length = (end > range->start && end - range->start <= UINT32_MAX) ? (uint32_t)(end - range->start) : 0;
+    range->start  = end;
+}
+
+/* File offsets of the NAL units which get_accessunit takes out of the samples although their type is kept.
+ * A filter has to know it since it can not look at the state of the parser. The Media Timeline owns this. */
+typedef struct
+{
+    uint32_t  count;
+    uint64_t *position;     /* in the ascending order */
+} nalu_filter_context_t;
+
+static void nalu_imp_destroy_filter_context( void *context )
+{
+    nalu_filter_context_t *filter_context = (nalu_filter_context_t *)context;
+    if( !filter_context )
+        return;
+    lsmash_free( filter_context->position );
+    lsmash_free( filter_context );
+}
+
+static int nalu_imp_compare_position( const void *a, const void *b )
+{
+    uint64_t x = *(const uint64_t *)a;
+    uint64_t y = *(const uint64_t *)b;
+    return x < y ? -1 : x > y;
+}
+
+/* Remember a NAL unit that is dropped from the samples. */
+static int nalu_imp_add_dropped_nalu_position( uint64_t **position, uint32_t *count, uint32_t *alloc, uint64_t pos )
+{
+    if( *count == *alloc )
+    {
+        uint32_t new_alloc = *alloc ? 2 * *alloc : 16;
+        if( new_alloc <= *alloc || new_alloc > UINT32_MAX / sizeof(uint64_t) )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        uint64_t *temp = (uint64_t *)lsmash_realloc( *position, new_alloc * sizeof(uint64_t) );
+        if( !temp )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        *position = temp;
+        *alloc    = new_alloc;
+    }
+    (*position)[ (*count)++ ] = pos;
+    return 0;
+}
+
+static int nalu_imp_h264_is_nalu_in_sample( uint8_t nalu_type )
+{
+    /* Same as the NAL unit types that nalu_imp_h264_get_access_unit_internal() appends to an access unit.
+     * Parameter sets, access unit delimiters, filler data and the types which are not supported are dropped. */
+    return (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SEI)
+        ||  nalu_type == H264_NALU_TYPE_EOS
+        ||  nalu_type == H264_NALU_TYPE_EOB
+        ||  nalu_type == H264_NALU_TYPE_SLICE_AUX;
+}
+
+static int nalu_imp_hevc_is_nalu_in_sample( uint8_t nalu_type )
+{
+    /* Same as the NAL unit types that nalu_imp_hevc_get_access_unit_internal() appends to an access unit.
+     * Parameter sets, access unit delimiters, filler data and the reserved types are dropped. */
+    return nalu_type <= 9                           /* TRAIL_N to RASL_R */
+        || (nalu_type >= 16 && nalu_type <= 21)     /* BLA_W_LP to CRA */
+        ||  nalu_type == 36                         /* EOS */
+        ||  nalu_type == 37                         /* EOB */
+        ||  nalu_type == 39                         /* PREFIX_SEI */
+        ||  nalu_type == 40                         /* SUFFIX_SEI */
+        ||  nalu_type == 62                         /* UNSPEC62 */
+        ||  nalu_type == 63;                        /* UNSPEC63 */
+}
+
+/* Convert an Annex B byte stream of an access unit into the Length-Prefixed NAL units that make a sample.
+ * This follows the way lsm_{h264,hevc}_find_next_start_code() delimits NAL units: a NAL unit ends right before the next
+ * 0x000001 and has no consecutive zero bytes at its end, and the zero bytes before a start code are not a part of any NAL unit.
+ * The length prefix is always 4 bytes (NALU_DEFAULT_NALU_LENGTH_SIZE), which is why the output can be larger than the input. */
+static int nalu_imp_convert_annexb_to_sample
+(
+    lsmash_sample_t             *sample,
+    int                          hevc,
+    const nalu_filter_context_t *context
+)
+{
+    const uint8_t *src           = sample->data;
+    uint32_t       size          = sample->length;
+    uint32_t       header_length = hevc ? 2 : 1;
+    uint8_t       *dst           = NULL;
+    uint32_t       dst_length    = 0;
+    for( int pass = 0; pass < 2; pass++ )
+    {
+        uint32_t i = 0;
+        dst_length = 0;
+        while( 1 )
+        {
+            while( i + 3 <= size && !(src[i] == 0 && src[i + 1] == 0 && src[i + 2] == 1) )
+                ++i;
+            if( i + 3 + header_length > size )
+                break;
+            uint32_t head = i + 3;
+            uint32_t next = head + header_length;
+            while( next + 3 <= size && !(src[next] == 0 && src[next + 1] == 0 && src[next + 2] == 1) )
+                ++next;
+            uint32_t end      = next + 3 <= size ? next : size;
+            uint32_t nalu_end = end;
+            while( nalu_end > head + header_length && src[nalu_end - 1] == 0 )
+                --nalu_end;
+            uint8_t nalu_type = hevc ? (src[head] >> 1) & 0x3F : src[head] & 0x1F;
+            int     keep      = hevc ? nalu_imp_hevc_is_nalu_in_sample( nalu_type ) : nalu_imp_h264_is_nalu_in_sample( nalu_type );
+            if( keep && context && context->count )
+            {
+                uint64_t file_pos = sample->pos + head;
+                if( bsearch( &file_pos, context->position, context->count, sizeof(uint64_t), nalu_imp_compare_position ) )
+                    keep = 0;
+            }
+            if( keep )
+            {
+                uint32_t nalu_length = nalu_end - head;
+                if( dst_length > UINT32_MAX - NALU_DEFAULT_NALU_LENGTH_SIZE - nalu_length )
+                {
+                    lsmash_free( dst );
+                    return LSMASH_ERR_INVALID_DATA;
+                }
+                if( dst )
+                {
+                    for( int k = 0; k < NALU_DEFAULT_NALU_LENGTH_SIZE; k++ )
+                        dst[dst_length + k] = (uint8_t)(nalu_length >> ((NALU_DEFAULT_NALU_LENGTH_SIZE - 1 - k) * 8));
+                    memcpy( dst + dst_length + NALU_DEFAULT_NALU_LENGTH_SIZE, src + head, nalu_length );
+                }
+                dst_length += NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            }
+            i = end;
+        }
+        if( pass == 0 )
+        {
+            dst = (uint8_t *)lsmash_malloc( dst_length ? dst_length : 1 );
+            if( !dst )
+                return LSMASH_ERR_MEMORY_ALLOC;
+        }
+    }
+    lsmash_free( sample->data );
+    sample->data   = dst;
+    sample->length = dst_length;
+    return 0;
+}
+
+static int nalu_imp_h264_filter_sample( lsmash_sample_t *sample, const void *context )
+{
+    return nalu_imp_convert_annexb_to_sample( sample, 0, NULL );
+}
+
+static int nalu_imp_hevc_filter_sample( lsmash_sample_t *sample, const void *context )
+{
+    return nalu_imp_convert_annexb_to_sample( sample, 1, (const nalu_filter_context_t *)context );
+}
 
 typedef struct
 {
@@ -49,6 +220,8 @@ typedef struct
     uint64_t last_intra_cts;
     uint64_t last_sync_cts;
     uint64_t sc_head_pos;
+    nalu_au_range_t au_range;
+    h264_sps_t first_sps;       /* the SPS that the first picture refers to, which the first summary is made of */
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
 } h264_importer_t;
@@ -91,10 +264,13 @@ static h264_importer_t *nalu_imp_create_h264( importer_t *importer )
     return h264_imp;
 }
 
-static int nalu_imp_h264_complete_au( h264_access_unit_t *au, int probe )
+/* end is the file offset where the access unit ends, that is, where the next access unit starts. */
+static int nalu_imp_h264_complete_au( h264_importer_t *h264_imp, int probe, uint64_t end )
 {
+    h264_access_unit_t *au = &h264_imp->info.au;
     if( !au->picture.has_primary || au->incomplete_length == 0 )
         return 0;
+    nalu_imp_complete_au_range( &h264_imp->au_range, end );
     if( !probe )
         memcpy( au->data, au->incomplete_data, au->incomplete_length );
     au->length              = au->incomplete_length;
@@ -245,7 +421,8 @@ static int nalu_imp_h264_get_access_unit_internal
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
             lsm_h264_update_picture_info( info, picture, slice, &info->sei );
-            complete_au = nalu_imp_h264_complete_au( au, probe );
+            /* The importer is at the end of the stream, which is the end of the last access unit. */
+            complete_au = nalu_imp_h264_complete_au( h264_imp, probe, lsmash_bs_get_stream_pos( bs ) );
             if( complete_au )
                 return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
             else
@@ -296,6 +473,11 @@ static int nalu_imp_h264_get_access_unit_internal
                 h264_slice_info_t prev_slice = *slice;
                 if( (err = lsm_h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
                     return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                /* After the whole stream is analyzed, the SPS of the parser is the last one in the stream. The first summary
+                 * has to be made of the one that the first picture refers to, otherwise the size of the sample entry that
+                 * goes with the first configuration record would be that of a later SPS if the stream changes it. */
+                if( probe && !h264_imp->first_sps.present )
+                    h264_imp->first_sps = info->sps;
                 if( probe && info->avcC_pending )
                 {
                     /* Copy and append a Codec Specific info. */
@@ -312,7 +494,7 @@ static int nalu_imp_h264_get_access_unit_internal
                         /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
                         lsm_h264_update_picture_info( info, picture, &prev_slice, &info->sei );
-                        complete_au = nalu_imp_h264_complete_au( au, probe );
+                        complete_au = nalu_imp_h264_complete_au( h264_imp, probe, h264_imp->sc_head_pos );
                     }
                     else
                         lsm_h264_update_picture_info_for_slice( info, picture, &prev_slice );
@@ -326,7 +508,7 @@ static int nalu_imp_h264_get_access_unit_internal
                 {
                     /* The last slice belongs to the AU you want at this time. */
                     lsm_h264_update_picture_info( info, picture, slice, &info->sei );
-                    complete_au = nalu_imp_h264_complete_au( au, probe );
+                    complete_au = nalu_imp_h264_complete_au( h264_imp, probe, h264_imp->sc_head_pos );
                 }
                 switch( nalu_type )
                 {
@@ -375,7 +557,7 @@ static int nalu_imp_h264_get_access_unit_internal
         else if( au->incomplete_length && au->length == 0 )
         {
             lsm_h264_update_picture_info( info, picture, slice, &info->sei );
-            nalu_imp_h264_complete_au( au, probe );
+            nalu_imp_h264_complete_au( h264_imp, probe, next_sc_head_pos );
             return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
         }
         if( complete_au )
@@ -415,6 +597,11 @@ static int nalu_imp_h264_get_accessunit
     {
         importer->status = IMPORTER_ERROR;
         return err;
+    }
+    if( info->au.length && !h264_imp->au_range.length )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_INVALID_DATA;
     }
     nalu_imp_h264_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->avcC_pending )
@@ -479,6 +666,10 @@ static int nalu_imp_h264_get_accessunit
         h264_imp->last_intra_cts = sample->cts;
     if( picture->idr )
         h264_imp->last_sync_cts  = sample->cts;
+    /* The access unit is stored in the stream as Annex B NAL units, which differ from the sample in the start codes and
+     * the NAL units that are not a part of the sample. The Media Timeline gets the sample from these stored bytes. */
+    sample->pos = h264_imp->au_range.pos;
+    importer->sample_raw_length = h264_imp->au_range.length;
     sample->length = au->length;
     memcpy( sample->data, au->data, au->length );
     return current_status;
@@ -713,7 +904,8 @@ static lsmash_video_summary_t *nalu_imp_h264_setup_first_summary
         return NULL;
     }
     lsmash_video_summary_t *summary = nalu_imp_h264_create_summary( (lsmash_h264_specific_parameters_t *)cs->data.structured,
-                                                                    &h264_imp->info.sps, h264_imp->max_au_length );
+                                                                    h264_imp->first_sps.present ? &h264_imp->first_sps : &h264_imp->info.sps,
+                                                                    h264_imp->max_au_length );
     if( !summary )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -741,7 +933,8 @@ static int nalu_imp_h264_analyze_whole_stream
     uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     lsmash_class_t *logger = &(lsmash_class_t){ "H.264" };
-    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
+    if( !importer->is_walker )
+        lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
     h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
     h264_info_t     *info     = &h264_imp->info;
     importer->status = IMPORTER_OK;
@@ -780,20 +973,23 @@ static int nalu_imp_h264_analyze_whole_stream
         else
             ++picture_stats[ picture->type ];
     }
-    lsmash_log_refresh_line( &logger );
-    lsmash_log( &logger, LSMASH_LOG_INFO,
-                "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
-                "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
-                picture_stats[H264_PICTURE_TYPE_IDR        ],
-                picture_stats[H264_PICTURE_TYPE_I          ],
-                picture_stats[H264_PICTURE_TYPE_I_P        ],
-                picture_stats[H264_PICTURE_TYPE_I_P_B      ],
-                picture_stats[H264_PICTURE_TYPE_SI         ]
-              + picture_stats[H264_PICTURE_TYPE_I_SI       ],
-                picture_stats[H264_PICTURE_TYPE_SI_SP      ]
-              + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP  ]
-              + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
-                picture_stats[H264_PICTURE_TYPE_NONE       ] );
+    if( !importer->is_walker )
+    {
+        lsmash_log_refresh_line( &logger );
+        lsmash_log( &logger, LSMASH_LOG_INFO,
+                    "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
+                    "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
+                    picture_stats[H264_PICTURE_TYPE_IDR        ],
+                    picture_stats[H264_PICTURE_TYPE_I          ],
+                    picture_stats[H264_PICTURE_TYPE_I_P        ],
+                    picture_stats[H264_PICTURE_TYPE_I_P_B      ],
+                    picture_stats[H264_PICTURE_TYPE_SI         ]
+                  + picture_stats[H264_PICTURE_TYPE_I_SI       ],
+                    picture_stats[H264_PICTURE_TYPE_SI_SP      ]
+                  + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP  ]
+                  + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
+                    picture_stats[H264_PICTURE_TYPE_NONE       ] );
+    }
     /* Copy and append the last Codec Specific info. */
     if( (err = nalu_imp_h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
         goto fail;
@@ -877,6 +1073,24 @@ static int nalu_imp_h264_probe( importer_t *importer )
     lsmash_list_remove_entries( info->avcC_param.parameter_sets->pps_list );
     lsmash_list_remove_entries( info->avcC_param.parameter_sets->spsext_list );
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
+    h264_imp->au_range = (nalu_au_range_t){ .start = first_sc_head_pos };
+    /* Make fake movie, track and sample entry (avc1 + avcC) so that this raw stream is readable
+     * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
+     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into it
+     * by multiplying the timebase, exactly as the muxer does. */
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, 1 );
+    uint32_t track_ID;
+    if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK, summary->timescale,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+        goto fail;
+    importer->timestamp_scale = summary->timebase;
+    /* The stream position is at the first start code, which is where the sequential reader starts. */
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     nalu_imp_remove_h264( h264_imp );
@@ -897,6 +1111,18 @@ static uint32_t nalu_imp_h264_get_last_delta( importer_t *importer, uint32_t tra
          : UINT32_MAX;    /* arbitrary */
 }
 
+/* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
+ * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
+ * from the sequential reader. */
+static int nalu_imp_h264_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    static const importer_raw_sample_filter_t raw_filter =
+    {
+        .filter = nalu_imp_h264_filter_sample
+    };
+    return lsm_importer_construct_timeline_by_walk_filtered( importer, track_number, &raw_filter );
+}
+
 const importer_functions h264_importer =
 {
     { "H.264", offsetof( importer_t, log_level ) },
@@ -904,7 +1130,8 @@ const importer_functions h264_importer =
     nalu_imp_h264_probe,
     nalu_imp_h264_get_accessunit,
     nalu_imp_h264_get_last_delta,
-    nalu_imp_h264_cleanup
+    nalu_imp_h264_cleanup,
+    nalu_imp_h264_construct_timeline
 };
 
 /***************************************************************************
@@ -925,6 +1152,11 @@ typedef struct
     uint32_t last_delta;
     uint64_t last_intra_cts;
     uint64_t sc_head_pos;
+    nalu_au_range_t au_range;
+    hevc_sps_t first_sps;       /* the SPS that the first picture refers to, which the first summary is made of */
+    uint64_t *dropped_nalu_position;    /* only the walker for the Media Timeline records this */
+    uint32_t  dropped_nalu_count;
+    uint32_t  dropped_nalu_alloc;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
     uint8_t  max_TemporalId;
@@ -937,6 +1169,7 @@ static void nalu_imp_remove_hevc( hevc_importer_t *hevc_imp )
     lsmash_list_remove_entries( hevc_imp->hvcC_list );
     lsm_hevc_cleanup_parser( &hevc_imp->info );
     lsmash_free( hevc_imp->ts_list.timestamp );
+    lsmash_free( hevc_imp->dropped_nalu_position );
     lsmash_free( hevc_imp );
 }
 
@@ -961,10 +1194,13 @@ static hevc_importer_t *nalu_imp_create_hevc( importer_t *importer )
     return hevc_imp;
 }
 
-static int nalu_imp_hevc_complete_au( hevc_access_unit_t *au, int probe )
+/* end is the file offset where the access unit ends, that is, where the next access unit starts. */
+static int nalu_imp_hevc_complete_au( hevc_importer_t *hevc_imp, int probe, uint64_t end )
 {
+    hevc_access_unit_t *au = &hevc_imp->info.au;
     if( !au->picture.has_primary || au->incomplete_length == 0 )
         return 0;
+    nalu_imp_complete_au_range( &hevc_imp->au_range, end );
     if( !probe )
         memcpy( au->data, au->incomplete_data, au->incomplete_length );
     au->TemporalId          = au->picture.TemporalId;
@@ -1110,7 +1346,8 @@ static int nalu_imp_hevc_get_access_unit_internal
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
             lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-            complete_au = nalu_imp_hevc_complete_au( au, probe );
+            /* The importer is at the end of the stream, which is the end of the last access unit. */
+            complete_au = nalu_imp_hevc_complete_au( hevc_imp, probe, lsmash_bs_get_stream_pos( bs ) );
             if( complete_au )
                 return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
             else
@@ -1166,6 +1403,11 @@ static int nalu_imp_hevc_get_access_unit_internal
                                                                 nalu        + nuh.length,
                                                                 nalu_length - nuh.length )) < 0 )
                     return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                /* After the whole stream is analyzed, the SPS of the parser is the last one in the stream. The first summary
+                 * has to be made of the one that the first picture refers to, otherwise the size of the sample entry that
+                 * goes with the first configuration record would be that of a later SPS if the stream changes it. */
+                if( probe && !hevc_imp->first_sps.present )
+                    hevc_imp->first_sps = info->sps;
                 if( probe && info->hvcC_pending )
                 {
                     /* Copy and append a Codec Specific info. */
@@ -1182,7 +1424,7 @@ static int nalu_imp_hevc_get_access_unit_internal
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
                         lsm_hevc_update_picture_info( info, picture, &prev_slice, &info->sps, &info->sei );
-                        complete_au = nalu_imp_hevc_complete_au( au, probe );
+                        complete_au = nalu_imp_hevc_complete_au( hevc_imp, probe, hevc_imp->sc_head_pos );
                     }
                     else
                         lsm_hevc_update_picture_info_for_slice( info, picture, &prev_slice );
@@ -1196,7 +1438,7 @@ static int nalu_imp_hevc_get_access_unit_internal
                 {
                     /* The last slice belongs to the AU you want at this time. */
                     lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-                    complete_au = nalu_imp_hevc_complete_au( au, probe );
+                    complete_au = nalu_imp_hevc_complete_au( hevc_imp, probe, hevc_imp->sc_head_pos );
                 }
                 switch( nalu_type )
                 {
@@ -1211,6 +1453,13 @@ static int nalu_imp_hevc_get_access_unit_internal
                             if( (err = lsm_hevc_try_to_append_dcr_nalu(info, HEVC_DCR_NALU_TYPE_PREFIX_SEI, nalu, nalu_length)) < 0 )
                                 return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                             info->sei.mastering_display.present--; /* so that only one is added */
+                            /* This NAL unit is not a part of any sample. The Media Timeline has to take it out of the stored bytes, too. */
+                            if( importer->is_walker
+                             && (err = nalu_imp_add_dropped_nalu_position( &hevc_imp->dropped_nalu_position,
+                                                                           &hevc_imp->dropped_nalu_count,
+                                                                           &hevc_imp->dropped_nalu_alloc,
+                                                                           hevc_imp->sc_head_pos + start_code_length )) < 0 )
+                                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                         }
                         else
                             nalu_imp_hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
@@ -1251,7 +1500,7 @@ static int nalu_imp_hevc_get_access_unit_internal
         else if( au->incomplete_length && au->length == 0 )
         {
             lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-            nalu_imp_hevc_complete_au( au, probe );
+            nalu_imp_hevc_complete_au( hevc_imp, probe, next_sc_head_pos );
             return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
         }
         if( complete_au )
@@ -1286,6 +1535,11 @@ static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_nu
     {
         importer->status = IMPORTER_ERROR;
         return err;
+    }
+    if( info->au.length && !hevc_imp->au_range.length )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_INVALID_DATA;
     }
     nalu_imp_hevc_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->hvcC_pending )
@@ -1362,6 +1616,10 @@ static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_nu
         else
             sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
     }
+    /* The access unit is stored in the stream as Annex B NAL units, which differ from the sample in the start codes and
+     * the NAL units that are not a part of the sample. The Media Timeline gets the sample from these stored bytes. */
+    sample->pos = hevc_imp->au_range.pos;
+    importer->sample_raw_length = hevc_imp->au_range.length;
     sample->length = au->length;
     memcpy( sample->data, au->data, au->length );
     return current_status;
@@ -1386,7 +1644,8 @@ static lsmash_video_summary_t *nalu_imp_hevc_setup_first_summary
         hevc_cs->has_hdr10p = 1;
 
     lsmash_video_summary_t *summary = nalu_imp_hevc_create_summary( (lsmash_hevc_specific_parameters_t *)cs->data.structured,
-                                                                    &hevc_imp->info.sps, hevc_imp->max_au_length );
+                                                                    hevc_imp->first_sps.present ? &hevc_imp->first_sps : &hevc_imp->info.sps,
+                                                                    hevc_imp->max_au_length );
     if( !summary )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -1414,7 +1673,8 @@ static int nalu_imp_hevc_analyze_whole_stream
     uint32_t picture_stats[HEVC_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     lsmash_class_t *logger = &(lsmash_class_t){ "HEVC" };
-    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as HEVC\r" );
+    if( !importer->is_walker )
+        lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as HEVC\r" );
     hevc_importer_t *hevc_imp = (hevc_importer_t *)importer->info;
     hevc_info_t     *info     = &hevc_imp->info;
     importer->status = IMPORTER_OK;
@@ -1456,13 +1716,16 @@ static int nalu_imp_hevc_analyze_whole_stream
         else
             ++picture_stats[ picture->type ];
     }
-    lsmash_log_refresh_line( &logger );
-    lsmash_log( &logger, LSMASH_LOG_INFO,
-                "IDR: %"PRIu32", CRA: %"PRIu32", BLA: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
-                picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_CRA],
-                picture_stats[HEVC_PICTURE_TYPE_BLA], picture_stats[HEVC_PICTURE_TYPE_I],
-                picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
-                picture_stats[HEVC_PICTURE_TYPE_NONE]);
+    if( !importer->is_walker )
+    {
+        lsmash_log_refresh_line( &logger );
+        lsmash_log( &logger, LSMASH_LOG_INFO,
+                    "IDR: %"PRIu32", CRA: %"PRIu32", BLA: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
+                    picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_CRA],
+                    picture_stats[HEVC_PICTURE_TYPE_BLA], picture_stats[HEVC_PICTURE_TYPE_I],
+                    picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
+                    picture_stats[HEVC_PICTURE_TYPE_NONE]);
+    }
     /* Copy and append the last Codec Specific info. */
     if( (err = nalu_imp_hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
         goto fail;
@@ -1549,6 +1812,28 @@ static int nalu_imp_hevc_probe( importer_t *importer )
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
         lsmash_list_remove_entries( info->hvcC_param.parameter_arrays->ps_array[i].list );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
+    hevc_imp->au_range = (nalu_au_range_t){ .start = first_sc_head_pos };
+    /* The analysis above ran the same parser as the sequential reader does, so that what it has found is to be found again. */
+    lsmash_freep( &hevc_imp->dropped_nalu_position );
+    hevc_imp->dropped_nalu_count = 0;
+    hevc_imp->dropped_nalu_alloc = 0;
+    /* Make fake movie, track and sample entry (hvc1 + hvcC) so that this raw stream is readable
+     * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
+     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into it
+     * by multiplying the timebase, exactly as the muxer does. */
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, 1 );
+    uint32_t track_ID;
+    if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK, summary->timescale,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+        goto fail;
+    importer->timestamp_scale = summary->timebase;
+    /* The stream position is at the first start code, which is where the sequential reader starts. */
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     nalu_imp_remove_hevc( hevc_imp );
@@ -1569,6 +1854,43 @@ static uint32_t nalu_imp_hevc_get_last_delta( importer_t *importer, uint32_t tra
          : UINT32_MAX;    /* arbitrary */
 }
 
+/* The mastering display colour volume SEI is moved into the configuration record instead of the sample, and the walk is the only
+ * way to know which NAL units of the stream it is, because the parser state decides. */
+static int nalu_imp_hevc_create_filter_context( importer_t *walker, void **context )
+{
+    hevc_importer_t *hevc_imp = (hevc_importer_t *)walker->info;
+    *context = NULL;
+    if( !hevc_imp || hevc_imp->dropped_nalu_count == 0 )
+        return 0;
+    nalu_filter_context_t *filter_context = (nalu_filter_context_t *)lsmash_malloc_zero( sizeof(nalu_filter_context_t) );
+    if( !filter_context )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    filter_context->position = (uint64_t *)lsmash_memdup( hevc_imp->dropped_nalu_position,
+                                                          (size_t)hevc_imp->dropped_nalu_count * sizeof(uint64_t) );
+    if( !filter_context->position )
+    {
+        lsmash_free( filter_context );
+        return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    filter_context->count = hevc_imp->dropped_nalu_count;
+    *context = filter_context;
+    return 0;
+}
+
+/* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
+ * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
+ * from the sequential reader. */
+static int nalu_imp_hevc_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    static const importer_raw_sample_filter_t raw_filter =
+    {
+        .filter          = nalu_imp_hevc_filter_sample,
+        .create_context  = nalu_imp_hevc_create_filter_context,
+        .destroy_context = nalu_imp_destroy_filter_context
+    };
+    return lsm_importer_construct_timeline_by_walk_filtered( importer, track_number, &raw_filter );
+}
+
 const importer_functions hevc_importer =
 {
     { "HEVC", offsetof( importer_t, log_level ) },
@@ -1576,5 +1898,6 @@ const importer_functions hevc_importer =
     nalu_imp_hevc_probe,
     nalu_imp_hevc_get_accessunit,
     nalu_imp_hevc_get_last_delta,
-    nalu_imp_hevc_cleanup
+    nalu_imp_hevc_cleanup,
+    nalu_imp_hevc_construct_timeline
 };

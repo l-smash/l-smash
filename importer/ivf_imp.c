@@ -66,8 +66,7 @@ typedef struct
     lsmash_av1_specific_parameters_t av1c_param;
 
     /* The stream position is shared with the Media Timeline, which seeks the same bitstream to read an arbitrary sample.
-     * Therefore get_accessunit remembers where it has to continue and seeks back to there before it reads. */
-    uint64_t                         resume_pos;    /* file offset of the next IVF frame header */
+     * The importer framework remembers where the sequential reader continues (see lsm_importer_mark_resume_pos()). */
     isom_portable_chunk_t            chunk;
 
     /* Parser state right after the probe, which is what a fresh walk over all frames starts from. */
@@ -121,14 +120,6 @@ static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
-    /* Continue from where the previous call has ended even if the Media Timeline has moved the stream position.
-     * The comparison keeps a sequential reader, including an unseekable one, from any needless seek. */
-    if( lsmash_bs_get_stream_pos( importer->bs ) != ivf_imp->resume_pos
-     && lsmash_bs_read_seek( importer->bs, (int64_t)ivf_imp->resume_pos, SEEK_SET ) < 0 )
-    {
-        importer->status = IMPORTER_ERROR;
-        return LSMASH_ERR_NAMELESS;
-    }
     if( lsmash_bs_is_end( importer->bs, 12 ) )
     {
         importer->status = IMPORTER_EOF;
@@ -220,7 +211,6 @@ static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     sample->cts    = ivf_imp->pts;
     sample->prop   = prop;
     ivf_imp->au_number++;
-    ivf_imp->resume_pos = lsmash_bs_get_stream_pos( importer->bs );
     return current_status;
 }
 
@@ -443,8 +433,9 @@ static int ivf_imp_probe( importer_t *importer )
     ivf_imp->parser.MaxRenderHeight = ivf_imp->max_render_height;
     ivf_imp->seed_sequence_header   = saved_sh;
     ivf_imp->seed_has_hdr10p        = saved_hdr10p;
-    ivf_imp->resume_pos             = gh->header_length;
 
+    /* The probe has skipped the global header, so the stream position is where the first IVF frame header is. */
+    lsm_importer_mark_resume_pos( importer );
     importer->info   = ivf_imp;
     importer->status = IMPORTER_OK;
     return 0;
@@ -468,7 +459,7 @@ static uint32_t ivf_imp_get_last_delta( importer_t *importer, uint32_t track_num
 }
 
 /* The IVF frame payload still holds the OBUs that are not a part of a sample, such as the temporal delimiter. */
-static int ivf_imp_filter_sample( lsmash_sample_t *sample )
+static int ivf_imp_filter_sample( lsmash_sample_t *sample, const void *context )
 {
     return lsm_av1_extract_sample_obus( sample->data, &sample->length );
 }
@@ -613,7 +604,7 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
     ivf_imp->chunk.length      = end_pos - gh->header_length;
     ivf_imp->chunk.number      = 1;
     ivf_imp->chunk.file        = importer->file;
-    lsm_timeline_set_sample_filter( timeline, ivf_imp_filter_sample );
+    lsm_timeline_set_sample_filter( timeline, ivf_imp_filter_sample, NULL, NULL );
     if( (err = lsm_timeline_finish_raw( timeline, sample_count, max_sample_size, media_duration )) < 0
      || (err = lsm_timeline_register( importer->file, timeline )) < 0 )
         goto fail;

@@ -57,9 +57,16 @@ typedef struct
 } isom_sample_info_t;
 
 /* Convert the data stored in the stream into the sample data users get. The filter is applied to the raw data of
- * every sample read from the stream and shall set sample->length to the size of the converted data in place.
- * It must be stateless since samples are read in arbitrary order. */
-typedef int (*lsm_timeline_sample_filter)( lsmash_sample_t *sample );
+ * every sample read from the stream and shall set sample->length to the size of the converted data.
+ * The raw data is in sample->data and its size is in sample->length on entry, and sample->pos is the position of the
+ * raw data in the stream. The filter may keep the buffer and convert in place, or replace sample->data with a buffer
+ * allocated by lsmash_malloc() after it frees the old one, which is required if the converted data is larger.
+ * It must not depend on the order of the calls since samples are read in arbitrary order. The context is the one
+ * passed to lsm_timeline_set_sample_filter() and is read-only for the filter. */
+typedef int (*lsm_timeline_sample_filter)( lsmash_sample_t *sample, const void *context );
+
+/* Release the context of a sample filter when the timeline is destroyed. */
+typedef void (*lsm_timeline_filter_context_destructor)( void *context );
 
 isom_timeline_t *lsm_timeline_create( void );
 
@@ -134,10 +141,14 @@ isom_portable_chunk_t *lsm_timeline_add_raw_chunk
     lsmash_file_t   *file
 );
 
+/* The timeline owns the context from the call on and releases it by the destructor, even if the timeline is destroyed
+ * without being registered. Passing NULL as the context needs no destructor. */
 void lsm_timeline_set_sample_filter
 (
-    isom_timeline_t           *timeline,
-    lsm_timeline_sample_filter filter
+    isom_timeline_t                       *timeline,
+    lsm_timeline_sample_filter             filter,
+    void                                  *context,
+    lsm_timeline_filter_context_destructor destructor
 );
 
 int lsm_timeline_finish_raw

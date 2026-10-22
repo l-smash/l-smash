@@ -69,6 +69,8 @@ struct isom_timeline_tag
     lsm_list_t info_list [1];   /* list of sample info */
     lsm_list_t bunch_list[1];   /* list of LPCM bunch */
     lsm_timeline_sample_filter filter;  /* optional conversion applied to the raw data read from the stream */
+    void *filter_context;               /* owned by the timeline, passed to the filter */
+    lsm_timeline_filter_context_destructor filter_context_destructor;
     int (*get_dts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *dts );
     int (*get_cts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *cts );
     int (*get_sample_duration)( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration );
@@ -116,6 +118,8 @@ void lsm_timeline_destroy( isom_timeline_t *timeline )
     lsm_list_clear( timeline->chunk_list ); /* chunk data must be already freed. */
     lsm_list_clear( timeline->info_list );
     lsm_list_clear( timeline->bunch_list );
+    if( timeline->filter_context && timeline->filter_context_destructor )
+        timeline->filter_context_destructor( timeline->filter_context );
     lsmash_free( timeline );
 }
 
@@ -231,12 +235,23 @@ int lsm_timeline_set_track_duration
 
 void lsm_timeline_set_sample_filter
 (
-    isom_timeline_t           *timeline,
-    lsm_timeline_sample_filter filter
+    isom_timeline_t                       *timeline,
+    lsm_timeline_sample_filter             filter,
+    void                                  *context,
+    lsm_timeline_filter_context_destructor destructor
 )
 {
-    if( timeline )
-        timeline->filter = filter;
+    if( !timeline )
+    {
+        if( context && destructor )
+            destructor( context );
+        return;
+    }
+    if( timeline->filter_context && timeline->filter_context_destructor )
+        timeline->filter_context_destructor( timeline->filter_context );
+    timeline->filter                    = filter;
+    timeline->filter_context            = context;
+    timeline->filter_context_destructor = destructor;
 }
 
 int lsm_timeline_register
@@ -558,8 +573,9 @@ static lsmash_sample_t *timeline_get_sample( isom_timeline_t *timeline, uint32_t
     {
         /* The data in the stream is not the sample itself. Convert it and verify the result against the recorded size
          * so that a corrupted stream never yields a sample whose length disagrees with the timeline. */
+        sample->pos    = info->pos;
         sample->length = read_length;
-        if( timeline->filter( sample ) < 0 || sample->length != info->length )
+        if( timeline->filter( sample, timeline->filter_context ) < 0 || sample->length != info->length )
         {
             lsmash_delete_sample( sample );
             return NULL;

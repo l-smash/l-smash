@@ -49,6 +49,8 @@ static void a52_imp_remove_ac3( ac3_importer_t *ac3_imp )
 {
     if( !ac3_imp )
         return;
+    /* A new dac3 that is built on a change but not handed over to the summary yet must not leak when the importer is destroyed. */
+    lsmash_free( ac3_imp->next_dac3 );
     lsmash_bits_cleanup( ac3_imp->info.bits );
     lsmash_free( ac3_imp );
 }
@@ -184,6 +186,9 @@ static int a52_imp_ac3_get_accessunit( importer_t *importer, uint32_t track_numb
             cs->destruct( cs->data.unstructured );
             cs->data.unstructured = ac3_imp->next_dac3;
         }
+        else
+            lsmash_free( ac3_imp->next_dac3 );
+        ac3_imp->next_dac3 = NULL;  /* handed over to the summary or released */
         summary->frequency  = lsm_a52_get_ac3_sample_rate( param );
         summary->channels   = lsm_a52_get_ac3_channel_count( param );
         //summary->layout_tag = ac3_channel_layout_table[ param->acmod ][ param->lfeon ];
@@ -230,6 +235,7 @@ static int a52_imp_ac3_get_accessunit( importer_t *importer, uint32_t track_numb
                 importer->status = IMPORTER_ERROR;
                 return current_status;
             }
+            lsmash_free( ac3_imp->next_dac3 );  /* an earlier one that has not been consumed */
             ac3_imp->next_dac3 = dac3;
             importer->status = IMPORTER_CHANGE;
         }
@@ -339,6 +345,8 @@ static void a52_imp_remove_eac3( eac3_importer_t *eac3_imp )
     if( !eac3_imp )
         return;
     lsmash_destroy_multiple_buffers( eac3_imp->au_buffers );
+    /* A new dec3 that is built on a change but not handed over to the summary yet must not leak when the importer is destroyed. */
+    lsmash_free( eac3_imp->next_dec3 );
     lsmash_bits_cleanup( eac3_imp->info.bits );
     lsmash_free( eac3_imp );
 }
@@ -532,6 +540,10 @@ static int a52_imp_eac3_get_accessunit( importer_t *importer, uint32_t track_num
             cs->data.unstructured = eac3_imp->next_dec3;
             cs->size              = eac3_imp->next_dec3_length;
         }
+        else
+            lsmash_free( eac3_imp->next_dec3 );
+        eac3_imp->next_dec3        = NULL;  /* handed over to the summary or released */
+        eac3_imp->next_dec3_length = 0;
         summary->max_au_length = eac3_imp->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
         lsm_a52_update_eac3_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
         lsm_a52_update_eac3_channel_count( &summary->channels, &info->dec3_param );
@@ -573,6 +585,7 @@ static int a52_imp_eac3_get_accessunit( importer_t *importer, uint32_t track_num
          || (cs && (new_length != cs->size || memcmp( dec3, cs->data.unstructured, cs->size ))) )
         {
             importer->status = IMPORTER_CHANGE;
+            lsmash_free( eac3_imp->next_dec3 );  /* an earlier one that has not been consumed */
             eac3_imp->next_dec3        = dec3;
             eac3_imp->next_dec3_length = new_length;
         }

@@ -1864,7 +1864,11 @@ int lsm_hevc_find_au_delimit_by_nalu_type
 )
 {
     /* 7.4.2.4.4 Order of NAL units and coded pictures and their association to access units */
-    if( prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31 || prev_nalu_type == HEVC_NALU_TYPE_UNSPEC62 )
+    if( prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31
+     || prev_nalu_type == HEVC_NALU_TYPE_FD
+     || prev_nalu_type == HEVC_NALU_TYPE_SUFFIX_SEI
+     || prev_nalu_type == HEVC_NALU_TYPE_UNSPEC62
+     || prev_nalu_type == HEVC_NALU_TYPE_UNSPEC63 )
         /* The first of any of the following NAL units after the last VCL NAL unit of a coded picture
          * specifies the start of a new access unit:
          *   - access unit delimiter NAL unit (when present)

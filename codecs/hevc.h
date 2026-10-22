@@ -2,6 +2,7 @@
  * hevc.h
  *****************************************************************************
  * Copyright (C) 2013-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -203,7 +204,7 @@ typedef struct
     uint8_t   entropy_coding_sync_enabled_flag;
     uint32_t  num_tile_columns_minus1;
     uint32_t  num_tile_rows_minus1;
-#define SIZEOF_PPS_EXCLUDING_HEAP (sizeof(hevc_pps_t) - offsetof( hevc_pps_t, col_alloc_size ))
+#define SIZEOF_PPS_EXCLUDING_HEAP offsetof( hevc_pps_t, col_alloc_size )
     size_t    col_alloc_size;
     size_t    row_alloc_size;
     uint32_t *colWidth;

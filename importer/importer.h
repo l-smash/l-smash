@@ -80,6 +80,13 @@ struct importer_tag
     int                      resume_enabled;/* If set to 1, lsmash_importer_get_access_unit() seeks back to resume_pos before reading. */
     uint64_t                 resume_pos;    /* file offset where the sequential reader continues. The Media Timeline moves the shared
                                              * byte stream, so the position has to be remembered here. */
+    uint32_t                 sample_raw_length; /* Set by get_accessunit together with lsmash_sample_t.pos when the bytes of the access unit
+                                                 * in the stream are not the sample data, that is, when a sample filter of the Media
+                                                 * Timeline converts them. It is the number of the bytes stored from sample->pos.
+                                                 * 0 means that the sample data is stored as it is, so its length is sample->length. */
+    uint32_t                 timestamp_scale;   /* Number of the media timescale units that one unit of the DTS, the CTS and the last delta
+                                                 * reported by get_accessunit and get_last_delta lasts. A video importer that counts them
+                                                 * in the timebase of its summary sets the timebase here. 0 means 1. */
 };
 
 int lsm_importer_make_fake_movie
@@ -123,6 +130,24 @@ int lsm_importer_construct_timeline_by_walk
 (
     importer_t *importer,
     uint32_t    track_number
+);
+
+/* The sample data of an importer which sets importer_t.sample_raw_length is converted from the stored bytes by a filter of the
+ * Media Timeline. The filter may need to know what the walk has found, e.g. which NAL units were taken out of the samples, since
+ * it can not depend on the state of the parser. create_context is called once with the walker after the last access unit has been
+ * got and before the walker is cleaned up. The context it returns is owned by the Media Timeline and released by destroy_context. */
+typedef struct
+{
+    int  (*filter)( lsmash_sample_t *sample, const void *context ); /* the type of lsm_timeline_sample_filter */
+    int  (*create_context)( importer_t *walker, void **context );
+    void (*destroy_context)( void *context );                       /* the type of lsm_timeline_filter_context_destructor */
+} importer_raw_sample_filter_t;
+
+int lsm_importer_construct_timeline_by_walk_filtered
+(
+    importer_t                         *importer,
+    uint32_t                            track_number,
+    const importer_raw_sample_filter_t *raw_filter
 );
 
 #else

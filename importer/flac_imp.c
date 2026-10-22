@@ -86,9 +86,8 @@ typedef struct
     uint32_t    last_block_size;
 
     /* The stream position is shared with the Media Timeline, which seeks the same bitstream to read an arbitrary sample.
-     * Therefore get_accessunit remembers where it has to continue and seeks back to there before it reads. */
+     * The importer framework remembers where the sequential reader continues (see lsm_importer_mark_resume_pos()). */
     uint64_t    audio_start;    /* file offset of the first audio frame */
-    uint64_t    resume_pos;     /* file offset where the next get_accessunit starts to search a frame */
     uint64_t    last_frame_pos; /* file offset of the frame get_accessunit has returned last */
     isom_portable_chunk_t chunk;
 } flac_importer_t;
@@ -357,8 +356,9 @@ static int flac_imp_probe( importer_t *imp )
         goto fail;
     }
 
+    /* The probe has already moved the stream position to the first audio frame, which is where the sequential reader starts. */
     flac_imp->audio_start = 4 + metadata_total;
-    flac_imp->resume_pos  = flac_imp->audio_start;
+    lsm_importer_mark_resume_pos( imp );
     imp->info   = flac_imp;
     imp->status = IMPORTER_OK;
     return 0;
@@ -392,14 +392,6 @@ static int flac_imp_get_accessunit
         return IMPORTER_EOF;
 
     lsmash_bs_t *bs = imp->bs;
-    /* Continue from where the previous call has ended even if the Media Timeline has moved the stream position.
-     * The comparison keeps a sequential reader, including an unseekable one, from any needless seek. */
-    if( lsmash_bs_get_stream_pos( bs ) != flac_imp->resume_pos
-     && lsmash_bs_read_seek( bs, (int64_t)flac_imp->resume_pos, SEEK_SET ) < 0 )
-    {
-        imp->status = IMPORTER_ERROR;
-        return LSMASH_ERR_NAMELESS;
-    }
     uint64_t base_pos = lsmash_bs_get_stream_pos( bs );
     uint64_t remain   = lsmash_bs_get_remaining_buffer_size( bs );
 
@@ -554,7 +546,6 @@ static int flac_imp_get_accessunit
 
     /* Advance the buffer past this frame so the next call starts after it. */
     lsmash_bs_skip_bytes( bs, (uint32_t)sync_offset + frame_size );
-    flac_imp->resume_pos = lsmash_bs_get_stream_pos( bs );
 
     remain = lsmash_bs_get_remaining_buffer_size( bs );
     if( (bs->eof || bs->eob) && remain < 6 )
@@ -602,16 +593,21 @@ static int flac_imp_construct_timeline( importer_t *imp, uint32_t track_number )
     uint64_t        saved_next_dts         = flac_imp->next_dts;
     uint32_t        saved_last_block_size  = flac_imp->last_block_size;
     uint64_t        saved_last_frame_pos   = flac_imp->last_frame_pos;
-    uint64_t        saved_resume_pos       = flac_imp->resume_pos;
     uint32_t        saved_samples_in_frame = summary->samples_in_frame;
     flac_imp->next_dts        = 0;
     flac_imp->last_block_size = 0;
-    flac_imp->resume_pos      = flac_imp->audio_start;
     imp->status               = IMPORTER_OK;
+    /* This walk calls get_accessunit directly, so it has to position the shared stream by itself. The sequential reader
+     * is put back by the importer framework, which seeks to the remembered position before its next read. */
     int      err;
     uint32_t sample_count    = 0;
     uint32_t max_sample_size = 0;
     uint64_t end_pos         = flac_imp->audio_start;
+    if( lsmash_bs_read_seek( imp->bs, (int64_t)flac_imp->audio_start, SEEK_SET ) < 0 )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
     if( (err = lsm_timeline_setup_raw( timeline, track_ID, flac_imp->sample_rate )) < 0 )
         goto fail;
     while( 1 )
@@ -662,7 +658,6 @@ restore:
     flac_imp->next_dts         = saved_next_dts;
     flac_imp->last_block_size  = saved_last_block_size;
     flac_imp->last_frame_pos   = saved_last_frame_pos;
-    flac_imp->resume_pos       = saved_resume_pos;
     summary->samples_in_frame  = saved_samples_in_frame;
     imp->status                = saved_status;
     return err;

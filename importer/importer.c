@@ -511,6 +511,16 @@ int lsm_importer_construct_timeline_by_walk
     uint32_t    track_number
 )
 {
+    return lsm_importer_construct_timeline_by_walk_filtered( importer, track_number, NULL );
+}
+
+int lsm_importer_construct_timeline_by_walk_filtered
+(
+    importer_t                         *importer,
+    uint32_t                            track_number,
+    const importer_raw_sample_filter_t *raw_filter
+)
+{
     if( !importer
      || track_number != 1
      || !importer->funcs.probe
@@ -562,6 +572,8 @@ int lsm_importer_construct_timeline_by_walk
     }
     if( (err = walker.funcs.probe( &walker )) < 0 )
         goto fail;
+    /* The importer may count the time stamps in a unit that differs from the media timescale. */
+    uint32_t timestamp_scale = walker.timestamp_scale ? walker.timestamp_scale : 1;
     if( (err = lsm_timeline_setup_raw( timeline, track_ID, timescale )) < 0 )
         goto cleanup_walker;
     if( !(chunk = lsm_timeline_add_raw_chunk( timeline, importer->file )) )
@@ -582,6 +594,7 @@ int lsm_importer_construct_timeline_by_walk
     {
         importer_status  status_before = walker.status;
         lsmash_sample_t *sample        = NULL;
+        walker.sample_raw_length = 0;
         err = walker.funcs.get_accessunit( &walker, track_number, &sample );
         if( err < 0 )
         {
@@ -593,7 +606,7 @@ int lsm_importer_construct_timeline_by_walk
             lsmash_delete_sample( sample );
             break;
         }
-        if( status_before == IMPORTER_CHANGE )
+        if( status_before == IMPORTER_CHANGE || err == IMPORTER_CHANGE )
         {
             /* The importer has switched the summary of the stream, so does the sample entry that the samples refer to. */
             lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_list_get_entry_data( walker.summaries, track_number );
@@ -614,7 +627,14 @@ int lsm_importer_construct_timeline_by_walk
                 err = LSMASH_ERR_INVALID_DATA;
                 goto cleanup_walker;
             }
-            pending.duration = (uint32_t)(sample->dts - pending_dts);
+            uint64_t duration = (sample->dts - pending_dts) * timestamp_scale;
+            if( (sample->dts - pending_dts) > UINT32_MAX / timestamp_scale || duration > UINT32_MAX )
+            {
+                lsmash_delete_sample( sample );
+                err = LSMASH_ERR_INVALID_DATA;
+                goto cleanup_walker;
+            }
+            pending.duration = (uint32_t)duration;
             last_duration    = pending.duration;
             if( (err = lsm_timeline_add_sample_info_entry( timeline, &pending )) < 0 )
             {
@@ -632,19 +652,27 @@ int lsm_importer_construct_timeline_by_walk
             err = LSMASH_ERR_INVALID_DATA;
             goto cleanup_walker;
         }
+        if( sample->cts < sample->dts || (sample->cts - sample->dts) > UINT32_MAX / timestamp_scale )
+        {
+            lsmash_delete_sample( sample );
+            err = LSMASH_ERR_INVALID_DATA;
+            goto cleanup_walker;
+        }
+        uint32_t stored_length = walker.sample_raw_length ? walker.sample_raw_length : sample->length;
         pending = (isom_sample_info_t)
         {
-            .pos      = sample->pos,
-            .duration = 0,
-            .offset   = (uint32_t)(sample->cts - sample->dts),
-            .length   = sample->length,
-            .index    = index,
-            .chunk    = chunk,
-            .prop     = sample->prop
+            .pos        = sample->pos,
+            .duration   = 0,
+            .offset     = (uint32_t)((sample->cts - sample->dts) * timestamp_scale),
+            .length     = sample->length,
+            .index      = index,
+            .chunk      = chunk,
+            .prop       = sample->prop,
+            .raw_length = walker.sample_raw_length
         };
         pending_dts     = sample->dts;
         has_pending     = 1;
-        end_pos         = LSMASH_MAX( end_pos, sample->pos + sample->length );
+        end_pos         = LSMASH_MAX( end_pos, sample->pos + stored_length );
         max_sample_size = LSMASH_MAX( max_sample_size, sample->length );
         lsmash_delete_sample( sample );
         /* The importer tells the duration of the last sample once it has reached the end of the stream. */
@@ -658,7 +686,12 @@ int lsm_importer_construct_timeline_by_walk
             last_delta = walker.funcs.get_last_delta( &walker, track_number );
         if( last_delta == 0 )
             last_delta = last_duration;
-        pending.duration = last_delta;
+        if( last_delta > UINT32_MAX / timestamp_scale )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto cleanup_walker;
+        }
+        pending.duration = last_delta * timestamp_scale;
         if( (err = lsm_timeline_add_sample_info_entry( timeline, &pending )) < 0 )
             goto cleanup_walker;
         media_duration += pending.duration;
@@ -671,6 +704,14 @@ int lsm_importer_construct_timeline_by_walk
     }
     chunk->data_offset = first_pos;
     chunk->length      = end_pos - first_pos;
+    if( raw_filter && raw_filter->filter )
+    {
+        void *context = NULL;
+        if( raw_filter->create_context && (err = raw_filter->create_context( &walker, &context )) < 0 )
+            goto cleanup_walker;
+        /* The context belongs to the timeline from here on. */
+        lsm_timeline_set_sample_filter( timeline, raw_filter->filter, context, raw_filter->destroy_context );
+    }
 
     if( (err = lsm_timeline_finish_raw( timeline, sample_count, max_sample_size, media_duration )) < 0
      || (err = lsm_timeline_register( importer->file, timeline )) < 0 )
