@@ -1,4 +1,4 @@
-# Self-Contained Synthetic Testing Strategy (`docs/specs/testing_strategy.md`)
+# Self-Contained Synthetic Testing Strategy (`docs/TESTING.md`)
 
 ## 1. Overview & Principles
 

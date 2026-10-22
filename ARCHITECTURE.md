@@ -1,4 +1,4 @@
-# L-SMASH Master Architecture & Specification (`SPEC.md`)
+# L-SMASH Master Architecture (`ARCHITECTURE.md`)
 
 ## 1. Project Identity & Design Philosophy
 
@@ -79,9 +79,9 @@ This guarantees thread safety across concurrent `lsmash_root_t` instances, place
 
 ## 3. Core Subsystems
 
-Detailed specifications for each major subsystem reside in `docs/specs/` and are indexed in Section 4:
+Detailed specifications for each major subsystem reside in `docs/` and are indexed in Section 4:
 
-1. **Comprehensive Codecs & Stream Importers Architecture (`codecs/`, `importer/`, `docs/specs/codecs_and_importers.md`)**:
+1. **Comprehensive Codecs & Stream Importers Architecture (`codecs/`, `importer/`, `docs/CODEC_BINDINGS.md`)**:
    - Self-contained C11 implementation of all video and audio codecs (H.264/AVC, H.265/HEVC, AOM AV1, SMPTE VC-1, MPEG-4 Visual/Audio, ProRes, QTFF uncompressed video, Xiph FLAC, IETF Opus, Dolby AC-3/E-AC-3, DTS/DTS-HD, Apple Lossless, ISO/IEC 23003-5 LPCM, 3GPP AMR, MP3, WMA) with zero external dependencies.
    - Decoupled `lsmash_summary_t` and `lsmash_codec_specific_t` structured/unstructured conversion model, compile-time `static const` dispatch tables, and uniform `importer_functions` streaming interface.
    - Comprehensive container binding specifications for ISOBMFF and QuickTime (QTFF), including NALU start-code conversion, complete AV1 `uncompressed_header()` and multi-tile tracking, ISO/IEC 23003-5 `ipcm`/`fpcm` with `pcmC`/`chnl`/`srat`, and Opus `'roll'` pre-roll sample grouping with Edit List mapping.
@@ -99,15 +99,15 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 
 ---
 
-## 4. Detailed Specification Index (`docs/specs/` & `docs/`)
+## 4. Detailed Documentation Index (`docs/`)
 
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
 | [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
 | [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.7`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
-| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.7`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.7`) |
+| [`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
+| [`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.7`) |
+| [`docs/TESTING.md`](docs/TESTING.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.7`) |
 
 ---
 

@@ -1,4 +1,4 @@
-# Codec Architecture & Container Binding Specification (`docs/specs/codecs_and_importers.md`)
+# Codec Architecture & Container Binding Specification (`docs/CODEC_BINDINGS.md`)
 
 ## 1. Architecture of `codecs/` and `importer/`
 

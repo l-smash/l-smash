@@ -173,12 +173,12 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 | Document | Contents |
 | :--- | :--- |
 | **[`USAGE.md`](USAGE.md)** | Quick Start, complete user guide for `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
-| **[`SPEC.md`](SPEC.md)** | Master Architecture & Specification Index (strict standard compliance principles, `box_default` Sentinel Box Architecture, Dual-List Box ownership, symbol naming conventions, and specification syntax identifier preservation). |
+| **[`ARCHITECTURE.md`](ARCHITECTURE.md)** | Master Architecture & Specification Index (strict standard compliance principles, `box_default` Sentinel Box Architecture, Dual-List Box ownership, symbol naming conventions, and specification syntax identifier preservation). |
 | **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)** | Official C11 coding style, Allman layout conventions, internal header policy, symbol prefixes, and Git contribution guidelines. |
 | **[`docs/HISTORY.md`](docs/HISTORY.md)** | Project history, branch lineage (`master`, `av1`, `vimeo`, `dev`), and architectural evolution. |
-| **[`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
-| **[`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md)** | Comprehensive architecture and container binding specification for all video and audio codecs and stream importers (`codecs/*`, `importer/*`). |
-| **[`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |
+| **[`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
+| **[`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md)** | Comprehensive architecture and container binding specification for all video and audio codecs and stream importers (`codecs/*`, `importer/*`). |
+| **[`docs/TESTING.md`](docs/TESTING.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |
 
 ---
 

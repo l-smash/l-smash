@@ -1,4 +1,4 @@
-# Memory Architecture & Container Specification (`docs/specs/memory_architecture.md`)
+# Memory Architecture & Container Specification (`docs/MEMORY_ARCHITECTURE.md`)
 
 ## 1. Overview & Motivation
 

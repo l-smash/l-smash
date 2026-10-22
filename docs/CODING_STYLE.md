@@ -197,7 +197,7 @@ L-SMASH follows strict semantic-like C library versioning defined by macros in t
 
 ## 7. Markdown Documentation Rules
 
-These invariants apply to `README.md`, `USAGE.md`, `SPEC.md`, and `docs/**/*.md`.
+These invariants apply to `README.md`, `USAGE.md`, `ARCHITECTURE.md`, and `docs/**/*.md`.
 
 ### 7.1 No LaTeX Math Blocks
 - Do not use LaTeX math notation (`$...$` or `$$...$$`) in Markdown documents.
