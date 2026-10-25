@@ -121,9 +121,9 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
   make -j8 all test
   ```
 - **Quality Requirements**:
-  1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
+  1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_*.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 20 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 21 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -350,4 +350,4 @@ Combining `[i]`, `[ii]`, and `[iii]`, the generated `Out[j].DTS` sequence satisf
 ## 7. Future Roadmap / Pending Tasks
 
 1. **Read support for separate Media Segments.** A Media Segment (`.m4s` × N) that has no `moov` is not yet linked to its Initialization Segment (`init.mp4`) at read time. The read path must associate each segment with the initializer (`file->initializer` and `lsmash_activate_file()`) so that a Media Timeline spanning several segment files can be built and demuxed directly, without concatenating the files first. Writing such segments is already supported (`lsmash_switch_media_segment()`).
-2. **External Data Reference for Movie Fragments (`moof` / `traf`).** External file references through a non-self-contained `'url '` entry of `dref` are already implemented for a normal movie (`moov` / `stbl`): `lsmash_create_data_reference()` writes them, `lsmash_get_data_reference()` / `lsmash_assign_data_reference()` resolve them at read time, and `tests/test_main.c` covers the round trip. What remains is completing external data references for Movie Fragments. Fragment sample offsets are relative to the Movie Fragment Box (default-base-is-moof) and the samples are written into the movie file, so `lsmash_create_data_reference()` currently rejects a fragmented movie or fragmented referenced file, and the read path for `traf` / `trun` data offsets into a separate file is not covered by any test.
+2. **External Data Reference for Movie Fragments (`moof` / `traf`).** External file references through a non-self-contained `'url '` entry of `dref` are already implemented for a normal movie (`moov` / `stbl`): `lsmash_create_data_reference()` writes them, `lsmash_get_data_reference()` / `lsmash_assign_data_reference()` resolve them at read time, and `tests/test_isom_container.c` covers the round trip. What remains is completing external data references for Movie Fragments. Fragment sample offsets are relative to the Movie Fragment Box (default-base-is-moof) and the samples are written into the movie file, so `lsmash_create_data_reference()` currently rejects a fragmented movie or fragmented referenced file, and the read path for `traf` / `trun` data offsets into a separate file is not covered by any test.
