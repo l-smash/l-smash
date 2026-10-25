@@ -26,15 +26,19 @@
 #include "test_common.h"
 
 #ifdef _WIN32
-#define CLI_MUXER      "cli\\muxer.exe"
-#define CLI_LSHMUXER   "cli\\lshmuxer.exe"
-#define CLI_BOXDUMPER  "cli\\boxdumper.exe"
-#define CLI_DEV_NULL   "NUL"
+#define CLI_MUXER          "cli\\muxer.exe"
+#define CLI_REMUXER        "cli\\remuxer.exe"
+#define CLI_TIMELINEEDITOR "cli\\timelineeditor.exe"
+#define CLI_LSHMUXER       "cli\\lshmuxer.exe"
+#define CLI_BOXDUMPER      "cli\\boxdumper.exe"
+#define CLI_DEV_NULL       "NUL"
 #else
-#define CLI_MUXER      "./cli/muxer"
-#define CLI_LSHMUXER   "./cli/lshmuxer"
-#define CLI_BOXDUMPER  "./cli/boxdumper"
-#define CLI_DEV_NULL   "/dev/null"
+#define CLI_MUXER          "./cli/muxer"
+#define CLI_REMUXER        "./cli/remuxer"
+#define CLI_TIMELINEEDITOR "./cli/timelineeditor"
+#define CLI_LSHMUXER       "./cli/lshmuxer"
+#define CLI_BOXDUMPER      "./cli/boxdumper"
+#define CLI_DEV_NULL       "/dev/null"
 #endif
 
 static void append_annexb_ebsp( uint8_t *dst, uint32_t *pos, uint8_t nal_hdr, const uint8_t *rbsp, uint32_t rbsp_len )
@@ -638,8 +642,27 @@ static void report_first_diff( const char *label, const char *args, const char *
             ++col;
         ++i;
     }
-    fprintf( stderr, "[DIFF] %s mismatch for args [%s] at line %zu, col %zu:\n  muxer   : %.120s\n  lshmuxer: %.120s\n",
+    fprintf( stderr, "[DIFF] %s mismatch for args [%s] at line %zu, col %zu:\n  ref     : %.200s\n  lshmuxer: %.200s\n",
              label, args, line, col, a + i, b + i );
+    const char *pa = a;
+    const char *pb = b;
+    size_t lno = 1;
+    int printed = 0;
+    while( *pa && *pb && printed < 15 )
+    {
+        const char *na = strchr( pa, '\n' );
+        const char *nb = strchr( pb, '\n' );
+        size_t la = na ? (size_t)(na - pa) : strlen( pa );
+        size_t lb = nb ? (size_t)(nb - pb) : strlen( pb );
+        if( la != lb || memcmp( pa, pb, la ) != 0 )
+        {
+            fprintf( stderr, "  L%zu ref: %.*s\n  L%zu lsh: %.*s\n", lno, (int)la, pa, lno, (int)lb, pb );
+            ++printed;
+        }
+        pa = na ? na + 1 : pa + la;
+        pb = nb ? nb + 1 : pb + lb;
+        ++lno;
+    }
 }
 
 static int assert_cli_equivalent( const char *args_without_output, const char *out_path )
@@ -739,6 +762,402 @@ static int assert_cli_both_fail( const char *args_without_output, const char *ou
     return 0;
 }
 
+static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_args, const char *out_path, const char *seg_path )
+{
+    if( !lsh_args )
+        lsh_args = rem_args;
+    const char *rem_box_path = "test_cli_eq_rem_box.txt";
+    const char *lsh_box_path = "test_cli_eq_lsh_box.txt";
+    const char *rem_ts_path  = "test_cli_eq_rem_ts.txt";
+    const char *lsh_ts_path  = "test_cli_eq_lsh_ts.txt";
+    const char *rem_seg_path = "test_cli_eq_rem_seg.txt";
+    const char *lsh_seg_path = "test_cli_eq_lsh_seg.txt";
+
+    char cmd[1024];
+    char *rem_box = NULL, *lsh_box = NULL;
+    char *rem_ts  = NULL, *lsh_ts  = NULL;
+    char *rem_seg = NULL, *lsh_seg = NULL;
+    size_t rem_box_len = 0, lsh_box_len = 0, rem_ts_len = 0, lsh_ts_len = 0, rem_seg_len = 0, lsh_seg_len = 0;
+    int rc_rem = -1, rc_lsh = -1, rc_bd1 = -1, rc_bd2 = 0, rc_bd3 = -1, rc_bd4 = 0, rc_bd5 = 0, rc_bd6 = 0;
+
+    for( int attempt = 0; attempt < 3; attempt++ )
+    {
+        lsmash_freep( &rem_box );
+        lsmash_freep( &lsh_box );
+        lsmash_freep( &rem_ts );
+        lsmash_freep( &lsh_ts );
+        lsmash_freep( &rem_seg );
+        lsmash_freep( &lsh_seg );
+
+        time_t t0 = time( NULL );
+
+        remove( out_path );
+        if( seg_path )
+            remove( seg_path );
+        snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_REMUXER, rem_args, out_path, CLI_DEV_NULL );
+        rc_rem = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, rem_box_path, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        if( !seg_path )
+        {
+            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, rem_ts_path, CLI_DEV_NULL );
+            rc_bd2 = system( cmd );
+        }
+        else
+        {
+            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, seg_path, rem_seg_path, CLI_DEV_NULL );
+            rc_bd5 = system( cmd );
+        }
+
+        remove( out_path );
+        if( seg_path )
+            remove( seg_path );
+        snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, lsh_args, out_path, CLI_DEV_NULL );
+        rc_lsh = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_box_path, CLI_DEV_NULL );
+        rc_bd3 = system( cmd );
+        if( !seg_path )
+        {
+            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_ts_path, CLI_DEV_NULL );
+            rc_bd4 = system( cmd );
+        }
+        else
+        {
+            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, seg_path, lsh_seg_path, CLI_DEV_NULL );
+            rc_bd6 = system( cmd );
+        }
+
+        time_t t1 = time( NULL );
+
+        rem_box = read_text_file( rem_box_path, &rem_box_len );
+        lsh_box = read_text_file( lsh_box_path, &lsh_box_len );
+        if( !seg_path )
+        {
+            rem_ts = read_text_file( rem_ts_path, &rem_ts_len );
+            lsh_ts = read_text_file( lsh_ts_path, &lsh_ts_len );
+        }
+        else
+        {
+            rem_seg = read_text_file( rem_seg_path, &rem_seg_len );
+            lsh_seg = read_text_file( lsh_seg_path, &lsh_seg_len );
+        }
+
+        if( t0 == t1 || (rem_box && lsh_box && rem_box_len == lsh_box_len && memcmp( rem_box, lsh_box, rem_box_len ) == 0) )
+            break;
+    }
+
+    remove( out_path );
+    if( seg_path )
+        remove( seg_path );
+    remove( rem_box_path );
+    remove( lsh_box_path );
+    remove( rem_ts_path );
+    remove( lsh_ts_path );
+    remove( rem_seg_path );
+    remove( lsh_seg_path );
+
+    int box_match = (rem_box && lsh_box && rem_box_len > 0 && rem_box_len == lsh_box_len
+                  && memcmp( rem_box, lsh_box, rem_box_len ) == 0);
+    int ts_match  = seg_path ? 1 : (rem_ts && lsh_ts && rem_ts_len > 0 && rem_ts_len == lsh_ts_len
+                  && memcmp( rem_ts, lsh_ts, rem_ts_len ) == 0);
+    int seg_match = !seg_path ? 1 : (rem_seg && lsh_seg && rem_seg_len > 0 && rem_seg_len == lsh_seg_len
+                  && memcmp( rem_seg, lsh_seg, rem_seg_len ) == 0);
+
+    if( !box_match && rem_box && lsh_box )
+        report_first_diff( "remuxer boxdumper --box", lsh_args, rem_box, lsh_box );
+    if( !ts_match && rem_ts && lsh_ts )
+        report_first_diff( "remuxer boxdumper --timestamp", lsh_args, rem_ts, lsh_ts );
+    if( !seg_match && rem_seg && lsh_seg )
+        report_first_diff( "remuxer segment boxdumper --box", lsh_args, rem_seg, lsh_seg );
+
+    lsmash_free( rem_box );
+    lsmash_free( lsh_box );
+    lsmash_free( rem_ts );
+    lsmash_free( lsh_ts );
+    lsmash_free( rem_seg );
+    lsmash_free( lsh_seg );
+
+    TEST_ASSERT( rc_rem == 0, "cli/remuxer succeeded" );
+    TEST_ASSERT( rc_lsh == 0, "cli/lshmuxer succeeded" );
+    TEST_ASSERT( rc_bd1 == 0 && rc_bd2 == 0 && rc_bd3 == 0 && rc_bd4 == 0 && rc_bd5 == 0 && rc_bd6 == 0, "cli/boxdumper succeeded" );
+    TEST_ASSERT( box_match, "boxdumper --box output is 100% identical between remuxer and lshmuxer" );
+    TEST_ASSERT( ts_match,  "boxdumper --timestamp output is 100% identical between remuxer and lshmuxer" );
+    TEST_ASSERT( seg_match, "segment boxdumper --box output is 100% identical between remuxer and lshmuxer" );
+    return 0;
+}
+
+static int assert_remuxer_equivalent( const char *args_without_output, const char *out_path, const char *seg_path )
+{
+    return assert_remuxer_equivalent_ex( args_without_output, NULL, out_path, seg_path );
+}
+
+static int assert_remuxer_both_fail( const char *args_without_output, const char *out_path )
+{
+    char cmd[1024];
+    remove( out_path );
+    snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_REMUXER, args_without_output, out_path, CLI_DEV_NULL );
+    int rc_rem = system( cmd );
+    remove( out_path );
+    snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, args_without_output, out_path, CLI_DEV_NULL );
+    int rc_lsh = system( cmd );
+    remove( out_path );
+    TEST_ASSERT( rc_rem != 0, "cli/remuxer rejected invalid invocation" );
+    TEST_ASSERT( rc_lsh != 0, "cli/lshmuxer rejected invalid invocation" );
+    return 0;
+}
+
+static int assert_timelineeditor_3way_equivalent
+(
+    const char *pos_opts,
+    const char *in_path,
+    const char *track_opts,
+    const char *out_path
+)
+{
+    const char *te_box_path   = "test_cli_eq_te_box.txt";
+    const char *lshp_box_path = "test_cli_eq_lshp_box.txt";
+    const char *lsht_box_path = "test_cli_eq_lsht_box.txt";
+    const char *te_ts_path    = "test_cli_eq_te_ts.txt";
+    const char *lshp_ts_path  = "test_cli_eq_lshp_ts.txt";
+    const char *lsht_ts_path  = "test_cli_eq_lsht_ts.txt";
+
+    char cmd[1024];
+    char *te_box = NULL, *lshp_box = NULL, *lsht_box = NULL;
+    char *te_ts  = NULL, *lshp_ts  = NULL, *lsht_ts  = NULL;
+    size_t te_box_len = 0, lshp_box_len = 0, lsht_box_len = 0;
+    size_t te_ts_len  = 0, lshp_ts_len  = 0, lsht_ts_len  = 0;
+    int rc_te = -1, rc_lshp = -1, rc_lsht = 0;
+    int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1, rc_bd5 = 0, rc_bd6 = 0;
+
+    for( int attempt = 0; attempt < 3; attempt++ )
+    {
+        lsmash_freep( &te_box );
+        lsmash_freep( &lshp_box );
+        lsmash_freep( &lsht_box );
+        lsmash_freep( &te_ts );
+        lsmash_freep( &lshp_ts );
+        lsmash_freep( &lsht_ts );
+
+        time_t t0 = time( NULL );
+
+        /* 1. cli/timelineeditor [options] input output */
+        remove( out_path );
+        snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
+                  CLI_TIMELINEEDITOR, pos_opts ? pos_opts : "", in_path, out_path, CLI_DEV_NULL );
+        rc_te = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, te_box_path, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, te_ts_path, CLI_DEV_NULL );
+        rc_bd2 = system( cmd );
+
+        /* 2. cli/lshmuxer [options] input output (positional mode) */
+        remove( out_path );
+        snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
+                  CLI_LSHMUXER, pos_opts ? pos_opts : "", in_path, out_path, CLI_DEV_NULL );
+        rc_lshp = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lshp_box_path, CLI_DEV_NULL );
+        rc_bd3 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lshp_ts_path, CLI_DEV_NULL );
+        rc_bd4 = system( cmd );
+
+        /* 3. cli/lshmuxer -i input?track_opts -o output (track-option mode) */
+        if( track_opts )
+        {
+            remove( out_path );
+            snprintf( cmd, sizeof(cmd), "%s -i %s?%s -o %s >%s 2>&1",
+                      CLI_LSHMUXER, in_path, track_opts, out_path, CLI_DEV_NULL );
+            rc_lsht = system( cmd );
+            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_box_path, CLI_DEV_NULL );
+            rc_bd5 = system( cmd );
+            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_ts_path, CLI_DEV_NULL );
+            rc_bd6 = system( cmd );
+        }
+
+        time_t t1 = time( NULL );
+
+        te_box   = read_text_file( te_box_path,   &te_box_len );
+        lshp_box = read_text_file( lshp_box_path, &lshp_box_len );
+        te_ts    = read_text_file( te_ts_path,    &te_ts_len );
+        lshp_ts  = read_text_file( lshp_ts_path,  &lshp_ts_len );
+        if( track_opts )
+        {
+            lsht_box = read_text_file( lsht_box_path, &lsht_box_len );
+            lsht_ts  = read_text_file( lsht_ts_path,  &lsht_ts_len );
+        }
+
+        if( t0 == t1
+         || (te_box && lshp_box && te_box_len == lshp_box_len && memcmp( te_box, lshp_box, te_box_len ) == 0
+          && (!track_opts || (lsht_box && te_box_len == lsht_box_len && memcmp( te_box, lsht_box, te_box_len ) == 0))) )
+            break;
+    }
+
+    remove( out_path );
+    remove( te_box_path );
+    remove( lshp_box_path );
+    remove( lsht_box_path );
+    remove( te_ts_path );
+    remove( lshp_ts_path );
+    remove( lsht_ts_path );
+
+    int box_match_pos = (te_box && lshp_box && te_box_len > 0 && te_box_len == lshp_box_len
+                      && memcmp( te_box, lshp_box, te_box_len ) == 0);
+    int ts_match_pos  = (te_ts && lshp_ts && te_ts_len > 0 && te_ts_len == lshp_ts_len
+                      && memcmp( te_ts, lshp_ts, te_ts_len ) == 0);
+    int box_match_trk = !track_opts ? 1 : (te_box && lsht_box && te_box_len > 0 && te_box_len == lsht_box_len
+                      && memcmp( te_box, lsht_box, te_box_len ) == 0);
+    int ts_match_trk  = !track_opts ? 1 : (te_ts && lsht_ts && te_ts_len > 0 && te_ts_len == lsht_ts_len
+                      && memcmp( te_ts, lsht_ts, te_ts_len ) == 0);
+
+    if( !box_match_pos && te_box && lshp_box )
+        report_first_diff( "timelineeditor vs lshmuxer(positional) --box", pos_opts ? pos_opts : "", te_box, lshp_box );
+    if( !ts_match_pos && te_ts && lshp_ts )
+        report_first_diff( "timelineeditor vs lshmuxer(positional) --timestamp", pos_opts ? pos_opts : "", te_ts, lshp_ts );
+    if( !box_match_trk && te_box && lsht_box )
+        report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --box", track_opts ? track_opts : "", te_box, lsht_box );
+    if( !ts_match_trk && te_ts && lsht_ts )
+        report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --timestamp", track_opts ? track_opts : "", te_ts, lsht_ts );
+
+    lsmash_free( te_box );
+    lsmash_free( lshp_box );
+    lsmash_free( lsht_box );
+    lsmash_free( te_ts );
+    lsmash_free( lshp_ts );
+    lsmash_free( lsht_ts );
+
+    TEST_ASSERT( rc_te == 0, "cli/timelineeditor succeeded" );
+    TEST_ASSERT( rc_lshp == 0, "cli/lshmuxer (positional) succeeded" );
+    TEST_ASSERT( rc_lsht == 0, "cli/lshmuxer (track-option) succeeded" );
+    TEST_ASSERT( rc_bd1 == 0 && rc_bd2 == 0 && rc_bd3 == 0 && rc_bd4 == 0 && rc_bd5 == 0 && rc_bd6 == 0, "cli/boxdumper succeeded" );
+    TEST_ASSERT( box_match_pos, "boxdumper --box is 100% identical between timelineeditor and lshmuxer (positional)" );
+    TEST_ASSERT( ts_match_pos,  "boxdumper --timestamp is 100% identical between timelineeditor and lshmuxer (positional)" );
+    TEST_ASSERT( box_match_trk, "boxdumper --box is 100% identical between timelineeditor and lshmuxer (-i input?opt)" );
+    TEST_ASSERT( ts_match_trk,  "boxdumper --timestamp is 100% identical between timelineeditor and lshmuxer (-i input?opt)" );
+    return 0;
+}
+
+static int assert_timelineeditor_both_fail( const char *pos_opts, const char *in_path, const char *out_path )
+{
+    char cmd[1024];
+    remove( out_path );
+    snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, pos_opts, in_path, out_path, CLI_DEV_NULL );
+    int rc_te = system( cmd );
+    remove( out_path );
+    snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1", CLI_LSHMUXER, pos_opts, in_path, out_path, CLI_DEV_NULL );
+    int rc_lsh = system( cmd );
+    remove( out_path );
+    TEST_ASSERT( rc_te != 0, "cli/timelineeditor rejected invalid invocation" );
+    TEST_ASSERT( rc_lsh != 0, "cli/lshmuxer rejected invalid invocation" );
+    return 0;
+}
+
+static int assert_pipeline_vs_1pass_equivalent
+(
+    const char *raw_v,
+    const char *raw_a,
+    const char *te_opts,
+    const char *remux_opts,
+    const char *lsh_1pass_args,
+    const char *out_path
+)
+{
+    const char *s1_mp4       = "test_cli_eq_pipe_s1.mp4";
+    const char *s2_mp4       = "test_cli_eq_pipe_s2.mp4";
+    const char *pipe_box_p   = "test_cli_eq_pipe_box.txt";
+    const char *lsh_box_p    = "test_cli_eq_1pass_box.txt";
+    const char *pipe_ts_p    = "test_cli_eq_pipe_ts.txt";
+    const char *lsh_ts_p     = "test_cli_eq_1pass_ts.txt";
+
+    char cmd[1024];
+    char *pipe_box = NULL, *lsh_box = NULL;
+    char *pipe_ts  = NULL, *lsh_ts  = NULL;
+    size_t pipe_box_len = 0, lsh_box_len = 0, pipe_ts_len = 0, lsh_ts_len = 0;
+    int rc_m1 = -1, rc_te = -1, rc_rem = 0, rc_lsh = -1;
+    int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1;
+
+    for( int attempt = 0; attempt < 3; attempt++ )
+    {
+        lsmash_freep( &pipe_box );
+        lsmash_freep( &lsh_box );
+        lsmash_freep( &pipe_ts );
+        lsmash_freep( &lsh_ts );
+
+        time_t t0 = time( NULL );
+
+        remove( s1_mp4 );
+        remove( s2_mp4 );
+        remove( out_path );
+
+        snprintf( cmd, sizeof(cmd), "%s -i %s -i %s -o %s >%s 2>&1", CLI_MUXER, raw_v, raw_a, s1_mp4, CLI_DEV_NULL );
+        rc_m1 = system( cmd );
+        if( remux_opts )
+        {
+            snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, s2_mp4, CLI_DEV_NULL );
+            rc_te = system( cmd );
+            snprintf( cmd, sizeof(cmd), "%s %s -i %s -o %s >%s 2>&1",
+                      CLI_REMUXER, remux_opts, s2_mp4, out_path, CLI_DEV_NULL );
+            rc_rem = system( cmd );
+        }
+        else
+        {
+            snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, out_path, CLI_DEV_NULL );
+            rc_te  = system( cmd );
+            rc_rem = 0;
+        }
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, pipe_box_p, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, pipe_ts_p, CLI_DEV_NULL );
+        rc_bd2 = system( cmd );
+
+        remove( out_path );
+        snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, lsh_1pass_args, out_path, CLI_DEV_NULL );
+        rc_lsh = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_box_p, CLI_DEV_NULL );
+        rc_bd3 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_ts_p, CLI_DEV_NULL );
+        rc_bd4 = system( cmd );
+
+        time_t t1 = time( NULL );
+
+        pipe_box = read_text_file( pipe_box_p, &pipe_box_len );
+        lsh_box  = read_text_file( lsh_box_p,  &lsh_box_len );
+        pipe_ts  = read_text_file( pipe_ts_p,  &pipe_ts_len );
+        lsh_ts   = read_text_file( lsh_ts_p,   &lsh_ts_len );
+
+        if( t0 == t1 || (pipe_box && lsh_box && pipe_box_len == lsh_box_len && memcmp( pipe_box, lsh_box, pipe_box_len ) == 0) )
+            break;
+    }
+
+    remove( s1_mp4 );
+    remove( s2_mp4 );
+    remove( out_path );
+    remove( pipe_box_p );
+    remove( lsh_box_p );
+    remove( pipe_ts_p );
+    remove( lsh_ts_p );
+
+    int box_match = (pipe_box && lsh_box && pipe_box_len > 0 && pipe_box_len == lsh_box_len
+                  && memcmp( pipe_box, lsh_box, pipe_box_len ) == 0);
+    int ts_match  = (pipe_ts && lsh_ts && pipe_ts_len > 0 && pipe_ts_len == lsh_ts_len
+                  && memcmp( pipe_ts, lsh_ts, pipe_ts_len ) == 0);
+
+    if( !box_match && pipe_box && lsh_box )
+        report_first_diff( "multi-stage pipeline vs 1-pass lshmuxer --box", lsh_1pass_args, pipe_box, lsh_box );
+    if( !ts_match && pipe_ts && lsh_ts )
+        report_first_diff( "multi-stage pipeline vs 1-pass lshmuxer --timestamp", lsh_1pass_args, pipe_ts, lsh_ts );
+
+    lsmash_free( pipe_box );
+    lsmash_free( lsh_box );
+    lsmash_free( pipe_ts );
+    lsmash_free( lsh_ts );
+
+    TEST_ASSERT( rc_m1 == 0 && rc_te == 0 && rc_rem == 0, "multi-stage legacy pipeline succeeded" );
+    TEST_ASSERT( rc_lsh == 0, "1-pass cli/lshmuxer succeeded" );
+    TEST_ASSERT( rc_bd1 == 0 && rc_bd2 == 0 && rc_bd3 == 0 && rc_bd4 == 0, "cli/boxdumper succeeded" );
+    TEST_ASSERT( box_match, "boxdumper --box is 100% identical between multi-stage pipeline and 1-pass lshmuxer" );
+    TEST_ASSERT( ts_match,  "boxdumper --timestamp is 100% identical between multi-stage pipeline and 1-pass lshmuxer" );
+    return 0;
+}
+
 int test_muxer_lshmuxer_cli_equivalence( void )
 {
     const char *f_h264_cfr   = "test_cli_eq_cfr.h264";
@@ -751,6 +1170,13 @@ int test_muxer_lshmuxer_cli_equivalence( void )
     const char *f_amr        = "test_cli_eq_audio.amr";
     const char *f_wave       = "test_cli_eq_audio.wav";
     const char *f_chap       = "test_cli_eq_chapters.txt";
+    const char *f_tcv1       = "test_cli_eq_tcv1.txt";
+    const char *f_tcv2       = "test_cli_eq_tcv2.txt";
+    const char *f_in_v       = "test_cli_eq_in_v.mp4";
+    const char *f_in_a       = "test_cli_eq_in_a.mp4";
+    const char *f_in_multi   = "test_cli_eq_in_multi.mp4";
+    const char *f_in_m4a     = "test_cli_eq_in_meta.m4a";
+    const char *f_in_mov     = "test_cli_eq_in_qt.mov";
 
     uint8_t *buf = (uint8_t *)lsmash_malloc( 32768 );
     TEST_ASSERT( buf != NULL, "allocate synthesis scratch buffer" );
@@ -789,6 +1215,26 @@ int test_muxer_lshmuxer_cli_equivalence( void )
         "CHAPTER02=00:00:00.050\n"
         "CHAPTER02NAME=Main Part\n";
     TEST_ASSERT( write_test_file( f_chap, (const uint8_t *)chap_text, sizeof(chap_text) - 1 ) == 0, "write chapter file" );
+
+    static const char tcv1_text[] =
+        "# timecode format v1\n"
+        "# comment line before assume\n"
+        "\n"
+        "Assume 23.976\n"
+        "# VFR override section\n"
+        "1,1,29.97\n";
+    TEST_ASSERT( write_test_file( f_tcv1, (const uint8_t *)tcv1_text, sizeof(tcv1_text) - 1 ) == 0, "write timecode v1 file" );
+
+    /* 4 frames with non-zero initial offset (50ms -> empty edit) and VFR intervals (40ms, 50ms, 40ms) */
+    static const char tcv2_text[] =
+        "# timecode format v2\n"
+        "# initial comment\n"
+        "50.0\n"
+        "90.0\n"
+        "# mid-file comment\n"
+        "140.0\n"
+        "180.0\n";
+    TEST_ASSERT( write_test_file( f_tcv2, (const uint8_t *)tcv2_text, sizeof(tcv2_text) - 1 ) == 0, "write timecode v2 file" );
 
     lsmash_free( buf );
 
@@ -881,6 +1327,191 @@ int test_muxer_lshmuxer_cli_equivalence( void )
     if( assert_cli_both_fail( "-i test_cli_eq_audio.amr", "test_cli_eq_out.mp4" ) < 0 )
         goto cleanup;
 
+    /* 3. Prepare baseline container inputs for remuxer and timelineeditor equivalence suites */
+    {
+        char cmd[1024];
+        snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, f_h264_cfr, f_in_v, CLI_DEV_NULL );
+        if( system( cmd ) != 0 )
+            goto cleanup;
+        snprintf( cmd, sizeof(cmd), "%s -i %s?encoder-delay=1024 -o %s >%s 2>&1", CLI_LSHMUXER, f_adts, f_in_a, CLI_DEV_NULL );
+        if( system( cmd ) != 0 )
+            goto cleanup;
+        snprintf( cmd, sizeof(cmd), "%s --compact-size-table --title MultiTitle -i %s -i %s -o %s >%s 2>&1",
+                  CLI_LSHMUXER, f_h264_cfr, f_adts, f_in_multi, CLI_DEV_NULL );
+        if( system( cmd ) != 0 )
+            goto cleanup;
+        snprintf( cmd, sizeof(cmd),
+                  "%s --file-format m4a --title SongTitle --artist SongArtist --album-name SongAlbum --tempo 120 -i %s -o %s >%s 2>&1",
+                  CLI_LSHMUXER, f_adts, f_in_m4a, CLI_DEV_NULL );
+        if( system( cmd ) != 0 )
+            goto cleanup;
+        snprintf( cmd, sizeof(cmd), "%s --file-format mov -i %s -i %s -o %s >%s 2>&1",
+                  CLI_LSHMUXER, f_h264_cfr, f_adts, f_in_mov, CLI_DEV_NULL );
+        if( system( cmd ) != 0 )
+            goto cleanup;
+    }
+
+    /* 4. Differential Equivalence Assertions (remuxer vs lshmuxer) */
+
+    /* Case 13: Multi-input container remuxing with max-chunk-duration and max-chunk-size */
+    if( assert_remuxer_equivalent(
+            "--max-chunk-duration 100 --max-chunk-size 1048576 -i test_cli_eq_in_v.mp4 -i test_cli_eq_in_a.mp4",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 14: Multi-track container track options (?1:..., ?2:..., language=, handler=, alternate-group=, disable, and --language) */
+    if( assert_remuxer_equivalent(
+            "--language und -i test_cli_eq_in_multi.mp4?1:language=jpn,handler=RemuxVideo,alternate-group=1?2:language=eng,handler=RemuxAudio,alternate-group=2,disable",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 15: Track removal (?2:remove) reducing a 2-track container to a 1-track container (verifies single-track mvhd timescale)
+     * plus implicit track 1 option syntax (?opt=val without track_num:) */
+    if( assert_remuxer_equivalent(
+            "-i test_cli_eq_in_multi.mp4?1:handler=ExplicitTrack1?2:remove",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+    if( assert_remuxer_equivalent_ex(
+            "-i test_cli_eq_in_multi.mp4?1:handler=ImplicitTrack1?2:remove",
+            "-i test_cli_eq_in_multi.mp4?handler=ImplicitTrack1?2:remove",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 16: Track seeking with ?1:seek= and ?1:safe-seek= (consider-rap) on B-frame H.264 + AAC container */
+    if( assert_remuxer_equivalent(
+            "-i test_cli_eq_in_v.mp4?1:seek=2",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+    if( assert_remuxer_equivalent(
+            "-i test_cli_eq_in_multi.mp4?1:safe-seek=3?2:seek=2",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 17: M4A container remuxing preserving iTunes metadata without duplicate encoding tool + reference/Nero chapters with BOM */
+    if( assert_remuxer_equivalent(
+            "--chapter test_cli_eq_chapters.txt --chpl-with-bom --chapter-track 1 -i test_cli_eq_in_meta.m4a",
+            "test_cli_eq_out.m4a", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 18: QuickTime .mov container remuxing preserving pure 'qt  ' brand + reference chapter track + --compact-size-table */
+    if( assert_remuxer_equivalent(
+            "--chapter test_cli_eq_chapters.txt --chapter-track 2 -i test_cli_eq_in_qt.mov",
+            "test_cli_eq_out.mov", NULL ) < 0 )
+        goto cleanup;
+    if( assert_remuxer_equivalent(
+            "--compact-size-table -i test_cli_eq_in_v.mp4",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 19: Fragmented MP4 remuxing (--fragment, --min-frag-duration, --last-frag-merge-thresh) + seek in fragmented mode */
+    if( assert_remuxer_equivalent(
+            "--fragment 1 --min-frag-duration 0.02 --last-frag-merge-thresh 0.5 -i test_cli_eq_in_v.mp4?1:safe-seek=2 -i test_cli_eq_in_a.mp4",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+
+    /* Case 20: MPEG-DASH self-initializing (--dash 0) and segmented (--dash 1, verifying both init and media segment _1.mp4) */
+    if( assert_remuxer_equivalent(
+            "--fragment 1 --dash 0 -i test_cli_eq_in_v.mp4 -i test_cli_eq_in_a.mp4",
+            "test_cli_eq_out.mp4", NULL ) < 0 )
+        goto cleanup;
+    if( assert_remuxer_equivalent(
+            "--fragment 1 --dash 1 -i test_cli_eq_in_v.mp4 -i test_cli_eq_in_a.mp4",
+            "test_cli_eq_out.mp4", "test_cli_eq_out_1.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 21: Negative test — invalid track number rejected by both remuxer and lshmuxer */
+    if( assert_remuxer_both_fail( "-i test_cli_eq_in_v.mp4?9:disable", "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* 5. Differential 3-Way Equivalence Assertions (timelineeditor vs lshmuxer positional vs lshmuxer -i input?opt) */
+
+    /* Case 22: Timecode v2 (VFR + non-zero initial timestamp offset -> Empty Edit + composition_delay + ring-buffer DTS) */
+    if( assert_timelineeditor_3way_equivalent(
+            "--timecode test_cli_eq_tcv2.txt",
+            f_in_v,
+            "timecode=test_cli_eq_tcv2.txt",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 23: Timecode v1 (Assume + VFR range + comments/blank lines) + --dts-compression */
+    if( assert_timelineeditor_3way_equivalent(
+            "--timecode test_cli_eq_tcv1.txt --dts-compression",
+            f_in_v,
+            "timecode=test_cli_eq_tcv1.txt,dts-compression",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 24: --media-timescale + --media-timebase + --skip + --delay (rational & integer) without timecode file */
+    if( assert_timelineeditor_3way_equivalent(
+            "--media-timescale 30000 --media-timebase 1001 --skip 1001/30000 --delay 2002/30000",
+            f_in_v,
+            "media-timescale=30000,media-timebase=1001,skip=1001/30000,delay=2002/30000",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 25: --dts-compression + --media-timescale (disables dts_compression_multiplier and synthesizes sub-frame initial DTS) */
+    if( assert_timelineeditor_3way_equivalent(
+            "--dts-compression --media-timescale 24000 --skip 500 --delay 1000",
+            f_in_v,
+            "dts-compression,media-timescale=24000,skip=500,delay=1000",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 26: Multi-track container (--track 1) with compact sample size table (stz2) and iTunes metadata preserved */
+    if( assert_timelineeditor_3way_equivalent(
+            "--track 1 --timecode test_cli_eq_tcv2.txt --dts-compression",
+            f_in_multi,
+            "1:timecode=test_cli_eq_tcv2.txt,dts-compression",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 27: Positional no-option invocation (argc == 3: GCD timescale/timebase reduction while copying original elst) */
+    if( assert_timelineeditor_3way_equivalent(
+            NULL,
+            f_in_v,
+            NULL,
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 28: Negative test — out-of-range --track number rejected by both timelineeditor and lshmuxer */
+    if( assert_timelineeditor_both_fail( "--track 99", f_in_v, "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* 6. Legacy Multi-Stage Pipeline (muxer -> timelineeditor [-> remuxer]) vs 1-Pass lshmuxer Equivalence */
+
+    /* Case 29: Non-fragmented 3-stage pipeline (muxer -> timelineeditor -> remuxer) vs 1-pass lshmuxer
+     * (raw B-frame H.264 + raw AAC + Timecode v2 + skip + delay + chapter) */
+    if( assert_pipeline_vs_1pass_equivalent(
+            f_h264_cfr,
+            f_adts,
+            "--timecode test_cli_eq_tcv2.txt --skip 25/1000 --delay 50/1000",
+            "--chapter test_cli_eq_chapters.txt",
+            "--chapter test_cli_eq_chapters.txt -i test_cli_eq_cfr.h264?timecode=test_cli_eq_tcv2.txt,skip=25/1000,delay=50/1000 -i test_cli_eq_audio.aac",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 30: 3-stage pipeline (muxer -> timelineeditor -> remuxer) vs 1-pass lshmuxer
+     * (raw B-frame H.264 + raw AAC + Timecode v1 + skip + delay + compact-size-table + max-chunk-duration) */
+    if( assert_pipeline_vs_1pass_equivalent(
+            f_h264_cfr,
+            f_adts,
+            "--timecode test_cli_eq_tcv1.txt --skip 10/1000 --delay 20/1000",
+            "--compact-size-table --max-chunk-duration 100",
+            "--compact-size-table --max-chunk-duration 100 -i test_cli_eq_cfr.h264?timecode=test_cli_eq_tcv1.txt,skip=10/1000,delay=20/1000 -i test_cli_eq_audio.aac",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 31: Multi-stage pipeline (muxer -> timelineeditor --dts-compression) vs 1-pass lshmuxer
+     * (raw B-frame H.264 + raw AAC + Timecode v2 + dts-compression + skip + delay) */
+    if( assert_pipeline_vs_1pass_equivalent(
+            f_h264_cfr,
+            f_adts,
+            "--timecode test_cli_eq_tcv2.txt --dts-compression --skip 25/1000 --delay 50/1000",
+            NULL,
+            "-i test_cli_eq_cfr.h264?timecode=test_cli_eq_tcv2.txt,dts-compression,skip=25/1000,delay=50/1000 -i test_cli_eq_audio.aac",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
     rc = 0;
 
 cleanup:
@@ -894,6 +1525,13 @@ cleanup:
     remove( f_amr );
     remove( f_wave );
     remove( f_chap );
+    remove( f_tcv1 );
+    remove( f_tcv2 );
+    remove( f_in_v );
+    remove( f_in_a );
+    remove( f_in_multi );
+    remove( f_in_m4a );
+    remove( f_in_mov );
     if( rc == 0 )
         printf( "[PASS] test_muxer_lshmuxer_cli_equivalence\n" );
     return rc;
