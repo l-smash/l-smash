@@ -427,16 +427,17 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
             int mm = (start_time /   60) % 60;
             int ss =  start_time         % 60;
             int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
-            if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
+            const char *chapter_name = data->chapter_name;
+            if( !memcmp( chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
             {
-                data->chapter_name += UTF8_BOM_LENGTH;
+                chapter_name += UTF8_BOM_LENGTH;
 #ifdef _WIN32
                 if( i == 1 )
                     printf( UTF8_BOM );    /* add BOM on Windows */
 #endif
             }
             printf( "CHAPTER%02"PRIu32"=%02d:%02d:%02d.%03d\n", i, hh, mm, ss, ms );
-            printf( "CHAPTER%02"PRIu32"NAME=%s\n", i++, data->chapter_name );
+            printf( "CHAPTER%02"PRIu32"NAME=%s\n", i++, chapter_name );
         }
         return 0;
     }

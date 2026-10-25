@@ -1842,6 +1842,7 @@ static int description_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsm
     if( err < 0 )
         return err;
     /* */
+    audio->manager             |= LSMASH_QTFF_BASE;
     audio->type                 = QT_CODEC_TYPE_MP4A_AUDIO;
     audio->version              = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
     audio->channelcount         = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );

@@ -1993,14 +1993,15 @@ static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
         int ss =  start_time         % 60;
         int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
         int with_bom = 0;
-        if( !memcmp( data->chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
+        const char *chapter_name = data->chapter_name;
+        if( !memcmp( chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
         {
-            data->chapter_name += 3;
+            chapter_name += 3;
             with_bom = 1;
         }
         lsmash_ifprintf( fp, indent++, "chapter[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "start_time = %02d:%02d:%02d.%03d\n", hh, mm, ss, ms );
-        lsmash_ifprintf( fp, indent--, with_bom ? "chapter_name = %s ( it has BOM in it )\n" : "chapter_name = %s\n", data->chapter_name );
+        lsmash_ifprintf( fp, indent--, with_bom ? "chapter_name = %s ( it has BOM in it )\n" : "chapter_name = %s\n", chapter_name );
     }
     return 0;
 }

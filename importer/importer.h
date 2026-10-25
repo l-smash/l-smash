@@ -219,3 +219,9 @@ lsmash_summary_t *lsmash_duplicate_summary
 );
 
 #endif /* #ifdef LSMASH_IMPORTER_INTERNAL */
+
+lsmash_summary_t *lsm_importer_duplicate_summary
+(
+    lsmash_root_t *root,
+    uint32_t       entry_number
+);

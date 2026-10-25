@@ -495,9 +495,14 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
         return err;
     }
     lsm_av1_reset_parser( &parser );
+    uint32_t cur_max_render_width  = ivf_imp->max_render_width;
+    uint32_t cur_max_render_height = ivf_imp->max_render_height;
+    uint32_t current_index         = 1;
     parser.sequence_header = ivf_imp->seed_sequence_header;
     parser.seen_seq_header = 1;
     parser.has_hdr10p      = ivf_imp->seed_has_hdr10p;
+    parser.MaxRenderWidth  = cur_max_render_width;
+    parser.MaxRenderHeight = cur_max_render_height;
     uint8_t *packetbuf = NULL;
     isom_sample_info_t info = { 0 };
     uint64_t first_pts       = 0;
@@ -547,6 +552,52 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
             err = LSMASH_ERR_INVALID_DATA;
             goto fail;
         }
+        /* Why: Mirror ivf_imp_get_accessunit()'s dynamic MaxRenderWidth/MaxRenderHeight SAR update
+         * so that mid-stream render dimension increases produce identical sample entries and pasp
+         * boxes on the Fake Track timeline path as on the legacy sequential importer path. */
+        if( parser.MaxRenderWidth > cur_max_render_width || parser.MaxRenderHeight > cur_max_render_height )
+        {
+            cur_max_render_width  = parser.MaxRenderWidth;
+            cur_max_render_height = parser.MaxRenderHeight;
+            lsmash_video_summary_t *dup = (lsmash_video_summary_t *)lsm_importer_duplicate_summary( importer->root, 1 );
+            if( !dup )
+            {
+                err = LSMASH_ERR_MEMORY_ALLOC;
+                goto fail;
+            }
+            uint64_t num = ((uint64_t)cur_max_render_width) * ((uint64_t)dup->height);
+            uint64_t den = ((uint64_t)dup->width)           * ((uint64_t)cur_max_render_height);
+            lsmash_reduce_fraction( &num, &den );
+            dup->par_h = (uint32_t)num;
+            dup->par_v = (uint32_t)den;
+            uint32_t count = lsmash_count_summary( importer->root, track_ID );
+            uint32_t found = 0;
+            for( uint32_t s_idx = 1; s_idx <= count; s_idx++ )
+            {
+                lsmash_summary_t *existing = (lsmash_summary_t *)lsmash_list_get_entry_data( importer->summaries, s_idx );
+                if( existing && lsmash_compare_summary( existing, (lsmash_summary_t *)dup ) == 0 )
+                {
+                    found = s_idx;
+                    break;
+                }
+            }
+            if( found )
+            {
+                lsmash_cleanup_summary( (lsmash_summary_t *)dup );
+                current_index = found;
+            }
+            else
+            {
+                int added = lsmash_add_sample_entry( importer->root, track_ID, (lsmash_summary_t *)dup );
+                if( added <= 0 || lsmash_list_add_entry( importer->summaries, dup ) < 0 )
+                {
+                    lsmash_cleanup_summary( (lsmash_summary_t *)dup );
+                    err = LSMASH_ERR_NAMELESS;
+                    goto fail;
+                }
+                current_index = (uint32_t)added;
+            }
+        }
         if( have_pending )
         {
             /* The duration is known only when the next time stamp is seen. */
@@ -570,7 +621,7 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
             .pos        = frame_pos + IVF_FRAME_HEADER_SIZE,
             .offset     = 0,
             .length     = samplesize,
-            .index      = 1,
+            .index      = current_index,
             .chunk      = &ivf_imp->chunk,
             .prop       = prop,
             .raw_length = au_length

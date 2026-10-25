@@ -34,6 +34,7 @@
     TODO: Make this importer work for multiple tracks.
 **********************************************************************************/
 #include "core/read.h"
+#include "core/print.h"
 #include "core/timeline.h"
 
 typedef struct
@@ -176,6 +177,13 @@ static int isobm_imp_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
+    /* Why: If lsm_read_file() fails mid-parse on a malformed container whose leading box
+     * matched importer_has_isobmff_signature(), lsm_importer_find() seeks back to 0 and
+     * probes raw stream importers. Discard any partially read boxes and dump print entries
+     * so subsequent raw probes and lsmash_print_movie() never encounter half-built state
+     * or dangling box pointers. */
+    lsm_print_destroy_list( importer->file );
+    lsmash_discard_boxes( importer->root );
     isobm_imp_remove( isobm_imp );
     return err;
 }

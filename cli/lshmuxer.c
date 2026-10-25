@@ -29,6 +29,8 @@
 #include <math.h>
 #include <inttypes.h>
 
+#include "importer/importer.h"
+
 #define MAX_NUM_OF_BRANDS 50
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define LSMASH_MIN( a, b ) ((a) < (b) ? (a) : (b))
@@ -144,6 +146,7 @@ typedef struct
     uint64_t                  edited_duration;
     int                       reach_end_of_media_timeline;
     uint32_t                  track_ID;
+    uint32_t                  timebase;
     uint32_t                  last_sample_delta;
     uint64_t                  duration;
     uint32_t                  current_sample_number;
@@ -182,6 +185,7 @@ typedef struct
 typedef struct
 {
     uint32_t                  track_ID;
+    uint32_t                  timebase;
     uint32_t                  last_sample_delta;
     uint32_t                  current_sample_number;
     uint32_t                 *summary_remap;
@@ -497,7 +501,7 @@ static void display_help( void )
              "    alternate-group=<integer> Specify alternate group\n"
              "    encoder-delay=<integer>   Represent audio encoder delay (priming samples)\n"
              "    constant-delay=<integer>  Specify constant composition delay\n"
-             "    copyright=<arg>           Specify track copyright (<language>/<string>)\n"
+             "    copyright=<arg>           Specify track copyright (<string> or <string>/<language>)\n"
              "    handler=<string>          Specify media handler name\n"
              "    sbr                       Enable backward-compatible explicit SBR signaling\n"
              "    par=<integer>:<integer>   Specify pixel aspect ratio\n"
@@ -790,7 +794,16 @@ static int get_movie( input_t *input, char *input_name )
             return ERROR_MSG( "failed to alloc input summaries.\n" );
         for( uint32_t j = 0; j < in_track[i].num_summaries; j++ )
         {
-            lsmash_summary_t *summary = lsmash_get_summary( input->root, in_track[i].track_ID, j + 1 );
+            /* Why: For raw elementary stream inputs, duplicate the parser-populated summary directly
+             * from importer->summaries rather than reconstructing from the Fake Track's stsd box via
+             * lsmash_get_summary(). Reconstructing from stsd loses parser-only metadata (video
+             * timescale/timebase/vfr/sample_per_field, structured HDR10+ flags in hvcC/av1C, and
+             * WAVE LPCM codec-specific state before the output container format is known). */
+            lsmash_summary_t *summary = in_file->is_raw
+                                      ? lsm_importer_duplicate_summary( input->root, j + 1 )
+                                      : NULL;
+            if( !summary )
+                summary = lsmash_get_summary( input->root, in_track[i].track_ID, j + 1 );
             if( !summary )
             {
                 WARNING_MSG( "failed to get a summary.\n" );
@@ -810,6 +823,7 @@ static int get_movie( input_t *input, char *input_name )
             in_track[i].summaries[j].active  = 1;
         }
         in_track[i].active                = 1;
+        in_track[i].timebase              = 1;
         in_track[i].current_sample_number = 1;
         in_track[i].sample                = NULL;
         in_track[i].dts                   = 0;
@@ -1061,8 +1075,11 @@ static int parse_track_option( lshmuxer_t *muxer )
                 }
                 else if( strstr( track_option, "copyright=" ) )
                 {
+                    /* Why: Legacy muxer.c defines copyright=<arg> as <notice> or <notice>/<language>
+                     * where the notice string comes first and the optional 3-letter ISO 639-2/T
+                     * language code follows '/'. */
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    current_track_opt->copyright_language = lsmash_pack_iso_language( track_parameter );
+                    current_track_opt->copyright_notice = track_parameter;
                     while( *track_parameter )
                     {
                         if( *track_parameter == '/' )
@@ -1072,7 +1089,7 @@ static int parse_track_option( lshmuxer_t *muxer )
                         }
                         ++track_parameter;
                     }
-                    current_track_opt->copyright_notice = track_parameter;
+                    current_track_opt->copyright_language = lsmash_pack_iso_language( track_parameter );
                 }
                 else if( strstr( track_option, "handler=" ) )
                 {
@@ -1339,8 +1356,11 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
                 FAILED_PARSE_CLI_OPTION( "--copyright-notice requires an argument.\n" );
             if( muxer->copyright_notice )
                 FAILED_PARSE_CLI_OPTION( "you specified --copyright-notice twice.\n" );
-            char *language = argv[i];
-            muxer->copyright_language = lsmash_pack_iso_language( language );
+            /* Why: Match legacy muxer.c's <notice> or <notice>/<language> format.
+             * When '/' is omitted, language points to the trailing NUL and lsmash_pack_iso_language()
+             * returns 0 (which track_set_media_language / lsmash_set_copyright maps to 'und'). */
+            muxer->copyright_notice = argv[i];
+            char *language = muxer->copyright_notice;
             while( *language )
             {
                 if( *language == '/' )
@@ -1350,7 +1370,7 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
                 }
                 ++language;
             }
-            muxer->copyright_notice = language;
+            muxer->copyright_language = language ? lsmash_pack_iso_language( language ) : ISOM_LANGUAGE_CODE_UNDEFINED;
         }
         else if( !strcasecmp( argv[i], "--movie-timescale" ) )
         {
@@ -1967,8 +1987,105 @@ static int edit_track_timeline
                     || track_opt->media_timescale != 0
                     || track_opt->media_timebase != 0
                     || track_opt->dts_compression != 0);
-    if( !has_tc_edit && !track_opt->user_fps )
+    if( input->file.is_raw && !has_tc_edit )
+    {
+        if( !in_track->num_summaries || !in_track->summaries[0].summary
+         || in_track->summaries[0].summary->summary_type != LSMASH_SUMMARY_TYPE_VIDEO )
+        {
+            in_track->timebase = 1;
+            return 0;
+        }
+        lsmash_video_summary_t *summary = (lsmash_video_summary_t *)in_track->summaries[0].summary;
+        /* Why: Preserve cli/muxer.c raw video timescale/timebase selection verbatim.
+         * Default to 25/1; only adopt bitstream timescale/timebase when !summary->vfr, and for
+         * H.264/HEVC additionally require the rate to match the well_known_fps[] whitelist so
+         * non-standard or bogus VUI tick ratios fall back safely to 25fps CFR. */
+        uint32_t new_timescale = 25;
+        uint32_t new_timebase  = 1;
+        if( track_opt->user_fps )
+        {
+            new_timescale = track_opt->fps_num << (!!summary->sample_per_field);
+            new_timebase  = track_opt->fps_den;
+        }
+        else if( !summary->vfr )
+        {
+            if( lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
+             || lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO ) )
+            {
+                static const struct
+                {
+                    uint32_t timescale;
+                    uint32_t timebase;
+                } well_known_fps[] =
+                    {
+                        { 24000, 1001 }, { 30000, 1001 }, { 60000, 1001 }, { 120000, 1001 }, { 72000, 1001 },
+                        { 25, 1 }, { 50, 1 }, { 24, 1 }, { 30, 1 }, { 60, 1 }, { 120, 1 }, { 72, 1 }, { 0, 0 }
+                    };
+                for( int i = 0; well_known_fps[i].timescale; i++ )
+                    if( summary->timescale == well_known_fps[i].timescale
+                     && summary->timebase  == well_known_fps[i].timebase )
+                    {
+                        new_timescale = summary->timescale;
+                        new_timebase  = summary->timebase;
+                        break;
+                    }
+            }
+            else
+            {
+                new_timescale = summary->timescale;
+                new_timebase  = summary->timebase;
+            }
+        }
+        in_track->timebase = new_timebase;
+        uint32_t orig_scale = summary->timebase ? summary->timebase : 1;
+        if( new_timescale == in_track->media.param.timescale && new_timebase == orig_scale )
+            return 0;
+        uint32_t track_ID = in_track->track_ID;
+        lsmash_media_ts_list_t ts_list;
+        if( lsmash_get_media_timestamps( input->root, track_ID, &ts_list ) )
+            return ERROR_MSG( "Failed to get media timestamps.\n" );
+        uint32_t sample_count = ts_list.sample_count;
+        if( sample_count == 0 )
+        {
+            lsmash_delete_media_timestamps( &ts_list );
+            return 0;
+        }
+        lsmash_media_ts_t *timestamp = ts_list.timestamp;
+        for( uint32_t i = 0; i < sample_count; i++ )
+        {
+            timestamp[i].dts = (timestamp[i].dts / orig_scale) * new_timebase;
+            timestamp[i].cts = (timestamp[i].cts / orig_scale) * new_timebase;
+        }
+        if( in_track->last_sample_delta == (uint32_t)(UINT32_MAX * orig_scale) )
+            in_track->last_sample_delta = (uint32_t)(UINT32_MAX * new_timebase);
+        else
+            in_track->last_sample_delta = (in_track->last_sample_delta / orig_scale) * new_timebase;
+        if( !in_track->last_sample_delta )
+            in_track->last_sample_delta = new_timebase;
+        in_track->media.param.timescale = new_timescale;
+        in_track->duration = timestamp[sample_count - 1].dts + in_track->last_sample_delta;
+        if( lsmash_set_media_timestamps( input->root, track_ID, &ts_list ) )
+        {
+            lsmash_delete_media_timestamps( &ts_list );
+            return ERROR_MSG( "Failed to set media timestamps.\n" );
+        }
+        lsmash_delete_media_timestamps( &ts_list );
         return 0;
+    }
+    if( !has_tc_edit && !track_opt->user_fps )
+    {
+        if( track_opt->has_cd )
+        {
+            lsmash_media_ts_list_t ts_list;
+            if( !lsmash_get_media_timestamps( input->root, in_track->track_ID, &ts_list ) )
+            {
+                uint64_t tb = get_media_timebase( &ts_list );
+                in_track->timebase = tb ? (uint32_t)tb : 1;
+                lsmash_delete_media_timestamps( &ts_list );
+            }
+        }
+        return 0;
+    }
     uint32_t track_ID = in_track->track_ID;
     lsmash_media_ts_list_t ts_list;
     if( lsmash_get_media_timestamps( input->root, track_ID, &ts_list ) )
@@ -1994,6 +2111,7 @@ static int edit_track_timeline
             sample_per_field = ((lsmash_video_summary_t *)in_track->summaries[0].summary)->sample_per_field;
         uint32_t new_timescale = track_opt->fps_num << (!!sample_per_field);
         uint32_t new_timebase  = track_opt->fps_den;
+        in_track->timebase = new_timebase;
         for( uint32_t i = 0; i < sample_count; i++ )
         {
             timestamp[i].dts = (timestamp[i].dts / orig_timebase) * new_timebase;
@@ -2141,6 +2259,7 @@ static int edit_track_timeline
     else
         timecode.duration = in_track->last_sample_delta = UINT32_MAX;
     in_track->media.param.timescale = timescale;
+    in_track->timebase              = timebase;
     in_track->duration              = timecode.duration;
     in_track->edited_duration       = timecode.duration;
     in_track->composition_delay     = timecode.composition_delay;
@@ -2434,7 +2553,9 @@ static int check_raw_codec_brands( lshmuxer_t *muxer )
             else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_SAWB_AUDIO )
                   || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_SAMR_AUDIO ) )
             {
-                if( muxer->explicit_format && !muxer->brand_3gx )
+                /* Why: cli/muxer.c rejects raw AMR-NB/WB unconditionally unless the output is a 3GPP(2)
+                 * file format, even when --file-format is omitted (default MP4). */
+                if( (muxer->input[i].file.is_raw || muxer->explicit_format) && !muxer->brand_3gx )
                     return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
             }
         }
@@ -2582,25 +2703,39 @@ static int set_movie_parameters( lshmuxer_t *muxer )
         return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
     out_file->seg_param = out_file->param;
     if( muxer->chap_file )
-        for( uint32_t i = 0; i < out_file->param.brand_count; i++ )
+    {
+        if( all_inputs_raw || muxer->explicit_format )
         {
-            uint32_t brand = out_file->param.brands[i];
-            if( ((brand >> 24) & 0xFF) == '3'
-             && ((brand >> 16) & 0xFF) == 'g'
-             && ((brand >>  8) & 0xFF) == 'p' )
-                break;
-            if( brand == ISOM_BRAND_TYPE_QT  || brand == ISOM_BRAND_TYPE_M4A
-             || brand == ISOM_BRAND_TYPE_M4B || brand == ISOM_BRAND_TYPE_M4P
-             || brand == ISOM_BRAND_TYPE_M4V )
+            /* Why: Preserve cli/muxer.c's exact reference chapter track availability check:
+             * (opt->qtff || opt->itunes_movie) && (opt->brand_3gx != 1). */
+            muxer->ref_chap_available = (muxer->qtff || muxer->itunes_movie) && (muxer->brand_3gx != 1);
+        }
+        else
+        {
+            for( uint32_t i = 0; i < out_file->param.brand_count; i++ )
             {
-                muxer->ref_chap_available = 1;
-                break;
+                uint32_t brand = out_file->param.brands[i];
+                if( ((brand >> 24) & 0xFF) == '3'
+                 && ((brand >> 16) & 0xFF) == 'g'
+                 && ((brand >>  8) & 0xFF) == 'p' )
+                    break;
+                if( brand == ISOM_BRAND_TYPE_QT  || brand == ISOM_BRAND_TYPE_M4A
+                 || brand == ISOM_BRAND_TYPE_M4B || brand == ISOM_BRAND_TYPE_M4P
+                 || brand == ISOM_BRAND_TYPE_M4V )
+                {
+                    muxer->ref_chap_available = 1;
+                    break;
+                }
             }
         }
+    }
     lsmash_initialize_movie_parameters( &out_file->movie.param );
     if( muxer->movie_timescale )
         out_file->movie.param.timescale = muxer->movie_timescale;
-    else if( out_file->movie.num_tracks == 1 )
+    /* Why: In cli/muxer.c, when there is only 1 input (and thus 1 track), movie_param.timescale is
+     * unconditionally set to the track's media_param.timescale even if --movie-timescale was specified
+     * (whose help string states: "Specify movie timescale for more than 1 tracks"). */
+    if( out_file->movie.num_tracks == 1 && (!muxer->movie_timescale || (all_inputs_raw && muxer->num_input == 1)) )
     {
         for( int i = 0; i < muxer->num_input; i++ )
         {
@@ -2738,7 +2873,13 @@ static int apply_summary_track_options
 {
     if( in_track->num_summaries == 0 || !in_track->summaries[0].summary )
         return 0;
-    for( uint32_t k = 0; k < in_track->num_summaries; k++ )
+    /* Why: For raw streams, cli/muxer.c applies track options (par=, btrt, dovi, st3d, prhd, projection,
+     * sbr, SA3D) only to the initial summary (first sequence) during prepare_output(), whereas any
+     * subsequent sample entries generated by mid-stream sequence changes keep their bitstream-derived
+     * parameters unmodified ("Specify pixel aspect ratio of the first sequence / And never change ones
+     * in the media stream"). */
+    uint32_t num_target_summaries = in->file.is_raw ? 1 : in_track->num_summaries;
+    for( uint32_t k = 0; k < num_target_summaries; k++ )
     {
         lsmash_summary_t *base_summary = in_track->summaries[k].summary;
         if( !base_summary )
@@ -2766,7 +2907,9 @@ static int apply_summary_track_options
                 out_track->track_param.display_width  = display_width  <= UINT32_MAX ? display_width  : UINT32_MAX;
                 out_track->track_param.display_height = display_height <= UINT32_MAX ? display_height : UINT32_MAX;
             }
-            if( in->file.is_raw && !summary->vfr
+            /* Why: cli/muxer.c only appends MPEG4BitRateBox (btrt) for raw AVC1/HVC1 when neither
+             * ?fps= (track_opt->user_fps) nor VFR (summary->vfr) is active. */
+            if( in->file.is_raw && !track_opt->user_fps && !summary->vfr
              && (lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
               || lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO )) )
             {
@@ -2782,7 +2925,8 @@ static int apply_summary_track_options
                                                                                    LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
                 if( !dovi )
                     return ERROR_MSG( "Failed to allocate Dolby Vision configuration box.\n" );
-                uint32_t tb = track_opt->user_fps ? track_opt->fps_den : (summary->timebase ? summary->timebase : 1);
+                uint32_t tb = out_track->timebase ? out_track->timebase
+                            : (track_opt->user_fps ? track_opt->fps_den : (summary->timebase ? summary->timebase : 1));
                 lsmash_dovi_set_config( (lsmash_hevc_dovi_t *)dovi->data.structured, track_opt->dv_profile,
                                         track_opt->dv_bl_signal_compatibility_id, out_track->media_param.timescale, tb,
                                         summary->width, summary->height );
@@ -2961,20 +3105,25 @@ static int prepare_output( lshmuxer_t *muxer )
             out_track->track_ID = lsmash_create_track( output->root, in_track->media.param.handler_type );
             if( !out_track->track_ID )
                 return ERROR_MSG( "failed to create a track.\n" );
-            out_track->track_param = in_track->track_param;
-            out_track->media_param = in_track->media.param;
-            out_track->lpcm        = in_track->lpcm;
+            out_track->timebase = in_track->timebase;
+            out_track->lpcm     = in_track->lpcm;
             if( input[i].file.is_raw )
             {
+                /* Why: Initialize track_param and media_param from scratch for raw inputs just like
+                 * cli/muxer.c instead of copying from the Fake Track. Copying the Fake Track's
+                 * lsmash_get_media_parameters() result inherits no_sample_dependency_table = 1 (because
+                 * the Fake Track has no sdtp box), which suppresses SampleDependencyTypeBox (sdtp)
+                 * generation in lsmash_set_media_parameters(). */
+                lsmash_initialize_track_parameters( &out_track->track_param );
                 out_track->track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
                 if( !current_track_opt->disable )
                     out_track->track_param.mode |= ISOM_TRACK_ENABLED;
                 if( muxer->qtff )
                     out_track->track_param.mode |= QT_TRACK_IN_POSTER;
-                out_track->media_param.MAC_language = 0;
-                out_track->media_param.ISO_language = current_track_opt->ISO_language
-                                                    ? current_track_opt->ISO_language
-                                                    : (muxer->isom ? ISOM_LANGUAGE_CODE_UNDEFINED : 0);
+                lsmash_initialize_media_parameters( &out_track->media_param );
+                out_track->media_param.handler_type = in_track->media.param.handler_type;
+                out_track->media_param.timescale    = in_track->media.param.timescale;
+                out_track->media_param.ISO_language = current_track_opt->ISO_language;
                 if( current_track_opt->handler_name )
                     out_track->media_param.media_handler_name = current_track_opt->handler_name;
                 else if( in_track->media.param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
@@ -2984,6 +3133,8 @@ static int prepare_output( lshmuxer_t *muxer )
             }
             else
             {
+                out_track->track_param = in_track->track_param;
+                out_track->media_param = in_track->media.param;
                 if( current_track_opt->disable )
                     out_track->track_param.mode &= ~ISOM_TRACK_ENABLED;
                 out_track->media_param.ISO_language       = current_track_opt->ISO_language;
@@ -3243,9 +3394,12 @@ static int adjust_timestamp
     {
         if( out_track->current_sample_number == 1 )
         {
-            if( track_opt->constant_delay < sample->cts )
+            /* Why: cli/muxer.c interprets ?constant-delay=<arg> in timebase units (frames/ticks),
+             * scaling constant_delay by out_track->timebase before comparing against sample->cts. */
+            uint64_t cd_in_timebase = (uint64_t)track_opt->constant_delay * out_track->timebase;
+            if( cd_in_timebase < sample->cts )
                 return ERROR_MSG( "constant delay must be greater than or equal to first CTS.\n" );
-            out_track->cd_shift = track_opt->constant_delay - sample->cts;
+            out_track->cd_shift = cd_in_timebase - sample->cts;
         }
         sample->cts += out_track->cd_shift;
     }
@@ -3560,19 +3714,23 @@ static int finish_movie( lshmuxer_t *muxer )
     if( muxer->chap_file )
         lsmash_set_tyrant_chapter( output->root, muxer->chap_file, muxer->add_bom_to_chpl );
     REFRESH_CONSOLE;
+    int all_raw = 1;
+    for( int i = 0; i < muxer->num_input; i++ )
+        if( !muxer->input[i].file.is_raw )
+            all_raw = 0;
     lsmash_adhoc_remux_t *remux_cb = &moov_to_front;
-    if( !muxer->frag_base_track && !muxer->optimize_pd )
-    {
-        int all_raw = 1;
-        for( int i = 0; i < muxer->num_input; i++ )
-            if( !muxer->input[i].file.is_raw )
-                all_raw = 0;
-        if( all_raw )
-            remux_cb = NULL;
-    }
+    if( !muxer->frag_base_track && !muxer->optimize_pd && all_raw )
+        remux_cb = NULL;
     if( lsmash_finish_movie( output->root, remux_cb ) )
         return -1;
-    return muxer->frag_base_track ? 0 : lsmash_write_lsmash_indicator( output->root );
+    /* Why: In cli/muxer.c, when --optimize-pd is specified, finish_movie() returns
+     * immediately after lsmash_finish_movie( output->root, &moov_to_front ) without
+     * appending the trailing 30-byte L-SMASH indicator 'free' box (whereas non-optimize-pd
+     * raw muxing and container remuxing append lsmash_write_lsmash_indicator()).
+     * Preserve this exact return path for raw stream inputs with --optimize-pd. */
+    if( muxer->frag_base_track || (all_raw && muxer->optimize_pd) )
+        return 0;
+    return lsmash_write_lsmash_indicator( output->root );
 }
 
 int main( int argc, char *argv[] )
