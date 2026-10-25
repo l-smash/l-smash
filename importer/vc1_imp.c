@@ -557,7 +557,7 @@ static int vc1_imp_probe( importer_t *importer )
     /* Make fake movie, track and sample entry (vc-1 + dvc1) so that this raw stream is readable
      * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
      * The media timescale is the frame rate numerator and a time stamp counted in the denominator, which is the timebase of the
-     * summary, is converted into it by multiplying the timebase, exactly as the muxer does. If the sequence header does not
+     * summary, is converted into media timescale units by multiplying by the timebase. If the sequence header does not
      * tell the frame rate, there is no timescale to refer to, so that a time stamp is counted in frames: a frame lasts 1. */
     uint32_t track_ID;
     if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK,
@@ -616,8 +616,8 @@ static int vc1_imp_filter_sample( lsmash_sample_t *sample, const void *context )
 }
 
 /* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
- * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
- * from the sequential reader. */
+ * the time stamps, the properties and the sample entries of the Timeline are by construction identical to what the
+ * sequential reader produces. */
 static int vc1_imp_construct_timeline( importer_t *importer, uint32_t track_number )
 {
     static const importer_raw_sample_filter_t raw_filter =

@@ -95,6 +95,13 @@ importer_t *lsm_importer_alloc( lsmash_root_t *root )
         lsmash_free( importer );
         return NULL;
     }
+    importer->description_summaries = lsmash_list_create( lsmash_cleanup_summary );
+    if( !importer->description_summaries )
+    {
+        lsmash_list_destroy( importer->summaries );
+        lsmash_free( importer );
+        return NULL;
+    }
     return importer;
 }
 
@@ -105,6 +112,7 @@ void lsm_importer_destroy( importer_t *importer )
     lsmash_file_t *file = importer->file;
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
+    lsmash_list_destroy( importer->description_summaries );
     lsmash_list_destroy( importer->summaries );
     lsmash_free( importer );
     /* Prevent freeing this already freed importer in file's destructor again. */
@@ -313,20 +321,11 @@ uint32_t lsmash_importer_get_track_count( importer_t *importer )
 {
     if( !importer || !importer->summaries )
         return 0;
-    /* Why: Raw stream importers always expose a single elementary stream track (track 1),
-     * even when stream property changes during timeline construction append additional
-     * sample entries to importer->summaries so that callers (e.g. lshmuxer) can duplicate
-     * each rich parser-populated summary without a lossy stsd round-trip. */
-    if( importer->file && !(importer->file->flags & LSMASH_FILE_MODE_BOX) )
-        return importer->summaries->entry_count ? 1 : 0;
     return importer->summaries->entry_count;
 }
 
-lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number )
+static lsmash_summary_t *importer_duplicate_summary_direct( const lsmash_summary_t *src_summary )
 {
-    if( !importer )
-        return NULL;
-    lsmash_summary_t *src_summary = lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !src_summary )
         return NULL;
     lsmash_summary_t *summary = lsmash_create_summary( src_summary->summary_type );
@@ -336,13 +335,13 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
     switch( src_summary->summary_type )
     {
         case LSMASH_SUMMARY_TYPE_VIDEO :
-            *(lsmash_video_summary_t *)summary = *(lsmash_video_summary_t *)src_summary;
+            *(lsmash_video_summary_t *)summary = *(const lsmash_video_summary_t *)src_summary;
             break;
         case LSMASH_SUMMARY_TYPE_AUDIO :
-            *(lsmash_audio_summary_t *)summary = *(lsmash_audio_summary_t *)src_summary;
+            *(lsmash_audio_summary_t *)summary = *(const lsmash_audio_summary_t *)src_summary;
             break;
         case LSMASH_SUMMARY_TYPE_HINT:
-            *(lsmash_hint_summary_t *)summary  = *(lsmash_hint_summary_t *)src_summary;
+            *(lsmash_hint_summary_t *)summary  = *(const lsmash_hint_summary_t *)src_summary;
             break;
         default :
             lsmash_cleanup_summary( summary );
@@ -365,13 +364,18 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
     return summary;
 }
 
-lsmash_summary_t *lsm_importer_duplicate_summary( lsmash_root_t *root, uint32_t entry_number )
+lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number )
 {
-    if( LSMASH_IS_NON_EXISTING_BOX( root )
-     || LSMASH_IS_NON_EXISTING_BOX( root->file )
-     || !root->file->importer )
+    if( !importer )
         return NULL;
-    return lsmash_duplicate_summary( root->file->importer, entry_number );
+    return importer_duplicate_summary_direct( lsmash_list_get_entry_data( importer->summaries, track_number ) );
+}
+
+lsmash_summary_t *lsm_importer_get_summary( importer_t *importer, uint32_t description_number )
+{
+    if( !importer )
+        return NULL;
+    return importer_duplicate_summary_direct( lsmash_list_get_entry_data( importer->description_summaries, description_number ) );
 }
 
 int lsm_importer_make_fake_movie( importer_t *importer )
@@ -410,6 +414,8 @@ void lsm_importer_break_fake_movie( importer_t *importer )
     /* A walker shares the file with the original importer and owns no fake boxes. */
     if( !importer || importer->is_walker )
         return;
+    if( importer->description_summaries )
+        lsmash_list_remove_entries( importer->description_summaries );
     lsm_box_remove_by_itself( importer->file->moov );
     /* The compatibility flag is set only together with a fake movie by lsm_importer_setup_fake_track(). */
     importer->file->isom_compatible = 0;
@@ -474,6 +480,13 @@ int lsm_importer_setup_fake_track
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
+    lsmash_summary_t *dup = importer_duplicate_summary_direct( summary );
+    if( !dup || lsmash_list_add_entry( importer->description_summaries, dup ) < 0 )
+    {
+        lsmash_cleanup_summary( dup );
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
+    }
     return 0;
 fail:
     lsm_importer_break_fake_movie( importer );
@@ -489,16 +502,14 @@ void lsm_importer_mark_resume_pos( importer_t *importer )
 }
 
 /* Find the sample entry of the fake track that is identical to the summary, or append it as a new one.
- * Why: When a new sample entry is added to the fake track, we also duplicate the walker's rich summary
- * into importer->summaries at the corresponding 1-based description index. Reconstructing a summary from
- * the fake track's stsd via lsmash_get_summary() loses parser-only fields (video timescale/timebase/vfr/
+ * When a new sample entry is added to the fake track, we also duplicate the parser-populated summary
+ * into importer->description_summaries at the corresponding 1-based description index so that
+ * lsmash_get_summary() preserves parser-specific fields (such as video timescale/timebase/vfr/
  * sample_per_field, structured HDR10+ flags in hvcC/av1C, and WAVE ISOBMFF pcmC vs QTFF lpcm state). */
-static int importer_get_sample_entry_index
+int lsm_importer_get_sample_entry_index
 (
     importer_t       *importer,
     uint32_t          track_ID,
-    importer_t       *walker,
-    uint32_t          track_number,
     lsmash_summary_t *summary,
     uint32_t         *index
 )
@@ -522,10 +533,10 @@ static int importer_get_sample_entry_index
     int added = lsmash_add_sample_entry( importer->root, track_ID, summary );
     if( added <= 0 )
         return LSMASH_ERR_NAMELESS;
-    if( (uint32_t)added > importer->summaries->entry_count )
+    if( (uint32_t)added > importer->description_summaries->entry_count )
     {
-        lsmash_summary_t *dup = lsmash_duplicate_summary( walker, track_number );
-        if( !dup || lsmash_list_add_entry( importer->summaries, dup ) < 0 )
+        lsmash_summary_t *dup = importer_duplicate_summary_direct( summary );
+        if( !dup || lsmash_list_add_entry( importer->description_summaries, dup ) < 0 )
         {
             lsmash_cleanup_summary( dup );
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -641,7 +652,7 @@ int lsm_importer_construct_timeline_by_walk_filtered
             /* The importer has switched the summary of the stream, so does the sample entry that the samples refer to. */
             lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_list_get_entry_data( walker.summaries, track_number );
             if( !summary
-             || (err = importer_get_sample_entry_index( importer, track_ID, &walker, track_number, summary, &index )) < 0 )
+             || (err = lsm_importer_get_sample_entry_index( importer, track_ID, summary, &index )) < 0 )
             {
                 lsmash_delete_sample( sample );
                 if( err >= 0 )
@@ -716,10 +727,10 @@ int lsm_importer_construct_timeline_by_walk_filtered
             last_delta = walker.funcs.get_last_delta( &walker, track_number );
         if( last_delta == 0 )
             last_delta = last_duration;
-        /* Why: vc1_imp_get_last_delta() and nalu_imp_*_get_last_delta() (for single-sample streams)
-         * return UINT32_MAX as an "arbitrary" sentinel delta, which legacy muxer.c scales via
-         * uint32_t wrap-around (out_track->last_delta *= out_track->timebase). Rejecting UINT32_MAX
-         * as overflow when timestamp_scale > 1 breaks 29.97/23.976fps VC-1 and 1-frame NALU streams. */
+        /* vc1_imp_get_last_delta() and single-sample nalu_imp_*_get_last_delta() return
+         * UINT32_MAX as an arbitrary sentinel delta intended to be scaled by timestamp_scale
+         * via uint32_t modular arithmetic. Allow UINT32_MAX here so fractional-fps VC-1
+         * (e.g. 30000/1001) and single-frame NALU streams do not fail when timestamp_scale > 1. */
         if( last_delta != UINT32_MAX && last_delta > UINT32_MAX / timestamp_scale )
         {
             err = LSMASH_ERR_INVALID_DATA;

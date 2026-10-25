@@ -68,12 +68,9 @@ struct importer_tag
     lsmash_file_parameters_t file_param;
     void                    *info;          /* importer internal status information. */
     importer_functions       funcs;
-    lsmash_entry_list_t     *summaries;
-    int                      is_adhoc_open; /* If set to 1, it means this importer is not allocated by lsmash_read_file().
-                                             * This is a poor design due to historical implementation between the importer
-                                             * framework and ISOBMFF demuxer framework. The importer shall be hidden inside
-                                             * the file handling abstraction layer. That'll achieve integration of the muxer
-                                             * and the remuxer CLIs. */
+    lsmash_entry_list_t     *summaries;     /* 1-based per-track active summary list for sequential importer API */
+    lsmash_entry_list_t     *description_summaries; /* 1-based per-sample-entry summary list for Fake Track lsmash_get_summary() */
+    int                      is_adhoc_open; /* If set to 1, it means this importer is not allocated by lsmash_read_file(). */
     int                      is_walker;     /* If set to 1, this importer is a private clone that only walks the bitstream to build a
                                              * Media Timeline. It shares the file and the byte stream with the original importer but
                                              * never touches the fake boxes. */
@@ -125,7 +122,7 @@ void lsm_importer_mark_resume_pos
 /* Build the Media Timeline of the only track by walking every access unit with a private clone of the importer.
  * The clone re-probes the stream from its head and runs the own get_accessunit of the importer, so that the sample
  * boundaries, the timestamps, the properties and the sample entries of the Timeline are by construction identical to
- * what the muxer gets. The original importer is never touched except for the shared stream position, which is restored. */
+ * what the sequential reader produces. The original importer is never touched except for the shared stream position, which is restored. */
 int lsm_importer_construct_timeline_by_walk
 (
     importer_t *importer,
@@ -148,6 +145,20 @@ int lsm_importer_construct_timeline_by_walk_filtered
     importer_t                         *importer,
     uint32_t                            track_number,
     const importer_raw_sample_filter_t *raw_filter
+);
+
+int lsm_importer_get_sample_entry_index
+(
+    importer_t       *importer,
+    uint32_t          track_ID,
+    lsmash_summary_t *summary,
+    uint32_t         *index
+);
+
+lsmash_summary_t *lsmash_duplicate_summary
+(
+    importer_t *importer,
+    uint32_t    track_number
 );
 
 #else
@@ -218,10 +229,10 @@ lsmash_summary_t *lsmash_duplicate_summary
     uint32_t    track_number
 );
 
-#endif /* #ifdef LSMASH_IMPORTER_INTERNAL */
-
-lsmash_summary_t *lsm_importer_duplicate_summary
+lsmash_summary_t *lsm_importer_get_summary
 (
-    lsmash_root_t *root,
-    uint32_t       entry_number
+    importer_t *importer,
+    uint32_t    description_number
 );
+
+#endif /* #ifdef LSMASH_IMPORTER_INTERNAL */

@@ -406,7 +406,7 @@ static int ivf_imp_probe( importer_t *importer )
     /* Make fake movie, track and sample entry (av01 + av1C) so that this raw stream is readable
      * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
      * The media timescale is the frame rate field of the IVF header. A time stamp counted in the time scale field of
-     * the IVF header is converted into it by multiplying the time scale, exactly as the muxer does with the timebase. */
+     * the IVF header is converted into media timescale units by multiplying by the time scale (timebase). */
     uint32_t track_ID;
     if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK, gh->frame_rate,
                                               (lsmash_summary_t *)summary, &track_ID )) < 0 )
@@ -552,14 +552,14 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
             err = LSMASH_ERR_INVALID_DATA;
             goto fail;
         }
-        /* Why: Mirror ivf_imp_get_accessunit()'s dynamic MaxRenderWidth/MaxRenderHeight SAR update
-         * so that mid-stream render dimension increases produce identical sample entries and pasp
-         * boxes on the Fake Track timeline path as on the legacy sequential importer path. */
+        /* Mirror ivf_imp_get_accessunit()'s dynamic MaxRenderWidth/MaxRenderHeight SAR update
+         * so that mid-stream render dimension increases append a matching sample entry and pasp
+         * box to the fake track timeline. */
         if( parser.MaxRenderWidth > cur_max_render_width || parser.MaxRenderHeight > cur_max_render_height )
         {
             cur_max_render_width  = parser.MaxRenderWidth;
             cur_max_render_height = parser.MaxRenderHeight;
-            lsmash_video_summary_t *dup = (lsmash_video_summary_t *)lsm_importer_duplicate_summary( importer->root, 1 );
+            lsmash_video_summary_t *dup = (lsmash_video_summary_t *)lsmash_duplicate_summary( importer, 1 );
             if( !dup )
             {
                 err = LSMASH_ERR_MEMORY_ALLOC;
@@ -570,33 +570,10 @@ static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_numb
             lsmash_reduce_fraction( &num, &den );
             dup->par_h = (uint32_t)num;
             dup->par_v = (uint32_t)den;
-            uint32_t count = lsmash_count_summary( importer->root, track_ID );
-            uint32_t found = 0;
-            for( uint32_t s_idx = 1; s_idx <= count; s_idx++ )
-            {
-                lsmash_summary_t *existing = (lsmash_summary_t *)lsmash_list_get_entry_data( importer->summaries, s_idx );
-                if( existing && lsmash_compare_summary( existing, (lsmash_summary_t *)dup ) == 0 )
-                {
-                    found = s_idx;
-                    break;
-                }
-            }
-            if( found )
-            {
-                lsmash_cleanup_summary( (lsmash_summary_t *)dup );
-                current_index = found;
-            }
-            else
-            {
-                int added = lsmash_add_sample_entry( importer->root, track_ID, (lsmash_summary_t *)dup );
-                if( added <= 0 || lsmash_list_add_entry( importer->summaries, dup ) < 0 )
-                {
-                    lsmash_cleanup_summary( (lsmash_summary_t *)dup );
-                    err = LSMASH_ERR_NAMELESS;
-                    goto fail;
-                }
-                current_index = (uint32_t)added;
-            }
+            err = lsm_importer_get_sample_entry_index( importer, track_ID, (lsmash_summary_t *)dup, &current_index );
+            lsmash_cleanup_summary( (lsmash_summary_t *)dup );
+            if( err < 0 )
+                goto fail;
         }
         if( have_pending )
         {

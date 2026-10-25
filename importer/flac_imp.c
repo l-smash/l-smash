@@ -571,7 +571,7 @@ static uint32_t flac_imp_get_last_delta
 }
 
 /* Build the Media Timeline by walking all frames with get_accessunit, so that the frame boundaries, the timestamps and
- * the sample sizes of the Timeline are by construction the same as what the muxer gets from the sequential reader.
+ * the sample sizes of the Timeline are by construction identical to what the sequential reader produces.
  * The walk moves the sequential reader, therefore its state is saved here and restored on every exit path:
  * get_accessunit that is called after this function continues from the very frame it would have returned. */
 static int flac_imp_construct_timeline( importer_t *imp, uint32_t track_number )

@@ -33,6 +33,7 @@
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
 #include "codecs/description.h"
+#include "importer/importer.h"
 
 /***************************************************************************
     summary and AudioSpecificConfig relative tools
@@ -174,10 +175,17 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
 {
     if( lsm_movie_check_initializer_present( root ) < 0 || track_ID == 0 || description_number == 0 )
         return NULL;
-    isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
+    lsmash_file_t *file = root->file->initializer;
+    isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->hdlr ) )
         return NULL;
+    if( !(file->flags & LSMASH_FILE_MODE_BOX) && file->importer )
+    {
+        lsmash_summary_t *summary = lsm_importer_get_summary( file->importer, description_number );
+        if( summary )
+            return summary;
+    }
     isom_minf_t *minf = trak->mdia->minf;
     isom_stsd_t *stsd = minf->stbl->stsd;
     uint32_t i = 1;

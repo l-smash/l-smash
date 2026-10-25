@@ -1076,8 +1076,8 @@ static int nalu_imp_h264_probe( importer_t *importer )
     h264_imp->au_range = (nalu_au_range_t){ .start = first_sc_head_pos };
     /* Make fake movie, track and sample entry (avc1 + avcC) so that this raw stream is readable
      * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
-     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into it
-     * by multiplying the timebase, exactly as the muxer does. */
+     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into
+     * media timescale units by multiplying by the timebase. */
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, 1 );
     uint32_t track_ID;
     if( !summary )
@@ -1112,8 +1112,8 @@ static uint32_t nalu_imp_h264_get_last_delta( importer_t *importer, uint32_t tra
 }
 
 /* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
- * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
- * from the sequential reader. */
+ * the time stamps, the properties and the sample entries of the Timeline are by construction identical to what the
+ * sequential reader produces. */
 static int nalu_imp_h264_construct_timeline( importer_t *importer, uint32_t track_number )
 {
     static const importer_raw_sample_filter_t raw_filter =
@@ -1819,8 +1819,8 @@ static int nalu_imp_hevc_probe( importer_t *importer )
     hevc_imp->dropped_nalu_alloc = 0;
     /* Make fake movie, track and sample entry (hvc1 + hvcC) so that this raw stream is readable
      * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
-     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into it
-     * by multiplying the timebase, exactly as the muxer does. */
+     * The media timescale is the one of the first summary and a time stamp counted in its timebase is converted into
+     * media timescale units by multiplying by the timebase. */
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, 1 );
     uint32_t track_ID;
     if( !summary )
@@ -1878,8 +1878,8 @@ static int nalu_imp_hevc_create_filter_context( importer_t *walker, void **conte
 }
 
 /* Build the Media Timeline by walking all access units with a private clone of the importer, so that the sample boundaries,
- * the time stamps, the properties and the sample entries of the Timeline are by construction the same as what the muxer gets
- * from the sequential reader. */
+ * the time stamps, the properties and the sample entries of the Timeline are by construction identical to what the
+ * sequential reader produces. */
 static int nalu_imp_hevc_construct_timeline( importer_t *importer, uint32_t track_number )
 {
     static const importer_raw_sample_filter_t raw_filter =
