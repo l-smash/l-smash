@@ -974,6 +974,8 @@ void lsm_box_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ALAC_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_AC_3_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, box_remove_audio_description ),
@@ -983,6 +985,26 @@ void lsm_box_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_QDM2_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_QDMC_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_QCLP_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_CDX2_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_CDX4_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_DVCA_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_DVI_AUDIO,  box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_IMA4_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_RAW_AUDIO,  box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_VDVA_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_MP3_AUDIO,     box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO, box_remove_audio_description ),
@@ -995,6 +1017,7 @@ void lsm_box_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, box_remove_audio_description ),
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,  box_remove_audio_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_FDP_HINT,  box_remove_hint_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_M2TS_HINT, box_remove_hint_description ),
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_PM2T_HINT, box_remove_hint_description ),
@@ -1026,6 +1049,10 @@ void lsm_box_remove_sample_description( isom_sample_entry_t *sample )
             description_remover_table[i].func( sample );
             return;
         }
+    if( sample->manager & LSMASH_VIDEO_DESCRIPTION )
+        box_remove_visual_description( sample );
+    else if( sample->manager & LSMASH_AUDIO_DESCRIPTION )
+        box_remove_audio_description( sample );
 }
 
 DEFINE_SIMPLE_PAGED_LIST_BOX_REMOVER( box_remove_stts, stts )

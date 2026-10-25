@@ -1663,6 +1663,9 @@ static int read_audio_description( lsmash_file_t *file, isom_box_t *box, isom_bo
         audio->constLPCMFramesPerAudioPacket = lsmash_bs_get_be32( bs );
         box->manager |= LSMASH_QTFF_BASE;
     }
+    if( (box->manager & LSMASH_QTFF_BASE)
+     && lsmash_check_codec_type_identical( box->type, ISOM_CODEC_TYPE_ALAC_AUDIO ) )
+        box->type = QT_CODEC_TYPE_ALAC_AUDIO;
     box->parent   = parent;
     box->manager |= LSMASH_AUDIO_DESCRIPTION;
     read_box_common_copy( audio, box );
@@ -1676,6 +1679,11 @@ static int read_wave( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
 {
     ADD_BOX( wave, isom_audio_entry_t );
     read_box_common_copy( wave, box );
+    if( lsmash_check_codec_type_identical( parent->type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
+        parent->type = QT_CODEC_TYPE_MP4A_AUDIO;
+    else if( lsmash_check_codec_type_identical( parent->type, ISOM_CODEC_TYPE_ALAC_AUDIO ) )
+        parent->type = QT_CODEC_TYPE_ALAC_AUDIO;
+    parent->manager |= LSMASH_QTFF_BASE;
     int ret = lsm_print_add_func( file, wave, level );
     if( ret < 0 )
         return ret;

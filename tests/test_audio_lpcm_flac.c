@@ -997,6 +997,123 @@ int test_flac_isobmff_roundtrip( void )
         lsmash_destroy_root( demux_root );
     }
 
+    /* 6. ALAC ISOBMFF, QTFF v1, and Chimera (ISOBMFF + QTFF brands) round-trip verification */
+    {
+        const char *alac_isom_path    = "tests/tmp_test_alac_isom.mp4";
+        const char *alac_qtff_path    = "tests/tmp_test_alac_qtff.mov";
+        const char *alac_chimera_path = "tests/tmp_test_alac_chimera.mp4";
+        const char *paths[3] = { alac_isom_path, alac_qtff_path, alac_chimera_path };
+        for( int mode = 0; mode < 3; mode++ )
+        {
+            lsmash_root_t *mroot = lsmash_create_root();
+            lsmash_file_parameters_t mparam = { 0 };
+            TEST_ASSERT( lsmash_open_file( paths[mode], 0, &mparam ) == 0, "open alac output" );
+            lsmash_brand_type brands[3];
+            if( mode == 0 )
+            {
+                brands[0] = ISOM_BRAND_TYPE_MP42;
+                brands[1] = ISOM_BRAND_TYPE_ISOM;
+                mparam.major_brand = ISOM_BRAND_TYPE_MP42;
+                mparam.brands      = brands;
+                mparam.brand_count = 2;
+            }
+            else if( mode == 1 )
+            {
+                brands[0] = ISOM_BRAND_TYPE_QT;
+                mparam.major_brand = ISOM_BRAND_TYPE_QT;
+                mparam.brands      = brands;
+                mparam.brand_count = 1;
+            }
+            else
+            {
+                brands[0] = ISOM_BRAND_TYPE_MP42;
+                brands[1] = ISOM_BRAND_TYPE_ISOM;
+                brands[2] = ISOM_BRAND_TYPE_QT;
+                mparam.major_brand = ISOM_BRAND_TYPE_MP42;
+                mparam.brands      = brands;
+                mparam.brand_count = 3;
+            }
+            TEST_ASSERT( lsmash_set_file( mroot, &mparam ) != NULL, "set alac output file" );
+            lsmash_movie_parameters_t mv;
+            lsmash_initialize_movie_parameters( &mv );
+            mv.timescale = 48000;
+            TEST_ASSERT( lsmash_set_movie_parameters( mroot, &mv ) == 0, "set alac movie params" );
+            uint32_t tid = lsmash_create_track( mroot, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+            lsmash_track_parameters_t tp;
+            lsmash_initialize_track_parameters( &tp );
+            tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+            TEST_ASSERT( lsmash_set_track_parameters( mroot, tid, &tp ) == 0, "set alac track params" );
+            lsmash_media_parameters_t mp;
+            lsmash_initialize_media_parameters( &mp );
+            mp.timescale = 48000;
+            TEST_ASSERT( lsmash_set_media_parameters( mroot, tid, &mp ) == 0, "set alac media params" );
+
+            lsmash_audio_summary_t *asum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+            asum->sample_type      = (mode == 1) ? QT_CODEC_TYPE_ALAC_AUDIO : ISOM_CODEC_TYPE_ALAC_AUDIO;
+            asum->frequency        = 48000;
+            asum->channels         = 2;
+            asum->sample_size      = 24;
+            asum->samples_in_frame = 4096;
+            asum->bytes_per_frame  = 0;
+            lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data(
+                LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC,
+                LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+            lsmash_alac_specific_parameters_t *ap = (lsmash_alac_specific_parameters_t *)cs->data.structured;
+            ap->frameLength   = 4096;
+            ap->bitDepth      = 24;
+            ap->numChannels   = 2;
+            ap->maxFrameBytes = 64;
+            ap->avgBitrate    = 384000;
+            ap->sampleRate    = 48000;
+            TEST_ASSERT( lsmash_add_codec_specific_data( (lsmash_summary_t *)asum, cs ) == 0, "add alac specific" );
+            lsmash_destroy_codec_specific_data( cs );
+            TEST_ASSERT( lsmash_add_sample_entry( mroot, tid, asum ) == 1, "add alac sample entry" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)asum );
+
+            const uint32_t pkt_sizes[2] = { 28, 36 };
+            for( int i = 0; i < 2; i++ )
+            {
+                lsmash_sample_t *s = lsmash_create_sample( pkt_sizes[i] );
+                memset( s->data, 0xA0 + i, pkt_sizes[i] );
+                s->dts           = (uint64_t)i * 4096;
+                s->cts           = s->dts;
+                s->index         = 1;
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+                TEST_ASSERT( lsmash_append_sample( mroot, tid, s ) == 0, "append alac sample" );
+            }
+            TEST_ASSERT( lsmash_flush_pooled_samples( mroot, tid, 4096 ) == 0, "flush alac samples" );
+            TEST_ASSERT( lsmash_update_track_duration( mroot, tid, 4096 ) == 0, "update alac track duration" );
+            TEST_ASSERT( lsmash_finish_movie( mroot, NULL ) == 0, "finish alac movie" );
+            lsmash_close_file( &mparam );
+            lsmash_destroy_root( mroot );
+
+            lsmash_root_t *rroot = lsmash_create_root();
+            lsmash_file_parameters_t rparam = { 0 };
+            TEST_ASSERT( lsmash_open_file( paths[mode], 1, &rparam ) == 0, "open alac for read" );
+            lsmash_file_t *rfile = lsmash_set_file( rroot, &rparam );
+            TEST_ASSERT( lsmash_read_file( rfile, &rparam ) >= 0, "read alac movie" );
+            lsmash_audio_summary_t *rsum = (lsmash_audio_summary_t *)lsmash_get_summary( rroot, 1, 1 );
+            TEST_ASSERT( rsum != NULL, "get alac summary" );
+            lsmash_codec_type_t exp_type = (mode == 1) ? QT_CODEC_TYPE_ALAC_AUDIO : ISOM_CODEC_TYPE_ALAC_AUDIO;
+            TEST_ASSERT( lsmash_check_codec_type_identical( rsum->sample_type, exp_type ), "alac sample_type matches" );
+            TEST_ASSERT( rsum->frequency == 48000 && rsum->channels == 2 && rsum->sample_size == 24 && rsum->samples_in_frame == 4096,
+                         "alac summary fields recovered from alac specific box" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)rsum );
+            TEST_ASSERT( lsmash_construct_timeline( rroot, 1 ) == 0, "construct alac timeline" );
+            TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( rroot, 1 ) == 2, "2 alac packets in timeline" );
+            for( uint32_t i = 1; i <= 2; i++ )
+            {
+                lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( rroot, 1, i );
+                TEST_ASSERT( s != NULL && s->length == pkt_sizes[i - 1], "alac packet length preserved" );
+                lsmash_delete_sample( s );
+            }
+            lsmash_destruct_timeline( rroot, 1 );
+            lsmash_close_file( &rparam );
+            lsmash_destroy_root( rroot );
+            remove( paths[mode] );
+        }
+    }
+
     remove( flac_path );
     remove( mp4_path );
 

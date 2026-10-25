@@ -2,7 +2,7 @@
 
 ## 1. Project Identity & Design Philosophy
 
-**L-SMASH** (*Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*) is a C11 library (`liblsmash`, with public header `lsmash.h` maintaining strict C99 and C++ compatibility) and command-line toolset (`lshmuxer`, `muxer`, `remuxer`, `boxdumper`, `timelineeditor`) for reading, writing, remuxing, and inspecting **ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12)** and **QuickTime File Format (QTFF)** media containers.
+**L-SMASH** (*Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*) is a C11 library (`liblsmash`, with public header `lsmash.h` maintaining strict C99 and C++ compatibility) and command-line toolset (`lshmuxer`, `boxdumper`) for reading, writing, remuxing, and inspecting **ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12)** and **QuickTime File Format (QTFF)** media containers.
 
 ### 1.1 Strict Compliance with International Standards
 L-SMASH is designed around strict compliance with the international standards governing each container and codec format:
@@ -289,7 +289,7 @@ In MPEG-1/2 Video (ITU-T H.262 | ISO/IEC 13818-2 Section 6.1.1.11), MPEG-4 Visua
          Out[i].PTS (PTS>=DTS):  1       4       2       3       7       5       6
 
 #### 6.5.2 Generating DTS from PTS for Arbitrary Reorder Delay `D` (Ring-Buffer Algorithm & Proof)
-For codecs supporting hierarchical B-pyramids with an arbitrary reorder delay of `D` frames (`D >= 0`, such as H.264/AVC and HEVC), or when applying an external VFR timecode file (`cli/timelineeditor.c`), L-SMASH (like `libx264`) synthesizes `Out[j].DTS` from the input presentation timestamps `In[j].PTS` and the reorder delay `D`.
+For codecs supporting hierarchical B-pyramids with an arbitrary reorder delay of `D` frames (`D >= 0`, such as H.264/AVC and HEVC), or when applying an external VFR timecode file, L-SMASH (like `libx264`) synthesizes `Out[j].DTS` from the input presentation timestamps `In[j].PTS` and the reorder delay `D`.
 
 A valid container timeline requires two invariants for every sample `j`:
 1. **Causality (`PTS >= DTS`)**: `Out[j].PTS >= Out[j].DTS`.
