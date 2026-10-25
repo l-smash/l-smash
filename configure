@@ -394,7 +394,7 @@ for src in $SRC_TOOLS; do
     OBJ_TOOLS="$OBJ_TOOLS ${src%.c}.o"
 done
 
-TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
+TOOLS_ALL="muxer remuxer lshmuxer boxdumper timelineeditor"
 TOOLS_NAME=""
 TOOLS="$TOOLS_ALL"
 

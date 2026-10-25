@@ -5621,7 +5621,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5648,7 +5648,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5679,7 +5679,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5706,7 +5706,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5740,7 +5740,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5769,7 +5769,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
 
@@ -5794,7 +5794,7 @@ static int test_read_file_audio_raw_streams( void )
         remove( path );
         if( ret < 0 )
         {
-            free( vb );
+            free( exp );
             return ret;
         }
     }
@@ -5844,7 +5844,10 @@ static int test_read_file_audio_raw_streams( void )
             int ret = check_raw_audio_stream( &chk );
             remove( path );
             if( ret < 0 )
+            {
+                free( exp );
                 return ret;
+            }
         }
     }
     free( exp );

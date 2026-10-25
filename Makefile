@@ -17,9 +17,11 @@ TESTS = tests/test_main$(EXT)
 
 #### main rules ####
 
-.PHONY: all lib install install-lib clean distclean dep depend test check
+.PHONY: all lib tools install install-lib install-tools uninstall uninstall-lib uninstall-tools clean distclean dep depend test check
 
 all: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
+
+tools: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
 
 test: $(TESTS)
 	./tests/test_main$(EXT)
@@ -60,7 +62,9 @@ TEST_HEADERS = $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h)
 %.test.o: %.c $(TEST_HEADERS) .depend config.h
 	$(CC) -c $(CFLAGS) -DLSMASH_DEBUG_ALLOC -o $@ $<
 
-install: all install-lib
+install: all install-lib install-tools
+
+install-tools: $(TOOLS)
 	install -d $(DESTDIR)$(bindir)
 	install -m 755 $(TOOLS) $(DESTDIR)$(bindir)
 
@@ -90,10 +94,15 @@ endif
 endif
 
 #All objects should be deleted regardless of configure when uninstall/clean/distclean.
-uninstall:
+uninstall: uninstall-lib uninstall-tools
+
+uninstall-lib:
 	$(RM) $(DESTDIR)$(includedir)/lsmash.h
 	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash.so* liblsmash.dylib liblsmash*.def pkgconfig/liblsmash.pc)
-	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash*.dll lsmash.lib cyglsmash.dll)
+	$(RM) $(addprefix $(DESTDIR)$(bindir)/, liblsmash*.dll lsmash.lib cyglsmash.dll)
+
+uninstall-tools:
+	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe))
 
 clean:
 	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) $(addprefix tests/, *.exe test_main) .depend
