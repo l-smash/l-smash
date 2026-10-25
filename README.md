@@ -136,10 +136,11 @@ make test
 
 ## CLI Tools Quick Start
 
-Building `all` (the default target) produces four command-line utilities in `cli/`:
+Building `all` (the default target) produces five command-line utilities in `cli/`:
 
 | Tool | Purpose |
 | :--- | :--- |
+| **`lshmuxer`** | Unified CLI multiplexer, remultiplexer, fragmenter, and timeline editor supporting 1-pass multiplexing of raw elementary streams and existing ISOBMFF/QTFF containers with optional VFR timecode v2 editing (`--timecode` or `?timecode=...`), Fragmented MP4 (`--fragment`), and MPEG-DASH segments (`--dash`). |
 | **`muxer`** | Multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1) or single-track containers into ISOBMFF (`.mp4`, `.m4a`, `.m4v`), QTFF (`.mov`), or 3GPP (`.3gp`, `.3g2`). |
 | **`remuxer`** | Remultiplexes existing ISOBMFF/QTFF containers, converts standard movies to **Fragmented MP4** (`--fragment`) or **MPEG-DASH segments** (`--dash`), filters tracks, and performs RAP-aligned seeking. |
 | **`boxdumper`** | Dumps the complete hierarchical Box tree (`--box`), per-sample DTS/CTS timestamps (`--timestamp`), or chapter lists (`--chapter`). |

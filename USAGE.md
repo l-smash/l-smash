@@ -1,6 +1,6 @@
 # L-SMASH User & C API Manual (`USAGE.md`)
 
-This manual provides a comprehensive guide to the **L-SMASH** command-line utilities (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and the **`liblsmash` C API**.
+This manual provides a comprehensive guide to the **L-SMASH** command-line utilities (`lshmuxer`, `muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and the **`liblsmash` C API**.
 
 ---
 
@@ -39,10 +39,11 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
 
 | I want to... | Use | Section |
 | :--- | :--- | :--- |
-| Turn raw streams (H.264, HEVC, AV1, AAC, WAVE, ...) into an `.mp4` / `.mov` / `.m4a` | `muxer` | [2.1](#21-muxer--elementary-stream-multiplexer) |
-| Convert an existing file: drop tracks, trim at a keyframe, make fragmented MP4 / DASH segments | `remuxer` | [2.2](#22-remuxer--container-remultiplexer--fragmenter) |
+| Multiplex raw streams, remux containers, fragment MP4 / DASH segments, and apply VFR timecodes in a single 1-pass tool | `lshmuxer` | [2.1](#21-muxer--elementary-stream-multiplexer)–[2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
+| Turn raw streams (H.264, HEVC, AV1, AAC, WAVE, ...) into an `.mp4` / `.mov` / `.m4a` | `muxer` (or `lshmuxer`) | [2.1](#21-muxer--elementary-stream-multiplexer) |
+| Convert an existing file: drop tracks, trim at a keyframe, make fragmented MP4 / DASH segments | `remuxer` (or `lshmuxer`) | [2.2](#22-remuxer--container-remultiplexer--fragmenter) |
 | Look inside a file (Box tree, DTS/CTS, chapters) | `boxdumper` | [2.3](#23-boxdumper--box-hierarchy-timestamp--chapter-inspector) |
-| Apply a VFR timecode file, or change skip / delay / timescales of one track without re-encoding | `timelineeditor` | [2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
+| Apply a VFR timecode file, or change skip / delay / timescales of one track without re-encoding | `timelineeditor` (or `lshmuxer`) | [2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
 | Read or write MP4 / MOV from your own C/C++ program | `liblsmash` | [3](#3-liblsmash-c-api-programming-guide) |
 
 ### 1.2 One-Minute Recipes
