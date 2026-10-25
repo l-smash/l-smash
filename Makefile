@@ -15,7 +15,8 @@ TEST_SRCS = tests/test_main.c \
             tests/test_audio_lpcm_flac.c \
             tests/test_isom_container.c \
             tests/test_raw_importers_timeline.c \
-            tests/test_raw_importers_streams.c
+            tests/test_raw_importers_streams.c \
+            tests/test_cli_equivalence.c
 TEST_OBJS = $(SRCS:%.c=%.test.o) $(TEST_SRCS:%.c=%.test.o)
 
 SRC_ALL = $(SRCS) $(SRC_TOOLS)
@@ -30,7 +31,7 @@ all: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
 
 tools: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
 
-test: $(TESTS)
+test: $(TESTS) $(TOOLS)
 	./tests/test_main$(EXT)
 
 check: test
@@ -65,7 +66,7 @@ include config.mak2
 # Test objects are built independently of the release objects so that every library module
 # and tests/test_*.c are always compiled with -DLSMASH_DEBUG_ALLOC. They are linked directly
 # (not via liblsmash.a), so the release liblsmash.a and CLI tools are never affected.
-TEST_HEADERS = $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h)
+TEST_HEADERS = $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h $(SRCDIR)/tests/*.h)
 %.test.o: %.c $(TEST_HEADERS) .depend config.h
 	$(CC) -c $(CFLAGS) -DLSMASH_DEBUG_ALLOC -o $@ $<
 

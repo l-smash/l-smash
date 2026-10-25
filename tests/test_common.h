@@ -223,3 +223,4 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void );
 int test_read_file_flac_ivf_timeline( void );
 int test_read_file_audio_raw_streams( void );
 int test_read_file_video_raw_streams( void );
+int test_muxer_lshmuxer_cli_equivalence( void );

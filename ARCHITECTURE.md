@@ -123,7 +123,7 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_*.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 21 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 22 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
