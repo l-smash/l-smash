@@ -22,6 +22,7 @@
 #include "common/internal.h"
 
 #include "test_common.h"
+#include "core/movie.h"
 
 /*---------------------------------------------------------------------------
  * Test 13: Malformed Box & Sample Table Negative Tests (Rollback & 0-Leak Audit)
@@ -257,6 +258,36 @@ int test_malformed_boxes_and_sample_tables( void )
         lsmash_destroy_root( root );
 #ifdef LSMASH_DEBUG_ALLOC
         TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13d: 100% rollback after malformed pcmC" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13e. Non-compliant stsz with sample_size > 0 and trailing entry_size table bytes (pos < box->size) */
+    {
+        uint8_t *patched = (uint8_t *)lsmash_memdup( base_buf, base_len );
+        int stsz_off = find_fourcc_offset( patched, base_len, LSMASH_4CC( 's', 't', 's', 'z' ) );
+        TEST_ASSERT( stsz_off >= 0, "13e: locate stsz box" );
+        /* stsz layout: size(4) + 'stsz'(4) + version/flags(4) + sample_size(4) + sample_count(4) + entry_size[4] */
+        put_be32( &patched[stsz_off + 12], 16 ); /* Non-zero sample_size alongside explicit entry table */
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( patched, 1, base_len, fp );
+        fclose( fp );
+        lsmash_free( patched );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13e: open bad_mp4 (stsz sample_size>0 with entries)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "13e: lsmash_read_file accepts stsz with sample_size>0 and entry table" );
+        TEST_ASSERT( file->moov && file->moov->trak_list.head && file->moov->trak_list.head->data, "13e: video track present" );
+        isom_trak_t *trak = (isom_trak_t *)file->moov->trak_list.head->data;
+        isom_stsz_t *stsz = trak->mdia->minf->stbl->stsz;
+        TEST_ASSERT( stsz->sample_size == 16 && stsz->list != NULL && lsm_list_count( stsz->list ) == 4,
+                     "13e: read_stsz populates stsz->list when trailing entry bytes are present" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13e: 0 leak after reading stsz with sample_size>0 and entries" );
 #endif
         remove( bad_mp4 );
     }
@@ -1014,6 +1045,66 @@ int test_external_data_reference_roundtrip( void )
         lsmash_close_file( &movie_param );
         lsmash_destroy_root( root );
         remove( frag_path );
+    }
+
+    /* 17d. Monotonic chunk_number advancement in lsm_movie_add_preceding_box_size when external dref is followed by non-monotonic stsc */
+    {
+        const char *mono_path = "tests/tmp_test_dref_mono_movie.mp4";
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "17d: create root" );
+        lsmash_file_parameters_t movie_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mono_path, 0, &movie_param ) == 0, "17d: open movie file" );
+        lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+        TEST_ASSERT( movie_file != NULL, "17d: set movie file" );
+        lsmash_file_parameters_t media_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( media_path, 0, &media_param ) == 0, "17d: open external media file" );
+        media_param.mode = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_MEDIA;
+        lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+        TEST_ASSERT( media_file != NULL, "17d: set external media file" );
+        lsmash_movie_parameters_t movie_pm;
+        lsmash_initialize_movie_parameters( &movie_pm );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_pm ) == 0, "17d: set movie parameters" );
+        uint32_t mono_tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( mono_tid != 0, "17d: create track" );
+
+        lsmash_data_reference_t self_ref = { .index = 1, .location = NULL };
+        TEST_ASSERT( lsmash_create_data_reference( root, mono_tid, &self_ref, movie_file ) == 0, "17d: self-contained dref" );
+        lsmash_data_reference_t ext_ref = { .index = 0, .location = (char *)media_name };
+        TEST_ASSERT( lsmash_create_data_reference( root, mono_tid, &ext_ref, media_file ) == 0, "17d: external dref" );
+
+        lsmash_video_summary_t *sum_ext = create_synth_av01_summary( 64, 64 );
+        sum_ext->data_ref_index = ext_ref.index;
+        TEST_ASSERT( lsmash_add_sample_entry( root, mono_tid, sum_ext ) == 1, "17d: sample entry 1 (external)" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)sum_ext );
+
+        lsmash_video_summary_t *sum_self = create_synth_av01_summary( 64, 64 );
+        sum_self->data_ref_index = self_ref.index;
+        TEST_ASSERT( lsmash_add_sample_entry( root, mono_tid, sum_self ) == 2, "17d: sample entry 2 (self-contained)" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)sum_self );
+
+        isom_trak_t *trak = (isom_trak_t *)movie_file->moov->trak_list.head->data;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        isom_stco_entry_t *c1 = (isom_stco_entry_t *)lsm_list_append( stbl->stco->list );
+        isom_stco_entry_t *c2 = (isom_stco_entry_t *)lsm_list_append( stbl->stco->list );
+        TEST_ASSERT( c1 && c2, "17d: append stco entries" );
+        c1->chunk_offset = 100;
+        c2->chunk_offset = 200;
+
+        /* Duplicate/non-monotonic first_chunk=1 after external dref entry */
+        isom_stsc_entry_t *s1 = (isom_stsc_entry_t *)lsm_list_append( stbl->stsc->list );
+        isom_stsc_entry_t *s2 = (isom_stsc_entry_t *)lsm_list_append( stbl->stsc->list );
+        TEST_ASSERT( s1 && s2, "17d: append stsc entries" );
+        s1->first_chunk = 1; s1->samples_per_chunk = 1; s1->sample_description_index = 1; /* external */
+        s2->first_chunk = 1; s2->samples_per_chunk = 1; s2->sample_description_index = 2; /* self-contained */
+
+        lsm_movie_add_preceding_box_size( movie_file->moov, 50 );
+        TEST_ASSERT( c1->chunk_offset == 150 && c2->chunk_offset == 250,
+                     "17d: monotonic chunk_number advancement applies preceding_size without underflow or infinite loop" );
+
+        lsmash_close_file( &media_param );
+        lsmash_close_file( &movie_param );
+        lsmash_destroy_root( root );
+        remove( mono_path );
     }
     remove( movie_path );
     remove( media_path );

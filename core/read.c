@@ -2140,10 +2140,11 @@ static int read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     if( bs->eob )
         return LSMASH_ERR_INVALID_DATA;
     uint64_t pos = lsmash_bs_count( bs );
-    if( stsz->sample_size == 0 && stsz->sample_count > 0 )
+    if( stsz->sample_size == 0 && stsz->sample_count > 0
+     && box->size < pos + (uint64_t)stsz->sample_count * 4 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( pos < box->size )
     {
-        if( box->size < pos + (uint64_t)stsz->sample_count * 4 )
-            return LSMASH_ERR_INVALID_DATA;
         stsz->list = lsm_list_create_simple( sizeof(isom_stsz_entry_t) );
         if( !stsz->list )
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -2156,7 +2157,7 @@ static int read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
             if( bs->eob )
                 return LSMASH_ERR_INVALID_DATA;
         }
-        if( lsm_list_count( stsz->list ) < stsz->sample_count )
+        if( stsz->sample_size == 0 && lsm_list_count( stsz->list ) < stsz->sample_count )
             return LSMASH_ERR_INVALID_DATA;
     }
     return read_leaf_box_common_last_process( file, box, level, stsz );

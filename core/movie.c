@@ -370,7 +370,8 @@ void lsm_movie_add_preceding_box_size
                      * If no more stsc entries, the rest of the chunks is not contained in the same file. */
                     if( !stsc_data )
                         break;
-                    chunk_number = stsc_data->first_chunk;
+                    while( chunk_number <= stco_count && chunk_number < stsc_data->first_chunk )
+                        ++chunk_number;
                     continue;
                 }
             }
