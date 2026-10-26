@@ -314,6 +314,8 @@ static lsmash_video_summary_t *nalu_imp_h264_create_summary
     uint32_t                           max_au_length
 )
 {
+    if( !param || !sps || !sps->present )
+        return NULL;
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
     if( !summary )
         return NULL;
@@ -557,8 +559,11 @@ static int nalu_imp_h264_get_access_unit_internal
         else if( au->incomplete_length && au->length == 0 )
         {
             lsm_h264_update_picture_info( info, picture, slice, &info->sei );
-            nalu_imp_h264_complete_au( h264_imp, probe, next_sc_head_pos );
-            return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
+            complete_au = nalu_imp_h264_complete_au( h264_imp, probe, next_sc_head_pos );
+            if( complete_au )
+                return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
+            else
+                return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
         }
         if( complete_au )
             return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
@@ -899,20 +904,17 @@ static lsmash_video_summary_t *nalu_imp_h264_setup_first_summary
 )
 {
     h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
+    /* Why: cs is owned by h264_imp->avcC_list (whose entry destructor is
+     * lsmash_destroy_codec_specific_data); do not destroy cs on error paths here,
+     * otherwise nalu_imp_remove_h264() will double-free it during importer cleanup. */
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
     if( !cs || !cs->data.structured )
-    {
-        lsmash_destroy_codec_specific_data( cs );
         return NULL;
-    }
     lsmash_video_summary_t *summary = nalu_imp_h264_create_summary( (lsmash_h264_specific_parameters_t *)cs->data.structured,
                                                                     h264_imp->first_sps.present ? &h264_imp->first_sps : &h264_imp->info.sps,
                                                                     h264_imp->max_au_length );
     if( !summary )
-    {
-        lsmash_destroy_codec_specific_data( cs );
         return NULL;
-    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -993,6 +995,11 @@ static int nalu_imp_h264_analyze_whole_stream
                     picture_stats[H264_PICTURE_TYPE_NONE       ] );
     }
     /* Copy and append the last Codec Specific info. */
+    if( num_access_units == 0 )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     if( (err = nalu_imp_h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
         goto fail;
     /* Set up the first summary. */
@@ -1247,6 +1254,8 @@ static lsmash_video_summary_t *nalu_imp_hevc_create_summary
     uint32_t                           max_au_length
 )
 {
+    if( !param || !sps || !sps->present )
+        return NULL;
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
     if( !summary )
         return NULL;
@@ -1400,6 +1409,11 @@ static int nalu_imp_hevc_get_access_unit_internal
             if( nalu_type <= HEVC_NALU_TYPE_RSV_VCL31 )
             {
                 /* VCL NALU (slice) */
+                if( !info->sps.present
+                 && (nalu_length <= nuh.length
+                  || !(nalu[nuh.length] & 0x80)
+                  || (nalu_type != HEVC_NALU_TYPE_IDR_W_RADL && nalu_type != HEVC_NALU_TYPE_IDR_N_LP)) )
+                    return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
                 hevc_slice_info_t prev_slice = *slice;
                 if( (err = lsm_hevc_parse_slice_segment_header( info, &nuh, sb->rbsp,
                                                                 nalu        + nuh.length,
@@ -1502,8 +1516,11 @@ static int nalu_imp_hevc_get_access_unit_internal
         else if( au->incomplete_length && au->length == 0 )
         {
             lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-            nalu_imp_hevc_complete_au( hevc_imp, probe, next_sc_head_pos );
-            return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
+            complete_au = nalu_imp_hevc_complete_au( hevc_imp, probe, next_sc_head_pos );
+            if( complete_au )
+                return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
+            else
+                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
         }
         if( complete_au )
             return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
@@ -1638,12 +1655,12 @@ static lsmash_video_summary_t *nalu_imp_hevc_setup_first_summary
 {
     hevc_importer_t *hevc_imp = (hevc_importer_t *)importer->info;
     hevc_info_t *info = &hevc_imp->info;
+    /* Why: cs is owned by hevc_imp->hvcC_list (whose entry destructor is
+     * lsmash_destroy_codec_specific_data); do not destroy cs on error paths here,
+     * otherwise nalu_imp_remove_hevc() will double-free it during importer cleanup. */
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( hevc_imp->hvcC_list, ++ hevc_imp->hvcC_number );
     if( !cs || !cs->data.structured )
-    {
-        lsmash_destroy_codec_specific_data( cs );
         return NULL;
-    }
 
     lsmash_hevc_specific_parameters_t *hevc_cs = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
     if( info->sei.hdr10p_present )
@@ -1653,10 +1670,7 @@ static lsmash_video_summary_t *nalu_imp_hevc_setup_first_summary
                                                                     hevc_imp->first_sps.present ? &hevc_imp->first_sps : &hevc_imp->info.sps,
                                                                     hevc_imp->max_au_length );
     if( !summary )
-    {
-        lsmash_destroy_codec_specific_data( cs );
         return NULL;
-    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -1733,6 +1747,11 @@ static int nalu_imp_hevc_analyze_whole_stream
                     picture_stats[HEVC_PICTURE_TYPE_NONE]);
     }
     /* Copy and append the last Codec Specific info. */
+    if( num_access_units == 0 )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     if( (err = nalu_imp_hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
         goto fail;
     /* Set up the first summary. */
