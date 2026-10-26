@@ -1044,8 +1044,12 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                      * which would underflow uint64_t if a negative offset ever appeared at dts == 0
                      * (or where dts < -offset). */
                     int32_t signed_offset = (int32_t)sample_offset;
-                    if( signed_offset < 0 && (uint32_t)(-signed_offset) > timeline->ctd_shift )
-                        timeline->ctd_shift = (uint32_t)(-signed_offset);
+                    if( signed_offset < 0 )
+                    {
+                        uint32_t neg_offset = (uint32_t)(-(int64_t)signed_offset);
+                        if( neg_offset > timeline->ctd_shift )
+                            timeline->ctd_shift = neg_offset;
+                    }
                 }
             }
             else
@@ -1360,8 +1364,12 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                      * computing uint64_t cts = dts + (int32_t)info.offset, avoiding unsigned
                                      * uint64_t wrap if a negative offset ever occurs where dts < -offset. */
                                     int32_t signed_offset = (int32_t)info.offset;
-                                    if( signed_offset < 0 && (uint32_t)(-signed_offset) > timeline->ctd_shift )
-                                        timeline->ctd_shift = (uint32_t)(-signed_offset);
+                                    if( signed_offset < 0 )
+                                    {
+                                        uint32_t neg_offset = (uint32_t)(-(int64_t)signed_offset);
+                                        if( neg_offset > timeline->ctd_shift )
+                                            timeline->ctd_shift = neg_offset;
+                                    }
                                 }
                             }
                             else
