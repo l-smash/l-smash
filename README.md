@@ -76,7 +76,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 - **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in `2^8 = 256`-element pages, providing `O(1)` bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
-- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 22 synthetic test suites (151,801 assertions, `v2.23.7`) requiring zero external media files.
+- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 22 synthetic test suites (152,002 assertions, `v2.23.7`) requiring zero external media files.
 
 ---
 
@@ -180,7 +180,7 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 | **[`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
 | **[`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md)** | Comprehensive architecture and container binding specification for all video and audio codecs and stream importers (`codecs/*`, `importer/*`). |
 | **[`docs/TESTING.md`](docs/TESTING.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |
-| **[`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md)** | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, `mdhd.duration` & 3-stage hybrid VFR final frame duration, HE-AAC filterbank delays, Negative POC & `cslg` / `ctts` v1 timeline shift). |
+| **[`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md)** | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy and QTFF `SoundDescriptionV1`/`V2`, `mdhd.duration` & 3-stage hybrid VFR final frame duration, HE-AAC filterbank delays, Negative POC & `cslg` / `ctts` v1 timeline shift). |
 
 ---
 
