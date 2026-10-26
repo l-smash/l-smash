@@ -111,7 +111,7 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
 | [`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
 | [`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.7`) |
 | [`docs/TESTING.md`](docs/TESTING.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.7`) |
-| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, HRD/VBV Leaky Bucket model, HE-AAC filterbank delays) | Synchronized (`v2.23.7`) |
+| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, `mdhd.duration` & 3-stage hybrid VFR final frame duration, HE-AAC filterbank delays, Negative POC & `cslg` / `ctts` v1 timeline shift) | Synchronized (`v2.23.7`) |
 
 ---
 
