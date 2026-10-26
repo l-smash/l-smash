@@ -54,6 +54,7 @@ struct isom_timeline_tag
     uint32_t media_timescale;
     uint32_t sample_count;
     uint32_t max_sample_size;
+    uint32_t last_sample_delta;
     uint32_t ctd_shift;     /* shift from composition to decode timeline */
     uint64_t media_duration;
     uint64_t track_duration;
@@ -1490,7 +1491,44 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     /* Finish timeline construction. */
     timeline->sample_count = sample_count;
     if( lsm_list_count( timeline->info_list ) )
+    {
         timeline_set_sample_getter_funcs( timeline );
+        isom_sample_info_t *last_info = (isom_sample_info_t *)lsm_list_tail( timeline->info_list );
+        timeline->last_sample_delta = last_info->duration;
+        if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvex )
+         && LSMASH_IS_EXISTING_BOX( ctts )
+         && lsm_list_count( timeline->info_list ) >= 2 )
+        {
+            /* Why: On write, track_update_mdhd_duration() stretches the last stts entry's
+             * sample_delta to (mdhd->duration - last_dts) = D_comp + (max_cts - min_cts - last_dts)
+             * when (max_cts - min_cts) > last_dts so that sum(stts) == mdhd->duration == (max_cts - min_cts + D_comp).
+             * Recover the unstretched composition duration D_comp = sum(stts) - (max_cts - min_cts)
+             * for lsmash_get_last_sample_delta_from_media_timeline() so that remuxing does not
+             * add (max_cts - min_cts - last_dts) a second time, while keeping last_info->duration
+             * as the raw stts entry delta for per-sample decoding duration queries. */
+            uint64_t cur_dts = 0;
+            uint64_t max_cts = 0;
+            uint64_t min_cts = LSMASH_TIMESTAMP_UNDEFINED;
+            isom_sample_info_t *info = NULL;
+            LSM_LIST_FOR_EACH( info, timeline->info_list )
+            {
+                if( info->offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+                {
+                    uint64_t cts = lsm_box_make_cts_adjust( cur_dts, info->offset, timeline->ctd_shift );
+                    min_cts = LSMASH_MIN( min_cts, cts );
+                    max_cts = LSMASH_MAX( max_cts, cts );
+                }
+                cur_dts += info->duration;
+            }
+            if( min_cts != LSMASH_TIMESTAMP_UNDEFINED )
+            {
+                uint64_t cts_span = max_cts - min_cts;
+                uint64_t last_dts = cur_dts - last_info->duration;
+                if( cts_span > last_dts && cur_dts > cts_span && cur_dts - cts_span <= UINT32_MAX )
+                    timeline->last_sample_delta = (uint32_t)(cur_dts - cts_span);
+            }
+        }
+    }
     else
         lsm_timeline_set_lpcm_sample_getter_funcs( timeline );
     return 0;
@@ -1804,7 +1842,14 @@ int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint3
     if( !last_sample_delta )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_timeline_t *timeline = lsm_timeline_get( root, track_ID );
-    return timeline ? timeline->get_sample_duration( timeline, timeline->sample_count, last_sample_delta ) : -1;
+    if( !timeline )
+        return -1;
+    if( timeline->last_sample_delta )
+    {
+        *last_sample_delta = timeline->last_sample_delta;
+        return 0;
+    }
+    return timeline->get_sample_duration( timeline, timeline->sample_count, last_sample_delta );
 }
 
 int lsmash_get_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *sample_delta )
@@ -2011,6 +2056,7 @@ int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
     /* Update CTSs.
      * ToDo: hint track must not have any sample_offset. */
     i = 0;
+    timeline->last_sample_delta = 0;
     timeline->ctd_shift = 0;
     isom_sample_info_t *info = NULL;
     LSM_LIST_FOR_EACH( info, timeline->info_list )

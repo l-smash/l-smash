@@ -253,6 +253,13 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
         return stsd->list.entry_count;
 }
 
+static int track_compare_uint64( const void *a, const void *b )
+{
+    uint64_t va = *(const uint64_t *)a;
+    uint64_t vb = *(const uint64_t *)b;
+    return (va > vb) - (va < vb);
+}
+
 static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_delta )
 {
     assert( LSMASH_IS_EXISTING_BOX( trak ) );
@@ -302,12 +309,38 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
             /* Remove the last entry. */
             if( (err = lsm_list_remove_tail( stts->list )) < 0 )
                 return err;
-            /* copy the previous sample_delta. */
+            /* Copy the previous sample_delta, or fall back to the median interval if the
+             * preceding frame is a statistical still-frame outlier (delta_prev > 4 * D_med). */
             last_stts_data = (isom_stts_entry_t *)lsm_list_tail( stts->list );
             if( !last_stts_data )
                 return LSMASH_ERR_INVALID_DATA;
-            ++ last_stts_data->sample_count;
-            mdhd->duration += last_stts_data->sample_delta;
+            uint32_t chosen_delta = last_stts_data->sample_delta;
+            if( sample_count >= 3 && lsm_list_count( stts->list ) > 1 )
+            {
+                uint32_t  num_deltas = sample_count - 1;
+                uint64_t *deltas     = lsmash_malloc( num_deltas * sizeof(uint64_t) );
+                if( deltas )
+                {
+                    uint32_t idx = 0;
+                    isom_stts_entry_t *entry_data = NULL;
+                    LSM_LIST_FOR_EACH( entry_data, stts->list )
+                        for( uint32_t s = 0; s < entry_data->sample_count && idx < num_deltas; s++ )
+                            deltas[idx++] = entry_data->sample_delta;
+                    if( idx >= 2 )
+                    {
+                        qsort( deltas, idx, sizeof(uint64_t), track_compare_uint64 );
+                        uint64_t d_med = deltas[(idx - 1) / 2];
+                        if( d_med > 0 && chosen_delta > 4 * d_med && d_med <= UINT32_MAX )
+                            chosen_delta = (uint32_t)d_med;
+                    }
+                    lsmash_free( deltas );
+                }
+            }
+            if( chosen_delta == last_stts_data->sample_delta )
+                ++ last_stts_data->sample_count;
+            else if( (err = lsm_stbl_add_stts_entry( stbl, chosen_delta )) < 0 )
+                return err;
+            mdhd->duration += chosen_delta;
         }
     }
     else
@@ -382,13 +415,78 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
         {
             if( !last_sample_delta )
             {
-                /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
+                /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's,
+                 * or fall back to the median composition interval if the last-1 sample is a still-frame outlier. */
                 last_sample_delta = max_cts - max2_cts;
+                if( sample_count >= 3 )
+                {
+                    uint64_t *cts_list = lsmash_malloc( sample_count * sizeof(uint64_t) );
+                    if( cts_list )
+                    {
+                        uint64_t cur_dts      = 0;
+                        uint32_t output_count = 0;
+                        uint32_t c_j          = 0;
+                        uint32_t c_k          = 0;
+                        uint32_t c_stts_idx   = 0;
+                        uint32_t c_ctts_idx   = 0;
+                        for( uint32_t i = 0; i < sample_count; i++ )
+                        {
+                            isom_stts_entry_t *stts_data = (isom_stts_entry_t *)lsm_list_at( stts->list, c_stts_idx );
+                            isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)lsm_list_at( ctts->list, c_ctts_idx );
+                            if( !stts_data || !ctts_data )
+                                break;
+                            if( ctts_data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+                            {
+                                cts_list[output_count++] = ctd_shift
+                                                         ? (cur_dts + (int64_t)(int32_t)ctts_data->sample_offset + ctd_shift)
+                                                         : (cur_dts + ctts_data->sample_offset);
+                            }
+                            cur_dts += stts_data->sample_delta;
+                            if( ++c_j == ctts_data->sample_count )
+                            {
+                                ++c_ctts_idx;
+                                c_j = 0;
+                            }
+                            if( ++c_k == stts_data->sample_count )
+                            {
+                                ++c_stts_idx;
+                                c_k = 0;
+                            }
+                        }
+                        if( output_count >= 3 )
+                        {
+                            qsort( cts_list, output_count, sizeof(uint64_t), track_compare_uint64 );
+                            uint32_t num_deltas = output_count - 1;
+                            for( uint32_t m = 0; m < num_deltas; m++ )
+                                cts_list[m] = cts_list[m + 1] - cts_list[m];
+                            qsort( cts_list, num_deltas, sizeof(uint64_t), track_compare_uint64 );
+                            uint64_t d_med = cts_list[(num_deltas - 1) / 2];
+                            if( d_med > 0 && last_sample_delta > 4 * d_med && d_med <= UINT32_MAX )
+                                last_sample_delta = (uint32_t)d_med;
+                        }
+                        lsmash_free( cts_list );
+                    }
+                }
             }
+            /* Design rationale for mdhd->duration and the final stts sample_delta:
+             * 1. The track media duration (mdhd->duration) is defined as the total span on the
+             *    Presentation (Composition) timeline: (max_cts - min_cts + D_comp), where D_comp
+             *    is the Composition duration of the last displayed frame. This guarantees the
+             *    exact presentation duration even under Implicit timeline mapping (when no Edit
+             *    List is present).
+             * 2. Meanwhile, ISOBMFF requires sum(stts) == mdhd->duration (i.e. last_dts + final
+             *    stts sample_delta == mdhd->duration) as well as DTS <= CTS (when cslg is absent).
+             *    To make (max_cts - min_cts + D_comp) equal to (last_dts + final stts sample_delta),
+             *    the final sample_delta of the Decoding timeline (stts) is stretched to
+             *    (mdhd->duration - last_dts) = D_comp + (max_cts - min_cts - last_dts).
+             *    Regardless of how long the final Decoding timeline duration becomes, it merely
+             *    represents the tail interval during which no subsequent frame is pulled from the
+             *    decode buffer, and has zero adverse impact on either the Presentation layer or
+             *    the decoding process. */
             if( min_cts != LSMASH_TIMESTAMP_UNDEFINED )
                 mdhd->duration = max_cts - min_cts + last_sample_delta;
             /* To match dts and media duration, update stts and mdhd relatively. */
-            if( mdhd->duration > dts )
+            if( mdhd->duration > dts + last_sample_delta )
                 last_sample_delta = mdhd->duration - dts;
             else
                 mdhd->duration = dts + last_sample_delta;   /* media duration must not less than last dts. */

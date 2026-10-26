@@ -84,6 +84,7 @@ typedef struct
     uint32_t  sample_count;
     int       auto_media_timescale;
     int       auto_media_timebase;
+    int       has_explicit_end;
     uint64_t  media_timescale;
     uint64_t  media_timebase;
     uint64_t  duration;
@@ -462,6 +463,8 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         return ERROR_MSG( "Unsupported timecode format\n" );
     char buff[256];
     double *timecode_array = NULL;
+    int has_explicit_end = 0;
+    timecode->has_explicit_end = 0;
     if( tcfv == 1 )
     {
         double  assume_fps = 0;
@@ -508,33 +511,33 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         double corrected_assume_fps = correct_fps( assume_fps, timecode );
         if( corrected_assume_fps < 0 )
             FAILED_PARSE_TIMECODE( "Failed to correct the assumed framerate\n" );
-        timecode_array = lsmash_malloc( sample_count * sizeof(double) );
+        timecode_array = lsmash_malloc( (sample_count + 1) * sizeof(double) );
         if( !timecode_array )
             FAILED_PARSE_TIMECODE( "Failed to alloc timecodes\n" );
         timecode_array[0] = 0;
         num_sequences = 0;
         uint32_t i = 0;
-        while( i < sample_count - 1 && fgets( buff, sizeof(buff), timecode->file ) )
+        while( i < sample_count && fgets( buff, sizeof(buff), timecode->file ) )
         {
             if( SKIP_LINE_CHARACTER( buff[0] ) )
                 continue;
             ret = sscanf( buff, "%"SCNd64",%"SCNd64",%lf", &start, &end, &sequence_fps );
             if( ret != 3 )
-                start = end = sample_count - 1;
-            for( ; i < start && i < sample_count - 1; i++ )
+                start = end = sample_count;
+            for( ; i < start && i < sample_count; i++ )
                 timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
-            if( i < sample_count - 1 )
+            if( i < sample_count )
             {
                 if( timecode->auto_media_timescale || timecode->auto_media_timebase )
                     fps_array[num_sequences++] = sequence_fps;
                 sequence_fps = correct_fps( sequence_fps, timecode );
                 if( sequence_fps < 0 )
                     FAILED_PARSE_TIMECODE( "Failed to correct the framerate of a sequence.\n" );
-                for( i = start; i <= end && i < sample_count - 1; i++ )
+                for( i = start; i <= end && i < sample_count; i++ )
                     timecode_array[i + 1] = timecode_array[i] + 1 / sequence_fps;
             }
         }
-        for( ; i < sample_count - 1; i++ )
+        for( ; i < sample_count; i++ )
             timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
         if( timecode->auto_media_timescale || timecode->auto_media_timebase )
             fps_array[num_sequences] = assume_fps;
@@ -549,24 +552,25 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 FAILED_PARSE_TIMECODE( "Failed to seek input timecode file.\n" );
             assume_fps_sig = sigexp10( assume_fps, &exponent );
             corrected_assume_fps = MATROSKA_TIMESCALE / ( round( MATROSKA_TIMESCALE / assume_fps_sig ) / exponent );
-            for( i = 0; i < sample_count - 1 && fgets( buff, sizeof(buff), timecode->file ); )
+            for( i = 0; i < sample_count && fgets( buff, sizeof(buff), timecode->file ); )
             {
                 if( SKIP_LINE_CHARACTER( buff[0] ) )
                     continue;
                 ret = sscanf( buff, "%"SCNd64",%"SCNd64",%lf", &start, &end, &sequence_fps );
                 if( ret != 3 )
-                    start = end = sample_count - 1;
+                    start = end = sample_count;
                 sequence_fps_sig = sigexp10( sequence_fps, &exponent );
                 sequence_fps = MATROSKA_TIMESCALE / ( round( MATROSKA_TIMESCALE / sequence_fps_sig ) / exponent );
-                for( ; i < start && i < sample_count - 1; i++ )
+                for( ; i < start && i < sample_count; i++ )
                     timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
-                for( i = start; i <= end && i < sample_count - 1; i++ )
+                for( i = start; i <= end && i < sample_count; i++ )
                     timecode_array[i + 1] = timecode_array[i] + 1 / sequence_fps;
             }
-            for( ; i < sample_count - 1; i++ )
+            for( ; i < sample_count; i++ )
                 timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
         }
         lsmash_free( fps_array );
+        has_explicit_end = 1;
     }
     else    /* tcfv == 2 */
     {
@@ -594,7 +598,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             return ERROR_MSG( "Lack number of timecodes.\n" );
         if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
             return ERROR_MSG( "Failed to seek input timecode file.\n" );
-        timecode_array = lsmash_malloc( sample_count * sizeof(uint64_t) );
+        timecode_array = lsmash_malloc( (sample_count + 1) * sizeof(double) );
         if( !timecode_array )
             return ERROR_MSG( "Failed to alloc timecodes.\n" );
         uint32_t i = 0;
@@ -626,13 +630,27 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             lsmash_free( timecode_array );
             return ERROR_MSG( "Failed to get timecodes.\n" );
         }
-        /* Generate media timescale automatically if needed. */
-        if( sample_count != 1 && timecode->auto_media_timescale )
+        if( num_timecodes > sample_count )
         {
-            double *fps_array = lsmash_malloc( (sample_count - 1) * sizeof(double) );
+            while( fgets( buff, sizeof(buff), timecode->file ) )
+            {
+                if( SKIP_LINE_CHARACTER( buff[0] ) )
+                    continue;
+                ret = sscanf( buff, "%lf", &timecode_array[sample_count] );
+                timecode_array[sample_count] *= 1e-3;   /* Timescale of timecode format v2 is 1000. */
+                if( ret == 1 && timecode_array[sample_count] > timecode_array[sample_count - 1] )
+                    has_explicit_end = 1;
+                break;
+            }
+        }
+        /* Generate media timescale automatically if needed. */
+        uint32_t num_intervals = (sample_count - 1) + has_explicit_end;
+        if( num_intervals && timecode->auto_media_timescale )
+        {
+            double *fps_array = lsmash_malloc( num_intervals * sizeof(double) );
             if( !fps_array )
                 FAILED_PARSE_TIMECODE( "Failed to allocate fps array\n" );
-            for( i = 0; i < sample_count - 1; i++ )
+            for( i = 0; i < num_intervals; i++ )
             {
                 fps_array[i] = 1 / (timecode_array[i + 1] - timecode_array[i]);
                 if( timecode->auto_media_timescale )
@@ -661,7 +679,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 }
             }
             if( timecode->auto_media_timebase && !timecode->auto_media_timescale
-             && try_matroska_timescale( fps_array, timecode, sample_count - 1 ) < 0 )
+             && try_matroska_timescale( fps_array, timecode, num_intervals ) < 0 )
                 FAILED_PARSE_TIMECODE( "Failed to try matroska timescale.\n" );
             lsmash_free( fps_array );
         }
@@ -682,7 +700,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
     uint32_t timebase  = timecode->media_timebase;
     double delay_tc = timecode_array[0];
     timecode->empty_delay = ((uint64_t)(delay_tc * ((double)timescale / timebase) + 0.5)) * timebase;
-    timecode->ts          = lsmash_malloc( sample_count * sizeof(uint64_t) );
+    timecode->ts          = lsmash_malloc( (sample_count + has_explicit_end) * sizeof(uint64_t) );
     if( !timecode->ts )
     {
         lsmash_free( timecode_array );
@@ -700,6 +718,15 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             return ERROR_MSG( "Invalid timecode.\n" );
         }
     }
+    if( has_explicit_end )
+    {
+        uint64_t end_ts = ((uint64_t)((timecode_array[sample_count] - delay_tc) * ((double)timescale / timebase) + 0.5)) * timebase;
+        if( end_ts > timecode->ts[sample_count - 1] )
+        {
+            timecode->ts[sample_count] = end_ts;
+            timecode->has_explicit_end = 1;
+        }
+    }
     lsmash_free( timecode_array );
     return 0;
 #undef FAILED_PARSE_TIMECODE
@@ -708,6 +735,36 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
 #undef DOUBLE_EPSILON
 #undef MATROSKA_TIMESCALE
 #undef SKIP_LINE_CHARACTER
+
+static int compare_uint64( const void *a, const void *b )
+{
+    uint64_t va = *(const uint64_t *)a;
+    uint64_t vb = *(const uint64_t *)b;
+    return (va > vb) - (va < vb);
+}
+
+static uint32_t estimate_last_sample_delta( const uint64_t *ts, uint32_t sample_count )
+{
+    if( sample_count < 2 )
+        return UINT32_MAX;
+    uint64_t delta_prev = ts[sample_count - 1] - ts[sample_count - 2];
+    if( sample_count >= 3 )
+    {
+        uint32_t  num_deltas = sample_count - 1;
+        uint64_t *deltas     = lsmash_malloc( num_deltas * sizeof(uint64_t) );
+        if( deltas )
+        {
+            for( uint32_t i = 0; i < num_deltas; i++ )
+                deltas[i] = ts[i + 1] - ts[i];
+            qsort( deltas, num_deltas, sizeof(uint64_t), compare_uint64 );
+            uint64_t d_med = deltas[(num_deltas - 1) / 2];
+            lsmash_free( deltas );
+            if( d_med > 0 && delta_prev > 4 * d_med )
+                delta_prev = d_med;
+        }
+    }
+    return delta_prev <= UINT32_MAX ? (uint32_t)delta_prev : UINT32_MAX;
+}
 
 static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt )
 {
@@ -763,7 +820,9 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
     if( !timecode->file )
     {
         /* Genarate timestamps timescale converted. */
-        timecode->ts = lsmash_malloc( sample_count * sizeof(uint64_t) );
+        int preserve_explicit_end = (sample_count > 1 && in_track->last_sample_delta
+                                  && in_track->last_sample_delta != (timestamp[sample_count - 1].cts - timestamp[sample_count - 2].cts));
+        timecode->ts = lsmash_malloc( (sample_count + preserve_explicit_end) * sizeof(uint64_t) );
         if( !timecode->ts )
             return ERROR_MSG( "Failed to alloc timestamps\n" );
         for( uint32_t i = 0; i < sample_count; i++ )
@@ -773,6 +832,16 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             if( i && (timecode->ts[i] <= timecode->ts[i - 1]) )
                 return ERROR_MSG( "Invalid timescale conversion.\n" );
         }
+        if( preserve_explicit_end )
+        {
+            uint64_t end_cts = (timestamp[sample_count - 1].cts + in_track->last_sample_delta - timestamp[0].cts) / orig_timebase;
+            end_cts = ((uint64_t)(end_cts * timebase_convert_multiplier + 0.5)) * timebase;
+            if( end_cts > timecode->ts[sample_count - 1] )
+            {
+                timecode->ts[sample_count] = end_cts;
+                timecode->has_explicit_end = 1;
+            }
+        }
     }
     if( sample_delay )
     {
@@ -781,7 +850,7 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
         uint64_t initial_delta = timecode->ts[1];
         timescale *= dts_compression_multiplier;
         if( dts_compression_multiplier > 1 )
-            for( uint32_t i = 0; i < sample_count; i++ )
+            for( uint32_t i = 0; i < sample_count + timecode->has_explicit_end; i++ )
                 timecode->ts[i] *= dts_compression_multiplier;
         /* Generate CTS. */
         uint64_t sample_delay_time = timecode->composition_delay = opt->dts_compression ? 0 : timecode->ts[sample_delay];
@@ -819,8 +888,16 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             timestamp[i].cts = timestamp[i].dts = timecode->ts[i];
     if( sample_count > 1 )
     {
-        in_track->last_sample_delta = timecode->ts[sample_count - 1] - timecode->ts[sample_count - 2];
-        timecode->duration = timecode->ts[sample_count - 1] + in_track->last_sample_delta;
+        if( timecode->has_explicit_end )
+        {
+            in_track->last_sample_delta = timecode->ts[sample_count] - timecode->ts[sample_count - 1];
+            timecode->duration          = timecode->ts[sample_count];
+        }
+        else
+        {
+            in_track->last_sample_delta = estimate_last_sample_delta( timecode->ts, sample_count );
+            timecode->duration          = timecode->ts[sample_count - 1] + in_track->last_sample_delta;
+        }
     }
     else    /* still image */
         timecode->duration = in_track->last_sample_delta = UINT32_MAX;
