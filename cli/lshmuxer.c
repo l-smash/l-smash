@@ -2328,9 +2328,20 @@ static int edit_track_timeline
         lsmash_free( prev_reordered_cts );
         if( orig_ctd_shift && !track_opt->dts_compression )
         {
-            uint64_t ctd_shift = timestamp[0].cts;
+            /* Why: At this point ts_list has already been sorted back into decoding
+             * order, so timestamp[0] is the first decoded sample rather than the first
+             * presented sample. In H.264/AVC and later codecs, pictures with negative
+             * POC (or leading pictures in an open GOP) decoded after the initial IDR
+             * at index 0 can have a smaller CTS (timecode.ts[0] + sample_delay_time)
+             * than timestamp[0].cts (timecode.ts[c(0)] + sample_delay_time). Subtracting
+             * timestamp[0].cts would therefore underflow uint64_t on those earlier-
+             * displayed samples.
+             * How: Subtract sample_delay_time — the exact uniform offset added to every
+             * sample's timecode.ts[c(i)] during composition-order sorting — so that
+             * timestamp[i].cts == timecode.ts[c(i)] >= 0 for all samples and
+             * lsmash_set_media_timestamps() derives the exact ctd_shift = sample_delay_time. */
             for( uint32_t i = 0; i < sample_count; i++ )
-                timestamp[i].cts -= ctd_shift;
+                timestamp[i].cts -= sample_delay_time;
             timecode.composition_delay = 0;
         }
     }
@@ -3510,6 +3521,8 @@ static void adapt_description_index( output_track_t *out_track, input_track_t *i
 static int adjust_timestamp
 (
     lshmuxer_t           *muxer,
+    input_t              *in,
+    input_track_t        *in_track,
     output_track_t       *out_track,
     track_media_option_t *track_opt,
     lsmash_sample_t      *sample
@@ -3525,7 +3538,32 @@ static int adjust_timestamp
     if( muxer->timeline_shift )
     {
         if( out_track->current_sample_number == 1 )
-            out_track->ctd_shift = sample->cts;
+        {
+            /* Why: In H.264/AVC and later codecs, pictures with negative POC (or leading
+             * pictures in an open GOP) decoded after the initial IDR at sample 1 can have
+             * an earlier presentation time (smaller CTS) than decoding-order sample 1.
+             * Using sample 1's CTS as out_track->ctd_shift would cause unsigned uint64_t
+             * underflow when subtracting out_track->ctd_shift from those earlier-displayed
+             * samples.
+             * How: Scan the input media timeline to find the minimum adjusted CTS across
+             * all samples in the track and use that minimum as out_track->ctd_shift. */
+            uint64_t min_cts = sample->cts;
+            uint64_t cts;
+            for( uint32_t i = in_track->current_sample_number + 1;
+                 !lsmash_get_cts_from_media_timeline( in->root, in_track->track_ID, i, &cts );
+                 i++ )
+            {
+                if( cts >= out_track->skip_dt_interval )
+                {
+                    uint64_t adj_cts = cts - out_track->skip_dt_interval;
+                    if( adj_cts < min_cts )
+                        min_cts = adj_cts;
+                }
+            }
+            uint64_t restore_dts;
+            (void)lsmash_get_dts_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number, &restore_dts );
+            out_track->ctd_shift = min_cts;
+        }
         sample->cts -= out_track->ctd_shift;
     }
     if( track_opt->has_cd )
@@ -3586,7 +3624,7 @@ static int do_mux( lshmuxer_t *muxer )
                 if( sample )
                 {
                     adapt_description_index( out_track, in_track, sample );
-                    if( adjust_timestamp( muxer, out_track, track_opt, sample ) < 0 )
+                    if( adjust_timestamp( muxer, in, in_track, out_track, track_opt, sample ) < 0 )
                     {
                         lsmash_delete_sample( sample );
                         return -1;
@@ -3829,11 +3867,13 @@ static int construct_timeline_maps( lshmuxer_t *muxer )
                 if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
                     return ERROR_MSG( "failed to create an explicit timeline map.\n" );
             }
-            else if( input[i].file.is_raw || topt->encoder_delay || topt->has_cd || muxer->timeline_shift || topt->user_fps )
+            else if( input[i].file.is_raw || topt->encoder_delay || topt->has_cd
+                  || (muxer->timeline_shift && !lsmash_count_explicit_timeline_map( input[i].root, in_track->track_ID ))
+                  || topt->user_fps )
             {
                 if( lsmash_delete_explicit_timeline_map( output->root, out_track->track_ID ) )
                     return ERROR_MSG( "failed to delete explicit timeline maps.\n" );
-                uint64_t actual_duration = out_track->lpcm
+                uint64_t actual_duration = (out_track->lpcm || !input[i].file.is_raw)
                                          ? lsmash_get_media_duration( output->root, out_track->track_ID )
                                          : out_track->last_sample_dts + out_track->last_sample_delta;
                 actual_duration -= out_track->priming_samples;
