@@ -2635,9 +2635,22 @@ static int description_set_qtff_template_audio_description( isom_audio_entry_t *
                                 : QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
         audio->samplerate       = summary->frequency << 16;
         audio->samplesPerPacket = samples_per_packet;
-        audio->bytesPerPacket   = summary->channels ? bytes_per_frame / summary->channels : 0;
-        audio->bytesPerFrame    = bytes_per_frame;  /* sample_size field in stsz box is NOT used. */
-        audio->bytesPerSample   = 1 + (sample_size != 8);
+        if( bytes_per_frame )
+        {
+            audio->bytesPerPacket = summary->channels ? bytes_per_frame / summary->channels : 0;
+            audio->bytesPerFrame  = bytes_per_frame;  /* sample_size field in stsz box is NOT used. */
+            audio->bytesPerSample = 1 + (sample_size != 8);
+        }
+        else
+        {
+            /* Align variable-compression Sound Sample Description v1 (such as ALAC-in-QTFF)
+             * with Apple AVAssetWriter (Core Media Audio) ground truth and
+             * description_set_qtff_mp4a_description(), setting template values
+             * bytesPerPacket = 1, bytesPerFrame = 1 * channels, and bytesPerSample = 2. */
+            audio->bytesPerPacket = 1;
+            audio->bytesPerFrame  = audio->bytesPerPacket * summary->channels;
+            audio->bytesPerSample = 2;
+        }
     }
     return 0;
 }
@@ -2831,9 +2844,12 @@ static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_
                     audio->compression_ID = data->compression_ID;
                     if( audio->compression_ID == QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION )
                     {
-                        /* For variable compression, bytesPerPacket and bytesPerFrame are reserved and should be set to 0. */
-                        audio->bytesPerPacket = 0;
-                        audio->bytesPerFrame  = 0;
+                        /* Align variable-compression Sound Sample Description v1 with Apple
+                         * AVAssetWriter (Core Media Audio) ground truth: bytesPerPacket = 1,
+                         * bytesPerFrame = 1 * channels, and bytesPerSample = 2. */
+                        audio->bytesPerPacket = 1;
+                        audio->bytesPerFrame  = audio->bytesPerPacket * summary->channels;
+                        audio->bytesPerSample = 2;
                     }
                 }
                 break;
@@ -3646,10 +3662,24 @@ lsmash_summary_t *lsm_description_create_audio_summary( isom_sample_entry_t *sam
             lsm_description_get_implicit_qt_fixed_comp_audio_sample_quants( audio, &summary->samples_in_frame, &summary->bytes_per_frame, &summary->sample_size );
         else if( audio->version == 1 )
         {
-            summary->channels         = audio->bytesPerPacket ? audio->bytesPerFrame / audio->bytesPerPacket : audio->channelcount;
-            summary->sample_size      = audio->bytesPerPacket * 8;
-            summary->samples_in_frame = audio->samplesPerPacket;
-            summary->bytes_per_frame  = audio->bytesPerFrame;
+            if( audio->compression_ID == QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION )
+            {
+                /* In variable-compression Sound Sample Description v1 (compression_ID == -2),
+                 * bytesPerPacket (1) and bytesPerFrame (channels) are template placeholders
+                 * written by Apple AVAssetWriter rather than fixed packet byte sizes.
+                 * Preserve summary->channels (audio->channelcount) and summary->sample_size
+                 * (audio->samplesize), and report summary->bytes_per_frame = 0 so that
+                 * remuxing keeps variable compression instead of turning into fixed compression. */
+                summary->samples_in_frame = audio->samplesPerPacket;
+                summary->bytes_per_frame  = 0;
+            }
+            else
+            {
+                summary->channels         = audio->bytesPerPacket ? audio->bytesPerFrame / audio->bytesPerPacket : audio->channelcount;
+                summary->sample_size      = audio->bytesPerPacket * 8;
+                summary->samples_in_frame = audio->samplesPerPacket;
+                summary->bytes_per_frame  = audio->bytesPerFrame;
+            }
         }
         else if( audio->version == 2 )
         {

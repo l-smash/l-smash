@@ -1112,6 +1112,195 @@ int test_flac_isobmff_roundtrip( void )
             lsmash_destroy_root( rroot );
             remove( paths[mode] );
         }
+
+        /* 6b. Apple AVAssetWriter ground-truth ALAC-in-QTFF (Sound Sample Description v1, 2ch / 16bit / 48kHz)
+         * build -> read -> Remux round-trip verification */
+        const char *alac_v1_src_path   = "tests/tmp_test_alac_v1_src.mov";
+        const char *alac_v1_remux_path = "tests/tmp_test_alac_v1_remux.mov";
+        const uint32_t v1_pkt_sizes[2] = { 28, 36 };
+        {
+            lsmash_root_t *mroot = lsmash_create_root();
+            lsmash_file_parameters_t mparam = { 0 };
+            TEST_ASSERT( lsmash_open_file( alac_v1_src_path, 0, &mparam ) == 0, "6b: open alac v1 src mov" );
+            lsmash_brand_type qt_brand = ISOM_BRAND_TYPE_QT;
+            mparam.major_brand = ISOM_BRAND_TYPE_QT;
+            mparam.brands      = &qt_brand;
+            mparam.brand_count = 1;
+            TEST_ASSERT( lsmash_set_file( mroot, &mparam ) != NULL, "6b: set alac v1 src file" );
+            lsmash_movie_parameters_t mv;
+            lsmash_initialize_movie_parameters( &mv );
+            mv.timescale = 48000;
+            TEST_ASSERT( lsmash_set_movie_parameters( mroot, &mv ) == 0, "6b: set alac v1 movie params" );
+            uint32_t tid = lsmash_create_track( mroot, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+            lsmash_track_parameters_t tp;
+            lsmash_initialize_track_parameters( &tp );
+            tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+            TEST_ASSERT( lsmash_set_track_parameters( mroot, tid, &tp ) == 0, "6b: set alac v1 track params" );
+            lsmash_media_parameters_t mp;
+            lsmash_initialize_media_parameters( &mp );
+            mp.timescale = 48000;
+            TEST_ASSERT( lsmash_set_media_parameters( mroot, tid, &mp ) == 0, "6b: set alac v1 media params" );
+
+            lsmash_audio_summary_t *asum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+            asum->sample_type      = QT_CODEC_TYPE_ALAC_AUDIO;
+            asum->frequency        = 48000;
+            asum->channels         = 2;
+            asum->sample_size      = 16;
+            asum->samples_in_frame = 4096;
+            asum->bytes_per_frame  = 0;
+            lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data(
+                LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC,
+                LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+            lsmash_alac_specific_parameters_t *ap = (lsmash_alac_specific_parameters_t *)cs->data.structured;
+            ap->frameLength   = 4096;
+            ap->bitDepth      = 16;
+            ap->numChannels   = 2;
+            ap->maxFrameBytes = 64;
+            ap->avgBitrate    = 256000;
+            ap->sampleRate    = 48000;
+            TEST_ASSERT( lsmash_add_codec_specific_data( (lsmash_summary_t *)asum, cs ) == 0, "6b: add alac v1 specific" );
+            lsmash_destroy_codec_specific_data( cs );
+            TEST_ASSERT( lsmash_add_sample_entry( mroot, tid, asum ) == 1, "6b: add alac v1 sample entry" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)asum );
+
+            for( int i = 0; i < 2; i++ )
+            {
+                lsmash_sample_t *s = lsmash_create_sample( v1_pkt_sizes[i] );
+                memset( s->data, 0xB0 + i, v1_pkt_sizes[i] );
+                s->dts           = (uint64_t)i * 4096;
+                s->cts           = s->dts;
+                s->index         = 1;
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+                TEST_ASSERT( lsmash_append_sample( mroot, tid, s ) == 0, "6b: append alac v1 sample" );
+            }
+            TEST_ASSERT( lsmash_flush_pooled_samples( mroot, tid, 4096 ) == 0, "6b: flush alac v1 samples" );
+            TEST_ASSERT( lsmash_update_track_duration( mroot, tid, 4096 ) == 0, "6b: update alac v1 track duration" );
+            TEST_ASSERT( lsmash_finish_movie( mroot, NULL ) == 0, "6b: finish alac v1 src movie" );
+            lsmash_close_file( &mparam );
+            lsmash_destroy_root( mroot );
+        }
+
+        /* Read alac_v1_src_path, verify Sound Sample Description v1 fields and summary, then Remux to alac_v1_remux_path */
+        {
+            lsmash_root_t *rroot = lsmash_create_root();
+            lsmash_file_parameters_t rparam = { 0 };
+            TEST_ASSERT( lsmash_open_file( alac_v1_src_path, 1, &rparam ) == 0, "6b: open alac v1 src for read" );
+            lsmash_file_t *rfile = lsmash_set_file( rroot, &rparam );
+            TEST_ASSERT( lsmash_read_file( rfile, &rparam ) >= 0, "6b: read alac v1 src movie" );
+
+            isom_trak_t *trak = (isom_trak_t *)rfile->moov->trak_list.head->data;
+            isom_audio_entry_t *audio = (isom_audio_entry_t *)trak->mdia->minf->stbl->stsd->list.head->data;
+            TEST_ASSERT( audio != NULL && audio->version == 1, "6b: src audio->version == 1" );
+            TEST_ASSERT( audio->channelcount == 2 && audio->samplesize == 16, "6b: src channelcount == 2 && samplesize == 16" );
+            TEST_ASSERT( audio->compression_ID == QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION && audio->packet_size == 0,
+                         "6b: src compression_ID == -2 && packet_size == 0" );
+            TEST_ASSERT( audio->samplesPerPacket == 4096
+                      && audio->bytesPerPacket   == 1
+                      && audio->bytesPerFrame    == 2
+                      && audio->bytesPerSample   == 2,
+                         "6b: src Sound Sample Description v1 template fields match AVAssetWriter (4096, 1, 2, 2)" );
+
+            lsmash_audio_summary_t *rsum = (lsmash_audio_summary_t *)lsmash_get_summary( rroot, 1, 1 );
+            TEST_ASSERT( rsum != NULL, "6b: get alac v1 src summary" );
+            TEST_ASSERT( lsmash_check_codec_type_identical( rsum->sample_type, QT_CODEC_TYPE_ALAC_AUDIO ), "6b: src sample_type is alac" );
+            TEST_ASSERT( rsum->frequency        == 48000
+                      && rsum->channels         == 2
+                      && rsum->sample_size      == 16
+                      && rsum->samples_in_frame == 4096
+                      && rsum->bytes_per_frame  == 0,
+                         "6b: src summary preserves sample_size == 16 and bytes_per_frame == 0" );
+            TEST_ASSERT( lsmash_construct_timeline( rroot, 1 ) == 0, "6b: construct src timeline" );
+            TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( rroot, 1 ) == 2, "6b: src has 2 variable-length packets" );
+
+            /* Remux into alac_v1_remux_path using the read summary */
+            lsmash_root_t *wroot = lsmash_create_root();
+            lsmash_file_parameters_t wparam = { 0 };
+            TEST_ASSERT( lsmash_open_file( alac_v1_remux_path, 0, &wparam ) == 0, "6b: open alac v1 remux mov" );
+            lsmash_brand_type qt_brand = ISOM_BRAND_TYPE_QT;
+            wparam.major_brand = ISOM_BRAND_TYPE_QT;
+            wparam.brands      = &qt_brand;
+            wparam.brand_count = 1;
+            TEST_ASSERT( lsmash_set_file( wroot, &wparam ) != NULL, "6b: set alac v1 remux file" );
+            lsmash_movie_parameters_t mv;
+            lsmash_initialize_movie_parameters( &mv );
+            mv.timescale = 48000;
+            TEST_ASSERT( lsmash_set_movie_parameters( wroot, &mv ) == 0, "6b: set remux movie params" );
+            uint32_t wtid = lsmash_create_track( wroot, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+            lsmash_track_parameters_t tp;
+            lsmash_initialize_track_parameters( &tp );
+            tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+            TEST_ASSERT( lsmash_set_track_parameters( wroot, wtid, &tp ) == 0, "6b: set remux track params" );
+            lsmash_media_parameters_t mp;
+            lsmash_initialize_media_parameters( &mp );
+            mp.timescale = 48000;
+            TEST_ASSERT( lsmash_set_media_parameters( wroot, wtid, &mp ) == 0, "6b: set remux media params" );
+            TEST_ASSERT( lsmash_add_sample_entry( wroot, wtid, rsum ) == 1, "6b: add remux sample entry from read summary" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)rsum );
+
+            for( uint32_t i = 1; i <= 2; i++ )
+            {
+                lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( rroot, 1, i );
+                TEST_ASSERT( s != NULL && s->length == v1_pkt_sizes[i - 1], "6b: get src sample for remux" );
+                TEST_ASSERT( lsmash_append_sample( wroot, wtid, s ) == 0, "6b: append remux sample" );
+            }
+            uint32_t last_delta = 0;
+            TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( rroot, 1, &last_delta ) == 0 && last_delta == 4096,
+                         "6b: get last_delta == 4096" );
+            TEST_ASSERT( lsmash_flush_pooled_samples( wroot, wtid, last_delta ) == 0, "6b: flush remux samples" );
+            TEST_ASSERT( lsmash_update_track_duration( wroot, wtid, last_delta ) == 0, "6b: update remux track duration" );
+            TEST_ASSERT( lsmash_finish_movie( wroot, NULL ) == 0, "6b: finish remux movie" );
+            lsmash_close_file( &wparam );
+            lsmash_destroy_root( wroot );
+
+            lsmash_destruct_timeline( rroot, 1 );
+            lsmash_close_file( &rparam );
+            lsmash_destroy_root( rroot );
+        }
+
+        /* Read back alac_v1_remux_path and verify all Sound Sample Description v1 fields and summary survived Remux intact */
+        {
+            lsmash_root_t *rroot2 = lsmash_create_root();
+            lsmash_file_parameters_t rparam2 = { 0 };
+            TEST_ASSERT( lsmash_open_file( alac_v1_remux_path, 1, &rparam2 ) == 0, "6b: open remuxed mov for read" );
+            lsmash_file_t *rfile2 = lsmash_set_file( rroot2, &rparam2 );
+            TEST_ASSERT( lsmash_read_file( rfile2, &rparam2 ) >= 0, "6b: read remuxed mov" );
+
+            isom_trak_t *trak2 = (isom_trak_t *)rfile2->moov->trak_list.head->data;
+            isom_audio_entry_t *audio2 = (isom_audio_entry_t *)trak2->mdia->minf->stbl->stsd->list.head->data;
+            TEST_ASSERT( audio2 != NULL && audio2->version == 1, "6b: remuxed audio->version == 1" );
+            TEST_ASSERT( audio2->channelcount == 2 && audio2->samplesize == 16, "6b: remuxed channelcount == 2 && samplesize == 16" );
+            TEST_ASSERT( audio2->compression_ID == QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION && audio2->packet_size == 0,
+                         "6b: remuxed compression_ID == -2 (not -1) && packet_size == 0" );
+            TEST_ASSERT( audio2->samplesPerPacket == 4096
+                      && audio2->bytesPerPacket   == 1
+                      && audio2->bytesPerFrame    == 2
+                      && audio2->bytesPerSample   == 2,
+                         "6b: remuxed Sound Sample Description v1 preserves 4096, 1, 2, 2" );
+
+            lsmash_audio_summary_t *rsum2 = (lsmash_audio_summary_t *)lsmash_get_summary( rroot2, 1, 1 );
+            TEST_ASSERT( rsum2 != NULL, "6b: get remuxed summary" );
+            TEST_ASSERT( rsum2->frequency        == 48000
+                      && rsum2->channels         == 2
+                      && rsum2->sample_size      == 16
+                      && rsum2->samples_in_frame == 4096
+                      && rsum2->bytes_per_frame  == 0,
+                         "6b: remuxed summary preserves sample_size == 16 and bytes_per_frame == 0" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)rsum2 );
+
+            TEST_ASSERT( lsmash_construct_timeline( rroot2, 1 ) == 0, "6b: construct remuxed timeline" );
+            TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( rroot2, 1 ) == 2, "6b: remuxed timeline has 2 packets" );
+            for( uint32_t i = 1; i <= 2; i++ )
+            {
+                lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( rroot2, 1, i );
+                TEST_ASSERT( s != NULL && s->length == v1_pkt_sizes[i - 1], "6b: remuxed variable packet length preserved" );
+                lsmash_delete_sample( s );
+            }
+            lsmash_destruct_timeline( rroot2, 1 );
+            lsmash_close_file( &rparam2 );
+            lsmash_destroy_root( rroot2 );
+        }
+        remove( alac_v1_src_path );
+        remove( alac_v1_remux_path );
     }
 
     remove( flac_path );
