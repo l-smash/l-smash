@@ -1191,6 +1191,13 @@ typedef struct
     uint32_t elst_count;
     uint64_t elst_dur[2];
     int64_t  elst_mt[2];
+    int      has_cslg;
+    uint8_t  ctts_version;
+    int32_t  cslg_ctd_shift;
+    int32_t  cslg_least_delta;
+    int32_t  cslg_greatest_delta;
+    int32_t  cslg_start_time;
+    int32_t  cslg_end_time;
 } track_timeline_metrics_t;
 
 static int inspect_track_timeline_metrics( const char *path, uint32_t track_number, track_timeline_metrics_t *m )
@@ -1223,6 +1230,18 @@ static int inspect_track_timeline_metrics( const char *path, uint32_t track_numb
     m->mdhd_timescale = trak->mdia->mdhd->timescale;
     m->mdhd_duration  = trak->mdia->mdhd->duration;
     m->tkhd_duration  = trak->tkhd->duration;
+    if( LSMASH_IS_EXISTING_BOX( trak->mdia->minf->stbl->ctts ) )
+        m->ctts_version = trak->mdia->minf->stbl->ctts->version;
+    if( LSMASH_IS_EXISTING_BOX( trak->mdia->minf->stbl->cslg ) )
+    {
+        isom_cslg_t *cslg = trak->mdia->minf->stbl->cslg;
+        m->has_cslg            = 1;
+        m->cslg_ctd_shift      = cslg->compositionToDTSShift;
+        m->cslg_least_delta    = cslg->leastDecodeToDisplayDelta;
+        m->cslg_greatest_delta = cslg->greatestDecodeToDisplayDelta;
+        m->cslg_start_time     = cslg->compositionStartTime;
+        m->cslg_end_time       = cslg->compositionEndTime;
+    }
 
     isom_stts_entry_t *data = NULL;
     LSM_LIST_FOR_EACH( data, trak->mdia->minf->stbl->stts->list )
@@ -1234,6 +1253,9 @@ static int inspect_track_timeline_metrics( const char *path, uint32_t track_numb
     TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "construct timeline for metrics inspection" );
     uint32_t sample_count = lsmash_get_sample_count_in_media_timeline( root, track_ID );
     TEST_ASSERT( sample_count > 0, "timeline sample_count > 0" );
+    uint32_t ctd_shift = 0;
+    TEST_ASSERT( lsmash_get_composition_to_decode_shift_from_media_timeline( root, track_ID, &ctd_shift ) == 0,
+                 "get ctd_shift from media timeline" );
 
     m->min_cts = UINT64_MAX;
     m->max_cts = 0;
@@ -1242,7 +1264,7 @@ static int inspect_track_timeline_metrics( const char *path, uint32_t track_numb
         uint64_t dts = 0, cts = 0;
         TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, i, &dts ) == 0, "get sample dts" );
         TEST_ASSERT( lsmash_get_cts_from_media_timeline( root, track_ID, i, &cts ) == 0, "get sample cts" );
-        TEST_ASSERT( dts <= cts, "DTS <= CTS invariant holds for every sample" );
+        TEST_ASSERT( dts <= cts + ctd_shift, "DTS <= CTS + ctd_shift invariant holds for every sample" );
         if( cts < m->min_cts )
             m->min_cts = cts;
         if( cts > m->max_cts )
@@ -1257,6 +1279,12 @@ static int inspect_track_timeline_metrics( const char *path, uint32_t track_numb
     TEST_ASSERT( m->stts_sum == m->mdhd_duration, "sum(stts) == mdhd->duration invariant holds" );
     TEST_ASSERT( m->last_dts + m->stts_last_delta == m->mdhd_duration, "last_dts + stts_last_delta == mdhd->duration invariant holds" );
     TEST_ASSERT( (m->max_cts - m->min_cts) + m->d_comp == m->mdhd_duration, "(max_cts - min_cts) + D_comp == mdhd->duration invariant holds" );
+    if( m->has_cslg )
+    {
+        TEST_ASSERT( m->cslg_ctd_shift == (int32_t)ctd_shift, "cslg->compositionToDTSShift matches timeline ctd_shift" );
+        TEST_ASSERT( (uint64_t)((int64_t)m->cslg_end_time - (int64_t)m->cslg_start_time) == m->mdhd_duration,
+                     "cslg composition span (compositionEndTime - compositionStartTime) == mdhd->duration" );
+    }
 
     m->elst_count = lsmash_count_explicit_timeline_map( root, track_ID );
     for( uint32_t i = 1; i <= m->elst_count && i <= 2; i++ )
@@ -1323,6 +1351,76 @@ static int assert_remux_idempotency_and_invariants( const char *raw_v, const cha
               && memcmp( m0.elst_dur, m3.elst_dur, sizeof(m0.elst_dur) ) == 0
               && memcmp( m0.elst_mt,  m3.elst_mt,  sizeof(m0.elst_mt) ) == 0,
                  "elst entries are 100% idempotent across repeated remuxer/lshmuxer passes" );
+    return 0;
+}
+
+static int assert_shift_timeline_vfr_remux_idempotency( const char *raw_v, const char *tcv2_path )
+{
+    const char *gen0 = "test_cli_eq_shift_gen0.mp4";
+    const char *gen1 = "test_cli_eq_shift_gen1.mp4";
+    const char *gen2 = "test_cli_eq_shift_gen2.mp4";
+    const char *gen3 = "test_cli_eq_shift_gen3.mp4";
+    const char *gen4 = "test_cli_eq_shift_gen4.mp4";
+    char cmd[1024];
+
+    remove( gen0 );
+    remove( gen1 );
+    remove( gen2 );
+    remove( gen3 );
+    remove( gen4 );
+
+    /* Gen 0: B-frame VFR container with --isom-version 6 --shift-timeline (ctts v1 negative offsets + cslg) */
+    snprintf( cmd, sizeof(cmd),
+              "%s --isom-version 6 --shift-timeline -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, raw_v, tcv2_path, gen0, CLI_DEV_NULL );
+    int rc0 = system( cmd );
+    /* Gen 1: remuxer pass */
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_REMUXER, gen0, gen1, CLI_DEV_NULL );
+    int rc1 = system( cmd );
+    /* Gen 2: timelineeditor re-edit pass (no-option timescale reduction / re-edit) */
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, gen1, gen2, CLI_DEV_NULL );
+    int rc2 = system( cmd );
+    /* Gen 3: lshmuxer remux pass */
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, gen2, gen3, CLI_DEV_NULL );
+    int rc3 = system( cmd );
+    /* Gen 4: lshmuxer positional re-edit pass */
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_LSHMUXER, gen3, gen4, CLI_DEV_NULL );
+    int rc4 = system( cmd );
+
+    track_timeline_metrics_t m0, m1, m2, m3, m4;
+    int ok = (rc0 == 0 && rc1 == 0 && rc2 == 0 && rc3 == 0 && rc4 == 0)
+          && inspect_track_timeline_metrics( gen0, 1, &m0 ) == 0
+          && inspect_track_timeline_metrics( gen1, 1, &m1 ) == 0
+          && inspect_track_timeline_metrics( gen2, 1, &m2 ) == 0
+          && inspect_track_timeline_metrics( gen3, 1, &m3 ) == 0
+          && inspect_track_timeline_metrics( gen4, 1, &m4 ) == 0;
+
+    remove( gen0 );
+    remove( gen1 );
+    remove( gen2 );
+    remove( gen3 );
+    remove( gen4 );
+
+    TEST_ASSERT( ok, "all 5 --shift-timeline VFR generations succeeded across lshmuxer, remuxer, and timelineeditor" );
+    TEST_ASSERT( m0.has_cslg && m0.ctts_version == 1 && m0.cslg_ctd_shift > 0 && m0.cslg_least_delta < 0,
+                 "Gen 0 has ctts v1 negative offset and cslg with positive compositionToDTSShift" );
+    const track_timeline_metrics_t *gens[4] = { &m1, &m2, &m3, &m4 };
+    for( int g = 0; g < 4; g++ )
+    {
+        TEST_ASSERT( gens[g]->mdhd_duration  == m0.mdhd_duration
+                  && gens[g]->tkhd_duration  == m0.tkhd_duration
+                  && gens[g]->stts_last_delta == m0.stts_last_delta
+                  && gens[g]->d_comp         == m0.d_comp,
+                     "--shift-timeline VFR mdhd->duration, tkhd->duration, stts final delta, and D_comp match with 0 ticks drift" );
+        TEST_ASSERT( gens[g]->has_cslg            == 1
+                  && gens[g]->ctts_version        == 1
+                  && gens[g]->cslg_ctd_shift      == m0.cslg_ctd_shift
+                  && gens[g]->cslg_least_delta    == m0.cslg_least_delta
+                  && gens[g]->cslg_greatest_delta == m0.cslg_greatest_delta
+                  && gens[g]->cslg_start_time     == m0.cslg_start_time
+                  && gens[g]->cslg_end_time       == m0.cslg_end_time,
+                     "--shift-timeline VFR ctts v1 and all 5 cslg fields match with 0 ticks drift" );
+    }
     return 0;
 }
 
@@ -1893,6 +1991,10 @@ int test_muxer_lshmuxer_cli_equivalence( void )
 
     /* Case 34: 3-stage hybrid VFR last-frame composition duration (D_comp) across Timecode v2 (N+1), Timecode v1 still-frame, and statistical outlier guard */
     if( assert_hybrid_vfr_last_duration( f_in_v ) < 0 )
+        goto cleanup;
+
+    /* Case 35: --shift-timeline (ctts v1 + cslg) B-frame VFR container Remux & re-edit idempotency across remuxer, timelineeditor, and lshmuxer */
+    if( assert_shift_timeline_vfr_remux_idempotency( f_h264_cfr, f_tcv2 ) < 0 )
         goto cleanup;
 
     rc = 0;

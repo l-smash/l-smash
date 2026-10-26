@@ -2196,6 +2196,9 @@ static int edit_track_timeline
     }
 
     timecode_t timecode = { 0 };
+    uint32_t orig_ctd_shift = 0;
+    if( !input->file.is_raw )
+        lsmash_get_composition_to_decode_shift_from_media_timeline( input->root, track_ID, &orig_ctd_shift );
     if( track_opt->timecode_name )
     {
         timecode.file = lsmash_fopen( track_opt->timecode_name, "rb" );
@@ -2323,6 +2326,13 @@ static int edit_track_timeline
             prev_reordered_cts[i % sample_delay] = timecode.ts[i] + sample_delay_time;
         }
         lsmash_free( prev_reordered_cts );
+        if( orig_ctd_shift && !track_opt->dts_compression )
+        {
+            uint64_t ctd_shift = timestamp[0].cts;
+            for( uint32_t i = 0; i < sample_count; i++ )
+                timestamp[i].cts -= ctd_shift;
+            timecode.composition_delay = 0;
+        }
     }
     else
         for( uint32_t i = 0; i < sample_count; i++ )
@@ -3813,7 +3823,7 @@ static int construct_timeline_maps( lshmuxer_t *muxer )
                     duration = ((double)duration / media_timescale) * movie_timescale;
                 lsmash_edit_t edit;
                 edit.duration   = muxer->frag_base_track ? ISOM_EDIT_DURATION_IMPLICIT : duration;
-                edit.start_time = (in_track->timeline_edited ? in_track->composition_delay : (out_track->priming_samples + start_offset))
+                edit.start_time = ((in_track->timeline_edited && !muxer->timeline_shift && !topt->has_cd) ? in_track->composition_delay : (out_track->priming_samples + start_offset))
                                 + (topt->skip_duration_num ? (uint64_t)((double)((uint64_t)topt->skip_duration_num * media_timescale) / topt->skip_duration_den + 0.5) : 0);
                 edit.rate       = ISOM_EDIT_MODE_NORMAL;
                 if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )

@@ -2071,7 +2071,7 @@ int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
             info->offset = ISOM_NON_OUTPUT_SAMPLE_OFFSET;
         ++i;
     }
-    if( timeline->ctd_shift && (!root->file->qt_compatible || root->file->max_isom_version < 4) )
+    if( timeline->ctd_shift && !root->file->qt_compatible && root->file->max_isom_version < 4 )
         return LSMASH_ERR_INVALID_DATA; /* Don't allow composition to decode timeline shift. */
     return 0;
 }

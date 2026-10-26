@@ -770,6 +770,8 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
 {
     track_t *in_track = &input->file.movie.track[opt->track_number - 1];
     uint32_t track_ID = in_track->track_ID;
+    uint32_t orig_ctd_shift = 0;
+    lsmash_get_composition_to_decode_shift_from_media_timeline( input->root, track_ID, &orig_ctd_shift );
     lsmash_media_ts_list_t ts_list;
     if( lsmash_get_media_timestamps( input->root, track_ID, &ts_list ) )
         return ERROR_MSG( "Failed to get media timestamps.\n" );
@@ -882,6 +884,13 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             prev_reordered_cts[ i % sample_delay ] = timecode->ts[i] + sample_delay_time;
         }
         lsmash_free( prev_reordered_cts );
+        if( orig_ctd_shift && !opt->dts_compression )
+        {
+            uint64_t ctd_shift = timestamp[0].cts;
+            for( uint32_t i = 0; i < sample_count; i++ )
+                timestamp[i].cts -= ctd_shift;
+            timecode->composition_delay = 0;
+        }
     }
     else
         for( uint32_t i = 0; i < sample_count; i++ )

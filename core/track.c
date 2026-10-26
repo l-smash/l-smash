@@ -404,6 +404,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
             }
         }
         dts -= last_stts_data->sample_delta;
+        uint32_t composition_last_delta = last_sample_delta ? last_sample_delta : (uint32_t)(max_cts - max2_cts);
         if( file->fragment )
             /* Overall presentation is extended exceeding this initial movie.
              * So, any players shall display the movie exceeding the durations
@@ -468,6 +469,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                     }
                 }
             }
+            composition_last_delta = last_sample_delta;
             /* Design rationale for mdhd->duration and the final stts sample_delta:
              * 1. The track media duration (mdhd->duration) is defined as the total span on the
              *    Presentation (Composition) timeline: (max_cts - min_cts + D_comp), where D_comp
@@ -504,7 +506,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                 max2_cts -= ctd_shift;
                 min_cts  -= ctd_shift;
             }
-            int64_t composition_end_time = max_cts + (max_cts - max2_cts);
+            int64_t composition_end_time = max_cts + composition_last_delta;
             if( !file->fragment
              && min_cts != LSMASH_TIMESTAMP_UNDEFINED
              && (min_offset <= INT32_MAX) && (min_offset >= INT32_MIN)
