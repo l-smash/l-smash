@@ -2637,9 +2637,18 @@ static int description_set_qtff_template_audio_description( isom_audio_entry_t *
                                 : QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
         audio->samplerate       = summary->frequency << 16;
         audio->samplesPerPacket = samples_per_packet;
-        audio->bytesPerFrame    = bytes_per_frame ? bytes_per_frame : 2;    /* sample_size field in stsz box is NOT used. */
-        audio->bytesPerPacket   = audio->channelcount ? audio->bytesPerFrame / audio->channelcount : 0;
-        audio->bytesPerSample   = 1 + (sample_size != 8);
+        if( bytes_per_frame )
+        {
+            audio->bytesPerPacket = audio->channelcount ? bytes_per_frame / audio->channelcount : 0;
+            audio->bytesPerFrame  = bytes_per_frame;  /* sample_size field in stsz box is NOT used. */
+            audio->bytesPerSample = 1 + (sample_size != 8);
+        }
+        else
+        {
+            audio->bytesPerFrame  = 2;
+            audio->bytesPerPacket = audio->channelcount ? audio->bytesPerFrame / audio->channelcount : 0;
+            audio->bytesPerSample = 2;
+        }
     }
     return 0;
 }
@@ -2835,6 +2844,7 @@ static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_
                     {
                         audio->bytesPerFrame  = 2;
                         audio->bytesPerPacket = audio->channelcount ? audio->bytesPerFrame / audio->channelcount : 0;
+                        audio->bytesPerSample = 2;
                     }
                 }
                 break;
