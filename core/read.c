@@ -2145,6 +2145,10 @@ static int read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
         return LSMASH_ERR_INVALID_DATA;
     if( pos < box->size )
     {
+        if( stsz->sample_size > 0 )
+            lsmash_log( file, LSMASH_LOG_WARNING,
+                        "stsz specifies a non-zero constant sample_size (%"PRIu32") together with an entry_size table.\n",
+                        stsz->sample_size );
         stsz->list = lsm_list_create_simple( sizeof(isom_stsz_entry_t) );
         if( !stsz->list )
             return LSMASH_ERR_MEMORY_ALLOC;
