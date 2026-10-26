@@ -572,7 +572,12 @@ static int get_movie( input_t *input, char *input_name )
             WARNING_MSG( "failed to construct timeline.\n" );
             continue;
         }
-        in_track[i].duration = lsmash_get_media_duration( input->root, in_track[i].track_ID);
+        /* Why: In Fragmented MP4 inputs where all samples reside in Movie Fragments ('moof'/'trun'),
+         * the initial Movie Header / Media Header ('mdhd->duration') is 0. Fall back to the
+         * constructed media timeline duration so fragmented inputs are not skipped. */
+        in_track[i].duration = lsmash_get_media_duration( input->root, in_track[i].track_ID );
+        if( !in_track[i].duration )
+            in_track[i].duration = lsmash_get_media_duration_from_media_timeline( input->root, in_track[i].track_ID );
         if( !in_track[i].duration )
         {
             WARNING_MSG( "failed to get the media duration.\n" );
@@ -1040,7 +1045,22 @@ static int set_movie_parameters( remuxer_t *remuxer )
     else if( pick_most_used_major_brand( input, out_file, num_input ) < 0 )
         return ERROR_MSG( "failed to pick the most used major brand.\n" );
     /* Deduplicate compatible brands. */
-    uint32_t num_input_brands = num_input + (self_containd_segment ? 1 : 0);
+    int need_iso6_for_frag_shift = 0;
+    if( remuxer->frag_base_track )
+    {
+        for( int i = 0; i < num_input; i++ )
+            for( uint32_t j = 0; j < input[i].file.movie.num_tracks; j++ )
+            {
+                input_track_t *in_track = &input[i].file.movie.track[j];
+                if( !in_track->active )
+                    continue;
+                uint32_t ctd_shift = 0;
+                if( !lsmash_get_composition_to_decode_shift_from_media_timeline( input[i].root, in_track->track_ID, &ctd_shift )
+                 && ctd_shift > 0 )
+                    need_iso6_for_frag_shift = 1;
+            }
+    }
+    uint32_t num_input_brands = num_input + (self_containd_segment ? 1 : 0) + (need_iso6_for_frag_shift ? 1 : 0);
     for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].file.param.brand_count;
     lsmash_brand_type *input_brands = lsmash_malloc( num_input_brands * sizeof(lsmash_brand_type) );
@@ -1056,6 +1076,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
             if( input[i].file.param.brands[j] )
                 input_brands[num_input_brands++] = input[i].file.param.brands[j];
     }
+    if( need_iso6_for_frag_shift )
+        input_brands[num_input_brands++] = ISOM_BRAND_TYPE_ISO6;
     lsmash_brand_type *output_brands = lsmash_malloc_zero( num_input_brands * sizeof(lsmash_brand_type) );
     if( !output_brands )
     {

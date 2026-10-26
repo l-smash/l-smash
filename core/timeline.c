@@ -1039,9 +1039,13 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 sample_offset = ctts_data->sample_offset;
                 if( allow_negative_sample_offset && sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
                 {
-                    uint64_t cts = dts + (int32_t)sample_offset;
-                    if( (cts + timeline->ctd_shift) < dts )
-                        timeline->ctd_shift = dts - cts;
+                    /* Why: Derive ctd_shift directly from the signed negative offset magnitude
+                     * -(int64_t)(int32_t)sample_offset rather than computing uint64_t cts = dts + offset,
+                     * which would underflow uint64_t if a negative offset ever appeared at dts == 0
+                     * (or where dts < -offset). */
+                    int32_t signed_offset = (int32_t)sample_offset;
+                    if( signed_offset < 0 && (uint32_t)(-signed_offset) > timeline->ctd_shift )
+                        timeline->ctd_shift = (uint32_t)(-signed_offset);
                 }
             }
             else
@@ -1351,9 +1355,13 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                 /* Check composition to decode timeline shift. */
                                 if( file->max_isom_version >= 6 && trun->version != 0 && info.offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
                                 {
-                                    uint64_t cts = dts + (int32_t)info.offset;
-                                    if( (cts + timeline->ctd_shift) < dts )
-                                        timeline->ctd_shift = dts - cts;
+                                    /* Why: Derive ctd_shift directly from the signed negative offset magnitude
+                                     * -(int64_t)(int32_t)info.offset across all Movie Fragments rather than
+                                     * computing uint64_t cts = dts + (int32_t)info.offset, avoiding unsigned
+                                     * uint64_t wrap if a negative offset ever occurs where dts < -offset. */
+                                    int32_t signed_offset = (int32_t)info.offset;
+                                    if( signed_offset < 0 && (uint32_t)(-signed_offset) > timeline->ctd_shift )
+                                        timeline->ctd_shift = (uint32_t)(-signed_offset);
                                 }
                             }
                             else
@@ -1979,7 +1987,15 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         return LSMASH_ERR_NAMELESS;
     uint32_t dst_movie_timescale = dst_file->moov->mvhd->timescale;
     uint32_t dst_media_timescale = dst_trak->mdia->mdhd->timescale;
-    int32_t  dst_ctd_shift       = dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift;
+    /* Why: For fragmented destinations with an empty initial Movie Box ('moov'),
+     * lsmash_copy_timeline_map() is called before any Movie Fragments ('moof') are
+     * muxed, so stbl->cslg does not exist and stbl->cslg->compositionToDTSShift is 0.
+     * Default dst_ctd_shift to src_ctd_shift in that case so copying an Edit List
+     * from a shifted source into a fragmented destination preserves the source's
+     * shifted media_time without spuriously re-adding src_ctd_shift. */
+    int32_t  dst_ctd_shift       = (dst_file->fragment && !lsm_stbl_get_sample_count( dst_trak ))
+                                 ? src_ctd_shift
+                                 : dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift;
     int32_t  media_time_shift    = src_ctd_shift - dst_ctd_shift;
     lsm_list_t *dst_list = dst_trak->edts->elst->list;
     isom_elst_entry_t *src_data;

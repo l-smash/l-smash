@@ -2336,8 +2336,8 @@ static int edit_track_timeline
              * than timestamp[0].cts (timecode.ts[c(0)] + sample_delay_time). Subtracting
              * timestamp[0].cts would therefore underflow uint64_t on those earlier-
              * displayed samples.
-             * How: Subtract sample_delay_time — the exact uniform offset added to every
-             * sample's timecode.ts[c(i)] during composition-order sorting — so that
+             * How: Subtract sample_delay_time -- the exact uniform offset added to every
+             * sample's timecode.ts[c(i)] during composition-order sorting -- so that
              * timestamp[i].cts == timecode.ts[c(i)] >= 0 for all samples and
              * lsmash_set_media_timestamps() derives the exact ctd_shift = sample_delay_time. */
             for( uint32_t i = 0; i < sample_count; i++ )
@@ -2736,7 +2736,7 @@ static int set_movie_parameters( lshmuxer_t *muxer )
             }
             add_brand( muxer, ISOM_BRAND_TYPE_ISO6 );
         }
-        else if( muxer->dash && muxer->isom )
+        else if( (muxer->dash || (muxer->frag_base_track && muxer->timeline_shift)) && muxer->isom )
             add_brand( muxer, ISOM_BRAND_TYPE_ISO6 );
         if( muxer->dash )
             sanitize_dash_brands( muxer->brands, &muxer->num_of_brands );
@@ -2754,8 +2754,26 @@ static int set_movie_parameters( lshmuxer_t *muxer )
         muxer->isom = 1;
         if( check_raw_codec_brands( muxer ) < 0 )
             return -1;
-        if( muxer->dash )
+        int has_input_ctd_shift = 0;
+        for( int i = 0; i < num_input; i++ )
+            for( uint32_t j = 0; j < input[i].file.movie.num_tracks; j++ )
+            {
+                input_track_t *in_track = &input[i].file.movie.track[j];
+                if( !in_track->active )
+                    continue;
+                uint32_t ctd_shift = 0;
+                if( !lsmash_get_composition_to_decode_shift_from_media_timeline( input[i].root, in_track->track_ID, &ctd_shift )
+                 && ctd_shift > 0 )
+                    has_input_ctd_shift = 1;
+            }
+        /* Why: Negative sample_composition_time_offset in Movie Fragment Track Run ('trun' version 1)
+         * requires ISO Base Media version 6 ('iso6'), whereas non-fragmented 'ctts' version 1 + 'cslg'
+         * requires ISO Base Media version 4 ('iso4'). Promote the output compatible brand accordingly
+         * when fragmenting or shifting a container input. */
+        if( muxer->dash || (muxer->frag_base_track && (muxer->timeline_shift || has_input_ctd_shift)) )
             add_brand( muxer, ISOM_BRAND_TYPE_ISO6 );
+        else if( muxer->timeline_shift )
+            add_brand( muxer, ISOM_BRAND_TYPE_ISO4 );
         replace_with_valid_brand( muxer );
         if( self_contained_segment )
         {
@@ -3797,14 +3815,50 @@ static int construct_timeline_maps( lshmuxer_t *muxer )
                 return ERROR_MSG( "media timescale is broken.\n" );
             double timescale_convert_multiplier = (double)movie_timescale / media_timescale;
 
-            uint64_t start_offset = out_track->start_offset;
-            if( muxer->frag_base_track && input[i].file.is_raw && !in_track->timeline_edited )
+            uint64_t start_offset   = out_track->start_offset;
+            uint64_t frag_ctd_shift = 0;
+            if( muxer->frag_base_track )
             {
+                /* Why: When fragmenting, construct_timeline_maps() runs prior to do_mux() because the
+                 * initial Movie Box ('moov') is written during the first sample append. Consequently,
+                 * out_track->start_offset and out_track->ctd_shift have not yet been populated by
+                 * adjust_timestamp().
+                 * How: Pre-calculate the minimum adjusted CTS (min_adj_cts), timeline shift
+                 * (frag_ctd_shift), and constant-delay shift across the input media timeline from
+                 * in_track->current_sample_number using the exact same rules as adjust_timestamp(),
+                 * then restore the input timeline cursor to in_track->current_sample_number. */
+                uint32_t first_sample = in_track->current_sample_number ? in_track->current_sample_number : 1;
                 uint64_t dts1 = 0, cts1 = 0;
-                if( !lsmash_get_dts_from_media_timeline( input[i].root, in_track->track_ID, 1, &dts1 )
-                 && !lsmash_get_cts_from_media_timeline( input[i].root, in_track->track_ID, 1, &cts1 )
-                 && cts1 > dts1 )
-                    start_offset = cts1 - dts1;
+                if( !lsmash_get_dts_from_media_timeline( input[i].root, in_track->track_ID, first_sample, &dts1 )
+                 && !lsmash_get_cts_from_media_timeline( input[i].root, in_track->track_ID, first_sample, &cts1 )
+                 && cts1 >= dts1 )
+                {
+                    uint64_t first_adj_cts = cts1 - dts1;
+                    uint64_t min_adj_cts   = first_adj_cts;
+                    uint64_t cts;
+                    for( uint32_t s = first_sample + 1;
+                         !lsmash_get_cts_from_media_timeline( input[i].root, in_track->track_ID, s, &cts );
+                         s++ )
+                    {
+                        if( cts >= dts1 )
+                        {
+                            uint64_t adj_cts = cts - dts1;
+                            if( adj_cts < min_adj_cts )
+                                min_adj_cts = adj_cts;
+                        }
+                    }
+                    uint64_t restore_dts;
+                    (void)lsmash_get_dts_from_media_timeline( input[i].root, in_track->track_ID, first_sample, &restore_dts );
+                    frag_ctd_shift = muxer->timeline_shift ? min_adj_cts : 0;
+                    start_offset   = muxer->timeline_shift ? 0 : min_adj_cts;
+                    if( topt->has_cd )
+                    {
+                        uint64_t first_shifted_cts = first_adj_cts - frag_ctd_shift;
+                        uint64_t cd_in_timebase    = (uint64_t)topt->constant_delay * out_track->timebase;
+                        if( cd_in_timebase >= first_shifted_cts )
+                            start_offset += cd_in_timebase - first_shifted_cts;
+                    }
+                }
             }
 
             if( topt->seek )
@@ -3884,8 +3938,34 @@ static int construct_timeline_maps( lshmuxer_t *muxer )
                 if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
                     return ERROR_MSG( "failed to set timeline map.\n" );
             }
-            else if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
-                return ERROR_MSG( "failed to copy timeline maps.\n" );
+            else
+            {
+                if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
+                    return ERROR_MSG( "failed to copy timeline maps.\n" );
+                if( muxer->frag_base_track && muxer->timeline_shift && frag_ctd_shift > 0 )
+                {
+                    /* Why: When fragmenting an unshifted container input with --shift-timeline,
+                     * lsmash_copy_timeline_map() runs before do_mux() shifts sample CTS values down
+                     * by frag_ctd_shift. Shift each copied non-empty Edit List entry's start_time
+                     * down by the scaled frag_ctd_shift so the initial 'moov' Edit List matches the
+                     * shifted 'trun' version 1 sample timestamps. */
+                    uint32_t orig_media_timescale = in_track->orig_timescale ? in_track->orig_timescale : media_timescale;
+                    int64_t  edit_shift           = (int64_t)(frag_ctd_shift * ((double)media_timescale / orig_media_timescale) + 0.5);
+                    uint32_t num_edits            = lsmash_count_explicit_timeline_map( output->root, out_track->track_ID );
+                    for( uint32_t edit_idx = 1; edit_idx <= num_edits; edit_idx++ )
+                    {
+                        lsmash_edit_t edit;
+                        if( lsmash_get_explicit_timeline_map( output->root, out_track->track_ID, edit_idx, &edit ) )
+                            return ERROR_MSG( "failed to get an explicit timeline map.\n" );
+                        if( edit.start_time != ISOM_EDIT_MODE_EMPTY && edit.start_time >= edit_shift )
+                        {
+                            edit.start_time -= edit_shift;
+                            if( lsmash_modify_explicit_timeline_map( output->root, out_track->track_ID, edit_idx, edit ) )
+                                return ERROR_MSG( "failed to modify an explicit timeline map.\n" );
+                        }
+                    }
+                }
+            }
         }
     out_movie->current_track_number = 1;
     return 0;

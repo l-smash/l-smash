@@ -894,8 +894,8 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
              * than timestamp[0].cts (timecode->ts[c(0)] + sample_delay_time). Subtracting
              * timestamp[0].cts would therefore underflow uint64_t on those earlier-
              * displayed samples.
-             * How: Subtract sample_delay_time — the exact uniform offset added to every
-             * sample's timecode->ts[c(i)] during composition-order sorting — so that
+             * How: Subtract sample_delay_time -- the exact uniform offset added to every
+             * sample's timecode->ts[c(i)] during composition-order sorting -- so that
              * timestamp[i].cts == timecode->ts[c(i)] >= 0 for all samples and
              * lsmash_set_media_timestamps() derives the exact ctd_shift = sample_delay_time. */
             for( uint32_t i = 0; i < sample_count; i++ )

@@ -1612,13 +1612,25 @@ static int fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sa
         /* Check if negative composition time offset is present. */
         if( !non_output_sample )
         {
-            if( (sample->cts + ctd_shift) < sample->dts )
+            /* Why: Unlike stbl->ctts (which is a single box for the entire track), a new
+             * isom_trun_t initialized with version = 0 is allocated for every Movie Fragment
+             * ('moof') and every Track Run ('trun'), whereas cache->timestamp.ctd_shift is a
+             * persistent track-wide high-water mark across all fragments. Checking only
+             * ((sample->cts + ctd_shift) < sample->dts) would leave trun->version == 0 in
+             * subsequent fragments whose negative offsets (sample->cts < sample->dts) do not
+             * exceed the previous fragment's ctd_shift, silently writing negative two's-
+             * complement offsets as huge unsigned 32-bit values in a version 0 'trun' box.
+             * How: Promote the current 'trun' to version 1 whenever any sample in that run
+             * has sample->cts < sample->dts, and update the track-wide ctd_shift high-water
+             * mark whenever (sample->dts - sample->cts) exceeds the current ctd_shift. */
+            if( sample->cts < sample->dts )
             {
                 if( file->max_isom_version < 6 )
                     return LSMASH_ERR_INVALID_DATA; /* Negative composition time offset is invalid. */
                 if( (sample->dts - sample->cts) > INT32_MAX )
                     return LSMASH_ERR_INVALID_DATA; /* Overflow */
-                ctd_shift = sample->dts - sample->cts;
+                if( (sample->cts + ctd_shift) < sample->dts )
+                    ctd_shift = sample->dts - sample->cts;
                 trun->version = 1;
             }
         }
