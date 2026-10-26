@@ -119,3 +119,21 @@ Overlapped transform and subband audio codecs introduce **priming delay** at the
 2. **Structural Limit of ISOBMFF / QTFF Edit Lists (`elst`)**:
    - As documented in the Apple QuickTime File Format Specification (*Audio Priming - Handling Encoder Delay in AAC*, `qtff.pdf`) and ISO/IEC 14496-24, an Edit List entry (`elst`) contains only **one** scalar `start_time` (`media_time`) field per track, and the `'roll'` sample group contains only one `roll_distance`.
    - Consequently, an ISOBMFF or QTFF file **cannot simultaneously express distinct priming trim offsets** for an AAC-LC fallback decoder and a full SBR/PS decoder. When multiplexing HE-AAC (`--sbr`), `elst.start_time` (`--encoder-delay`) must be configured for the target full HE-AAC decoder's total delay.
+
+---
+
+## 4. Negative POC / Leading Pictures & Composition-to-Decode Timeline Shift (`cslg` / `ctts` v1)
+
+In ITU-T H.264/AVC and later codecs (HEVC, AV1), presentation order is governed by Picture Order Count (`POC`). Even in a Closed GOP, pictures decoded *after* the initial IDR picture at decoding index `i = 0` (`POC = 0`) can have a negative POC (`POC < 0`) and therefore be presented *before* `timestamp[0]` (the same holds for leading B-pictures following an Open-GOP CRA/BLA/I picture):
+
+    Decoding order (i):       i = 0 (IDR, POC = 0)     i = 1 (P/B, POC = -2)    i = 2 (P, POC = +4) ...
+                              DTS = 0, CTS = ts[1]     DTS = 40, CTS = ts[0]=0  DTS = 80, CTS = ts[3]
+    Composition order (m):    m = 0 (decoded at i=1)   m = 1 (decoded at i=0)   m = 2 (decoded at i=3) ...
+
+1. **Why Subtracting `timestamp[0].cts` Underflows `uint64_t` in Decoding Order**:
+   - During timeline editing (`cli/timelineeditor.c:edit_media_timeline` and `cli/lshmuxer.c:edit_track_timeline`), timestamps are first sorted into composition order (`m = 0 .. N-1`) and shifted by the uniform offset `sample_delay_time = timecode->ts[sample_delay]` so that sample `i` (with composition index `c(i)`) receives `CTS = timecode->ts[c(i)] + sample_delay_time`.
+   - After sorting back into decoding order (`lsmash_sort_timestamps_decoding_order`), `timestamp[0]` is decoding-order sample `0` with `c(0) > 0`, whereas a subsequent sample `k > 0` has `c(k) = 0` and `timestamp[k].cts = sample_delay_time < timestamp[0].cts`.
+   - Subtracting `timestamp[0].cts` from every `timestamp[i].cts` when re-editing a track with `orig_ctd_shift > 0` (`!dts_compression`) would therefore underflow unsigned `uint64_t` on sample `k`. Subtracting `sample_delay_time` directly yields `timestamp[i].cts == timecode->ts[c(i)] >= 0` for all samples (`min_i CTS_i == 0`) and allows `lsmash_set_media_timestamps()` to derive the exact `timeline->ctd_shift = sample_delay_time`.
+
+2. **Minimum-CTS Scan for `--shift-timeline` (`cli/lshmuxer.c:adjust_timestamp`)**:
+   - For the same reason, when `lshmuxer --shift-timeline` (`muxer->timeline_shift`) shifts composition timestamps so that the earliest presentation starts at `CTS = 0`, `out_track->ctd_shift` must be initialized to the minimum adjusted CTS (`min_k (CTS_k - skip_dt_interval)`) across the input media timeline rather than decoding-order sample 1's `sample->cts`.
