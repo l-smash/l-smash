@@ -1708,6 +1708,494 @@ cleanup:
     return 0;
 }
 
+typedef struct
+{
+    uint32_t moof_count;
+    uint32_t trun_count;
+    uint8_t  trun_version[4];
+    int32_t  trun_min_offset[4];
+    int32_t  trun_max_offset[4];
+    uint64_t mehd_duration;
+    uint32_t mdhd_timescale;
+    uint64_t media_duration;
+    uint32_t d_comp;
+    uint32_t ctd_shift;
+    uint32_t elst_count;
+    uint64_t elst_dur[2];
+    int64_t  elst_mt[2];
+    uint64_t sample_dts[8];
+    uint64_t sample_cts[8];
+} frag_track_metrics_t;
+
+static int create_synth_negative_poc_2gop_mp4( const char *path, int shifted )
+{
+    remove( path );
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "neg_poc_2gop: create root" );
+    lsmash_file_parameters_t fp = { 0 };
+    TEST_ASSERT( lsmash_open_file( path, 0, &fp ) == 0, "neg_poc_2gop: open file" );
+    fp.major_brand   = ISOM_BRAND_TYPE_MP42;
+    fp.minor_version = 0;
+    lsmash_brand_type brands[4] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO4, ISOM_BRAND_TYPE_AV01, ISOM_BRAND_TYPE_MP42 };
+    fp.brands        = brands;
+    fp.brand_count   = 4;
+    TEST_ASSERT( lsmash_set_file( root, &fp ) != NULL, "neg_poc_2gop: set file" );
+
+    lsmash_movie_parameters_t mp;
+    lsmash_initialize_movie_parameters( &mp );
+    mp.timescale = 1000;
+    TEST_ASSERT( lsmash_set_movie_parameters( root, &mp ) == 0, "neg_poc_2gop: set movie params" );
+
+    uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+    TEST_ASSERT( tid == 1, "neg_poc_2gop: create track" );
+    lsmash_track_parameters_t tp;
+    lsmash_initialize_track_parameters( &tp );
+    tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+    tp.display_width  = 16 << 16;
+    tp.display_height = 16 << 16;
+    TEST_ASSERT( lsmash_set_track_parameters( root, tid, &tp ) == 0, "neg_poc_2gop: set track params" );
+
+    lsmash_media_parameters_t mdp;
+    lsmash_initialize_media_parameters( &mdp );
+    mdp.timescale = 1000;
+    TEST_ASSERT( lsmash_set_media_parameters( root, tid, &mdp ) == 0, "neg_poc_2gop: set media params" );
+
+    lsmash_video_summary_t *summary = create_synth_av01_summary( 16, 16 );
+    TEST_ASSERT( summary != NULL, "neg_poc_2gop: create synth summary" );
+    uint32_t s_idx = lsmash_add_sample_entry( root, tid, summary );
+    lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    TEST_ASSERT( s_idx == 1, "neg_poc_2gop: add sample entry" );
+
+    /* 8 samples across 2 GOPs (RAP at sample 0 and sample 4) with Negative POC in both GOPs:
+     * - Shifted   (ctd_shift = 40): DTS = [0, 40, 80, 120, 160, 200, 240, 280],
+     *                               CTS = [40, 0, 120, 80, 200, 160, 280, 240]
+     * - Unshifted (ctd_shift = 0):  DTS = [0, 40, 80, 120, 160, 200, 240, 280],
+     *                               CTS = [80, 40, 160, 120, 240, 200, 320, 280] */
+    const uint64_t dts_arr[8] = { 0, 40, 80, 120, 160, 200, 240, 280 };
+    const uint64_t cts_arr[8] = {
+        shifted ?  40 :  80,
+        shifted ?   0 :  40,
+        shifted ? 120 : 160,
+        shifted ?  80 : 120,
+        shifted ? 200 : 240,
+        shifted ? 160 : 200,
+        shifted ? 280 : 320,
+        shifted ? 240 : 280
+    };
+    for( int i = 0; i < 8; i++ )
+    {
+        lsmash_sample_t *sample = lsmash_create_sample( 4 );
+        memset( sample->data, 0, 4 );
+        sample->dts   = dts_arr[i];
+        sample->cts   = cts_arr[i];
+        sample->index = s_idx;
+        sample->prop.ra_flags = (i == 0 || i == 4)
+                              ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC
+                              : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+        TEST_ASSERT( lsmash_append_sample( root, tid, sample ) == 0, "neg_poc_2gop: append sample" );
+    }
+    TEST_ASSERT( lsmash_flush_pooled_samples( root, tid, 40 ) == 0, "neg_poc_2gop: flush pooled samples" );
+    TEST_ASSERT( lsmash_update_track_duration( root, tid, 0 ) == 0, "neg_poc_2gop: update track duration" );
+
+    lsmash_edit_t edit;
+    edit.duration   = 320;
+    edit.start_time = shifted ? 0 : 40;
+    edit.rate       = ISOM_EDIT_MODE_NORMAL;
+    TEST_ASSERT( lsmash_create_explicit_timeline_map( root, tid, edit ) == 0, "neg_poc_2gop: create elst" );
+    TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "neg_poc_2gop: finish movie" );
+    lsmash_close_file( &fp );
+    lsmash_destroy_root( root );
+    return 0;
+}
+
+static int inspect_fragmented_track_metrics( const char *path, uint32_t track_number, frag_track_metrics_t *m )
+{
+    memset( m, 0, sizeof(*m) );
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "frag_metrics: create root" );
+    lsmash_file_parameters_t fp = { 0 };
+    TEST_ASSERT( lsmash_open_file( path, 1, &fp ) == 0, "frag_metrics: open file" );
+    lsmash_file_t *file = lsmash_set_file( root, &fp );
+    TEST_ASSERT( file != NULL, "frag_metrics: set file" );
+    TEST_ASSERT( lsmash_read_file( file, &fp ) >= 0, "frag_metrics: read file" );
+
+    uint32_t track_ID = lsmash_get_track_ID( root, track_number );
+    TEST_ASSERT( track_ID != 0, "frag_metrics: get track_ID" );
+
+    isom_trak_t *trak = NULL;
+    isom_trak_t *cur_trak = NULL;
+    LSM_ENTRY_LIST_FOR_EACH( cur_trak, &file->moov->trak_list )
+    {
+        if( cur_trak->tkhd && cur_trak->tkhd->track_ID == track_ID )
+        {
+            trak = cur_trak;
+            break;
+        }
+    }
+    TEST_ASSERT( trak && trak->mdia && trak->mdia->mdhd && LSMASH_IS_EXISTING_BOX( file->moov->mvex ),
+                 "frag_metrics: trak, mdhd, and mvex exist" );
+    m->mdhd_timescale = trak->mdia->mdhd->timescale;
+    if( LSMASH_IS_EXISTING_BOX( file->moov->mvex->mehd ) )
+        m->mehd_duration = file->moov->mvex->mehd->fragment_duration;
+
+    isom_moof_t *moof = NULL;
+    LSM_ENTRY_LIST_FOR_EACH( moof, &file->moof_list )
+    {
+        ++m->moof_count;
+        isom_traf_t *traf = NULL;
+        LSM_ENTRY_LIST_FOR_EACH( traf, &moof->traf_list )
+        {
+            if( LSMASH_IS_NON_EXISTING_BOX( traf->tfhd ) || traf->tfhd->track_ID != track_ID )
+                continue;
+            isom_trun_t *trun = NULL;
+            LSM_ENTRY_LIST_FOR_EACH( trun, &traf->trun_list )
+            {
+                if( m->trun_count < 4 )
+                {
+                    m->trun_version[m->trun_count]    = trun->version;
+                    m->trun_min_offset[m->trun_count] = INT32_MAX;
+                    m->trun_max_offset[m->trun_count] = INT32_MIN;
+                    isom_trun_optional_row_t *row = NULL;
+                    LSM_LIST_FOR_EACH( row, trun->optional )
+                    {
+                        int32_t signed_off = (int32_t)row->sample_composition_time_offset;
+                        if( signed_off < m->trun_min_offset[m->trun_count] )
+                            m->trun_min_offset[m->trun_count] = signed_off;
+                        if( signed_off > m->trun_max_offset[m->trun_count] )
+                            m->trun_max_offset[m->trun_count] = signed_off;
+                    }
+                }
+                ++m->trun_count;
+            }
+        }
+    }
+
+    TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "frag_metrics: construct timeline" );
+    uint32_t sample_count = lsmash_get_sample_count_in_media_timeline( root, track_ID );
+    TEST_ASSERT( sample_count == 8, "frag_metrics: timeline sample_count == 8" );
+    TEST_ASSERT( lsmash_get_composition_to_decode_shift_from_media_timeline( root, track_ID, &m->ctd_shift ) == 0,
+                 "frag_metrics: get ctd_shift" );
+    m->media_duration = lsmash_get_media_duration_from_media_timeline( root, track_ID );
+    TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &m->d_comp ) == 0,
+                 "frag_metrics: get d_comp" );
+
+    lsmash_media_ts_list_t ts_list = { 0 };
+    TEST_ASSERT( lsmash_get_media_timestamps( root, track_ID, &ts_list ) == 0 && ts_list.sample_count == 8,
+                 "frag_metrics: get media timestamps" );
+    for( uint32_t i = 1; i <= sample_count; i++ )
+    {
+        uint64_t dts = 0, cts = 0;
+        TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, i, &dts ) == 0, "frag_metrics: get dts" );
+        TEST_ASSERT( lsmash_get_cts_from_media_timeline( root, track_ID, i, &cts ) == 0, "frag_metrics: get cts" );
+        TEST_ASSERT( dts == ts_list.timestamp[i - 1].dts && cts == ts_list.timestamp[i - 1].cts,
+                     "frag_metrics: lsmash_get_media_timestamps matches per-sample timeline queries" );
+        TEST_ASSERT( dts <= cts + m->ctd_shift, "frag_metrics: DTS <= CTS + ctd_shift invariant holds" );
+        m->sample_dts[i - 1] = dts;
+        m->sample_cts[i - 1] = cts;
+    }
+    lsmash_delete_media_timestamps( &ts_list );
+
+    m->elst_count = lsmash_count_explicit_timeline_map( root, track_ID );
+    for( uint32_t k = 1; k <= m->elst_count && k <= 2; k++ )
+    {
+        lsmash_edit_t edit = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( root, track_ID, k, &edit ) == 0, "frag_metrics: get elst" );
+        m->elst_dur[k - 1] = edit.duration;
+        m->elst_mt[k - 1]  = edit.start_time;
+    }
+
+    lsmash_close_file( &fp );
+    lsmash_destroy_root( root );
+    return 0;
+}
+
+static int assert_fragmented_negative_poc_trun_v1_roundtrip( void )
+{
+    const char *f_base_shifted    = "test_cli_eq_frag_negpoc_shifted.mp4";
+    const char *f_base_unshifted  = "test_cli_eq_frag_negpoc_unshifted.mp4";
+    const char *f_tcv2_8          = "test_cli_eq_frag_negpoc_tcv2_8.txt";
+    const char *f_frag_from_unsh  = "test_cli_eq_frag_from_unsh.mp4";
+    const char *f_frag_from_sh_l  = "test_cli_eq_frag_from_sh_lsh.mp4";
+    const char *f_frag_from_sh_r  = "test_cli_eq_frag_from_sh_rem.mp4";
+    const char *f_frag_refrag_l   = "test_cli_eq_frag_refrag_lsh.mp4";
+    const char *f_frag_refrag_r   = "test_cli_eq_frag_refrag_rem.mp4";
+    const char *f_dump_box        = "test_cli_eq_frag_dump_box.txt";
+    const char *f_dump_ts         = "test_cli_eq_frag_dump_ts.txt";
+    const char *f_defrag_lsh      = "test_cli_eq_defrag_lsh.mp4";
+    const char *f_defrag_rem      = "test_cli_eq_defrag_rem.mp4";
+    const char *f_defrag_te_bare  = "test_cli_eq_defrag_te_bare.mp4";
+    const char *f_defrag_lsh_pos  = "test_cli_eq_defrag_lsh_pos.mp4";
+    const char *f_vfr_te          = "test_cli_eq_frag_vfr_te.mp4";
+    const char *f_vfr_lsh         = "test_cli_eq_frag_vfr_lsh.mp4";
+    const char *f_vfr_frag        = "test_cli_eq_frag_vfr_frag.mp4";
+    const char *f_vfr_frag_shift  = "test_cli_eq_frag_vfr_frag_shift.mp4";
+    const char *all_files[] = {
+        f_base_shifted, f_base_unshifted, f_tcv2_8,
+        f_frag_from_unsh, f_frag_from_sh_l, f_frag_from_sh_r, f_frag_refrag_l, f_frag_refrag_r,
+        f_dump_box, f_dump_ts,
+        f_defrag_lsh, f_defrag_rem, f_defrag_te_bare, f_defrag_lsh_pos,
+        f_vfr_te, f_vfr_lsh, f_vfr_frag, f_vfr_frag_shift
+    };
+    char cmd[1024];
+    int rc = -1;
+
+    for( size_t i = 0; i < sizeof(all_files) / sizeof(all_files[0]); i++ )
+        remove( all_files[i] );
+
+    /* 8-frame VFR Timecode v2 with 50ms initial offset and intervals [40, 50, 40, 40, 40, 50, 40] ms */
+    static const char tcv2_8_text[] =
+        "# timecode format v2\n"
+        "50.0\n"
+        "90.0\n"
+        "140.0\n"
+        "180.0\n"
+        "220.0\n"
+        "260.0\n"
+        "310.0\n"
+        "350.0\n";
+    TEST_ASSERT( write_test_file( f_tcv2_8, (const uint8_t *)tcv2_8_text, sizeof(tcv2_8_text) - 1 ) == 0,
+                 "write 8-frame timecode v2 file" );
+
+    if( create_synth_negative_poc_2gop_mp4( f_base_shifted, 1 ) < 0
+     || create_synth_negative_poc_2gop_mp4( f_base_unshifted, 0 ) < 0 )
+        goto cleanup;
+
+    /* Part A: Fragmented MP4 generation (2 moof/trun fragments) across lshmuxer and remuxer */
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 --shift-timeline -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_unshifted, f_frag_from_unsh, CLI_DEV_NULL );
+    int rc_f1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_shifted, f_frag_from_sh_l, CLI_DEV_NULL );
+    int rc_f2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 -i %s -o %s >%s 2>&1",
+              CLI_REMUXER, f_base_shifted, f_frag_from_sh_r, CLI_DEV_NULL );
+    int rc_f3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_frag_from_unsh, f_frag_refrag_l, CLI_DEV_NULL );
+    int rc_f4 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 -i %s -o %s >%s 2>&1",
+              CLI_REMUXER, f_frag_from_unsh, f_frag_refrag_r, CLI_DEV_NULL );
+    int rc_f5 = system( cmd );
+
+    TEST_ASSERT( rc_f1 == 0 && rc_f2 == 0 && rc_f3 == 0 && rc_f4 == 0 && rc_f5 == 0,
+                 "Frag Negative-POC Part A: all 5 fragmented MP4 generation and re-fragmentation passes succeeded" );
+
+    const char *frag_files[5] = {
+        f_frag_from_unsh, f_frag_from_sh_l, f_frag_from_sh_r, f_frag_refrag_l, f_frag_refrag_r
+    };
+    const uint64_t exp_dts[8] = {  0, 40,  80, 120, 160, 200, 240, 280 };
+    const uint64_t exp_cts[8] = { 40,  0, 120,  80, 200, 160, 280, 240 };
+    for( int g = 0; g < 5; g++ )
+    {
+        frag_track_metrics_t fm;
+        TEST_ASSERT( inspect_fragmented_track_metrics( frag_files[g], 1, &fm ) == 0,
+                     "Frag Negative-POC Part A: inspect fragmented metrics" );
+        TEST_ASSERT( fm.moof_count          == 2
+                  && fm.trun_count          == 2
+                  && fm.trun_version[0]     == 1
+                  && fm.trun_version[1]     == 1
+                  && fm.trun_min_offset[0]  == -40
+                  && fm.trun_max_offset[0]  ==  40
+                  && fm.trun_min_offset[1]  == -40
+                  && fm.trun_max_offset[1]  ==  40
+                  && fm.mehd_duration       == 320
+                  && fm.mdhd_timescale      == 1000
+                  && fm.media_duration      == 320
+                  && fm.d_comp              == 40
+                  && fm.ctd_shift           == 40
+                  && fm.elst_count          == 1
+                  && fm.elst_mt[0]          == 0
+                  && memcmp( fm.sample_dts, exp_dts, sizeof(exp_dts) ) == 0
+                  && memcmp( fm.sample_cts, exp_cts, sizeof(exp_cts) ) == 0,
+                     "Frag Negative-POC Part A: both moof #1 and moof #2 have trun v1 (-40/+40), ctd_shift=40, elst media_time=0, and exact 8-sample DTS/CTS" );
+    }
+
+    /* Verify boxdumper --box and boxdumper --timestamp on the multi-fragment trun v1 container */
+    snprintf( cmd, sizeof(cmd), "%s --box %s > %s", CLI_BOXDUMPER, f_frag_from_unsh, f_dump_box );
+    TEST_ASSERT( system( cmd ) == 0, "Frag Negative-POC Part A: boxdumper --box succeeded" );
+    snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s", CLI_BOXDUMPER, f_frag_from_unsh, f_dump_ts );
+    TEST_ASSERT( system( cmd ) == 0, "Frag Negative-POC Part A: boxdumper --timestamp succeeded" );
+    {
+        size_t box_len = 0, ts_len = 0;
+        char *box_txt = read_text_file( f_dump_box, &box_len );
+        char *ts_txt  = read_text_file( f_dump_ts,  &ts_len );
+        int box_ok = box_txt
+                  && strstr( box_txt, "sample_composition_time_offset = -40" ) != NULL
+                  && strstr( box_txt, "4294967256" ) == NULL;
+        int ts_ok  = ts_txt
+                  && strstr( ts_txt, "Media timescale: 1000" ) != NULL
+                  && strstr( ts_txt, "DTS = 0, CTS = 80" ) != NULL
+                  && strstr( ts_txt, "DTS = 40, CTS = 40" ) != NULL
+                  && strstr( ts_txt, "DTS = 200, CTS = 200" ) != NULL;
+        lsmash_free( box_txt );
+        lsmash_free( ts_txt );
+        TEST_ASSERT( box_ok && ts_ok,
+                     "Frag Negative-POC Part A: boxdumper --box and --timestamp format signed trun v1 offsets (-40) and ctd_shift (40) without unsigned wrap" );
+    }
+
+    /* Part B: Fragmented MP4 -> Non-Fragmented MP4 round-trip via lshmuxer, remuxer, and timelineeditor */
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_frag_from_unsh, f_defrag_lsh, CLI_DEV_NULL );
+    int rc_d1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1",
+              CLI_REMUXER, f_frag_from_unsh, f_defrag_rem, CLI_DEV_NULL );
+    int rc_d2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
+              CLI_TIMELINEEDITOR, f_frag_from_unsh, f_defrag_te_bare, CLI_DEV_NULL );
+    int rc_d3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
+              CLI_LSHMUXER, f_frag_from_unsh, f_defrag_lsh_pos, CLI_DEV_NULL );
+    int rc_d4 = system( cmd );
+
+    TEST_ASSERT( rc_d1 == 0 && rc_d2 == 0 && rc_d3 == 0 && rc_d4 == 0,
+                 "Frag Negative-POC Part B: all 4 defragmenting remux and bare re-edit passes succeeded" );
+
+    track_timeline_metrics_t mb2, md1, md2, md3, md4;
+    TEST_ASSERT( inspect_track_timeline_metrics( f_base_shifted,   1, &mb2 ) == 0
+              && inspect_track_timeline_metrics( f_defrag_lsh,     1, &md1 ) == 0
+              && inspect_track_timeline_metrics( f_defrag_rem,     1, &md2 ) == 0
+              && inspect_track_timeline_metrics( f_defrag_te_bare, 1, &md3 ) == 0
+              && inspect_track_timeline_metrics( f_defrag_lsh_pos, 1, &md4 ) == 0,
+                 "Frag Negative-POC Part B: inspect defragmented non-fragmented timeline metrics" );
+
+    const track_timeline_metrics_t *defrag_1000[2] = { &md1, &md2 };
+    for( int g = 0; g < 2; g++ )
+    {
+        TEST_ASSERT( defrag_1000[g]->mdhd_timescale      == 1000
+                  && defrag_1000[g]->mdhd_duration       == 320
+                  && defrag_1000[g]->tkhd_duration       == 320
+                  && defrag_1000[g]->stts_last_delta     == 40
+                  && defrag_1000[g]->d_comp              == 40
+                  && defrag_1000[g]->has_cslg            == 1
+                  && defrag_1000[g]->ctts_version        == 1
+                  && defrag_1000[g]->cslg_ctd_shift      == 40
+                  && defrag_1000[g]->cslg_least_delta    == -40
+                  && defrag_1000[g]->cslg_greatest_delta == 40
+                  && defrag_1000[g]->cslg_start_time     == 0
+                  && defrag_1000[g]->cslg_end_time       == 320
+                  && defrag_1000[g]->elst_count          == 1
+                  && defrag_1000[g]->elst_dur[0]         == 320
+                  && defrag_1000[g]->elst_mt[0]          == 0
+                  && memcmp( defrag_1000[g]->sample_dts, mb2.sample_dts, 8 * sizeof(uint64_t) ) == 0
+                  && memcmp( defrag_1000[g]->sample_cts, mb2.sample_cts, 8 * sizeof(uint64_t) ) == 0,
+                     "Frag Negative-POC Part B (1000 Hz defrag): mdhd, tkhd, stts, ctts v1, cslg, elst, and 8-sample DTS/CTS match with 0 ticks drift" );
+    }
+
+    const track_timeline_metrics_t *defrag_25[2] = { &md3, &md4 };
+    for( int g = 0; g < 2; g++ )
+    {
+        TEST_ASSERT( defrag_25[g]->mdhd_timescale      == 25
+                  && defrag_25[g]->mdhd_duration       == 8
+                  && defrag_25[g]->tkhd_duration       == 320
+                  && defrag_25[g]->stts_last_delta     == 1
+                  && defrag_25[g]->d_comp              == 1
+                  && defrag_25[g]->has_cslg            == 1
+                  && defrag_25[g]->ctts_version        == 1
+                  && defrag_25[g]->cslg_ctd_shift      == 1
+                  && defrag_25[g]->cslg_least_delta    == -1
+                  && defrag_25[g]->cslg_greatest_delta == 1
+                  && defrag_25[g]->cslg_start_time     == 0
+                  && defrag_25[g]->cslg_end_time       == 8
+                  && defrag_25[g]->elst_count          == 1
+                  && defrag_25[g]->elst_dur[0]         == 320
+                  && defrag_25[g]->elst_mt[0]          == 0
+                  && defrag_25[g]->sample_dts[1] == 1 && defrag_25[g]->sample_cts[1] == 0
+                  && defrag_25[g]->sample_dts[5] == 5 && defrag_25[g]->sample_cts[5] == 4,
+                     "Frag Negative-POC Part B (25 Hz bare re-edit): mdhd, tkhd, stts, ctts v1, cslg, elst, and 8-sample DTS/CTS match with 0 ticks drift" );
+    }
+
+    /* Part C: Fragmented MP4 -> VFR Timecode v2 re-edit into both Non-Fragmented and Fragmented MP4 */
+    snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+              CLI_TIMELINEEDITOR, f_tcv2_8, f_frag_from_unsh, f_vfr_te, CLI_DEV_NULL );
+    int rc_c1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_frag_from_unsh, f_tcv2_8, f_vfr_lsh, CLI_DEV_NULL );
+    int rc_c2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_frag_from_unsh, f_tcv2_8, f_vfr_frag, CLI_DEV_NULL );
+    int rc_c3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --fragment 1 --shift-timeline -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_unshifted, f_tcv2_8, f_vfr_frag_shift, CLI_DEV_NULL );
+    int rc_c4 = system( cmd );
+
+    TEST_ASSERT( rc_c1 == 0 && rc_c2 == 0 && rc_c3 == 0 && rc_c4 == 0,
+                 "Frag Negative-POC Part C: all 4 VFR timecode re-edits (non-fragmented and fragmented) succeeded" );
+
+    /* Expected VFR timestamps at 100 Hz (10ms timebase):
+     * timecode.ts = [0, 4, 9, 13, 17, 21, 26, 30], sample_delay = 1, sample_delay_time = 4, D_comp = 4, media_duration = 34
+     * Decoding order c(i) = [1, 0, 3, 2, 5, 4, 7, 6]:
+     *   DTS = [0, 4,  8, 13, 17, 21, 25, 30]
+     *   CTS = [4, 0, 13,  9, 21, 17, 30, 26]
+     *   offsets = [+4, -4, +5, -4, +4, -4, +5, -4] */
+    const uint64_t exp_vfr_dts[8] = { 0, 4,  8, 13, 17, 21, 25, 30 };
+    const uint64_t exp_vfr_cts[8] = { 4, 0, 13,  9, 21, 17, 30, 26 };
+
+    track_timeline_metrics_t mc1, mc2;
+    TEST_ASSERT( inspect_track_timeline_metrics( f_vfr_te,  1, &mc1 ) == 0
+              && inspect_track_timeline_metrics( f_vfr_lsh, 1, &mc2 ) == 0,
+                 "Frag Negative-POC Part C: inspect non-fragmented VFR outputs" );
+    const track_timeline_metrics_t *vfr_nonfrag[2] = { &mc1, &mc2 };
+    for( int g = 0; g < 2; g++ )
+    {
+        TEST_ASSERT( vfr_nonfrag[g]->mdhd_timescale      == 100
+                  && vfr_nonfrag[g]->mdhd_duration       == 34
+                  && vfr_nonfrag[g]->tkhd_duration       == 390
+                  && vfr_nonfrag[g]->stts_last_delta     == 4
+                  && vfr_nonfrag[g]->d_comp              == 4
+                  && vfr_nonfrag[g]->has_cslg            == 1
+                  && vfr_nonfrag[g]->ctts_version        == 1
+                  && vfr_nonfrag[g]->cslg_ctd_shift      == 4
+                  && vfr_nonfrag[g]->cslg_least_delta    == -4
+                  && vfr_nonfrag[g]->cslg_greatest_delta == 5
+                  && vfr_nonfrag[g]->cslg_start_time     == 0
+                  && vfr_nonfrag[g]->cslg_end_time       == 34
+                  && vfr_nonfrag[g]->elst_count          == 2
+                  && vfr_nonfrag[g]->elst_dur[0]         == 50
+                  && vfr_nonfrag[g]->elst_mt[0]          == ISOM_EDIT_MODE_EMPTY
+                  && vfr_nonfrag[g]->elst_dur[1]         == 340
+                  && vfr_nonfrag[g]->elst_mt[1]          == 0
+                  && memcmp( vfr_nonfrag[g]->sample_dts, exp_vfr_dts, sizeof(exp_vfr_dts) ) == 0
+                  && memcmp( vfr_nonfrag[g]->sample_cts, exp_vfr_cts, sizeof(exp_vfr_cts) ) == 0,
+                     "Frag Negative-POC Part C (non-fragmented VFR): mdhd, tkhd, stts, ctts v1, cslg, elst, and 8-sample VFR DTS/CTS match with 0 ticks drift" );
+    }
+
+    const char *vfr_frag_files[2] = { f_vfr_frag, f_vfr_frag_shift };
+    for( int g = 0; g < 2; g++ )
+    {
+        frag_track_metrics_t fmc;
+        TEST_ASSERT( inspect_fragmented_track_metrics( vfr_frag_files[g], 1, &fmc ) == 0,
+                     "Frag Negative-POC Part C: inspect fragmented VFR outputs" );
+        TEST_ASSERT( fmc.moof_count          == 2
+                  && fmc.trun_count          == 2
+                  && fmc.trun_version[0]     == 1
+                  && fmc.trun_version[1]     == 1
+                  && fmc.trun_min_offset[0]  == -4
+                  && fmc.trun_max_offset[0]  ==  5
+                  && fmc.trun_min_offset[1]  == -4
+                  && fmc.trun_max_offset[1]  ==  5
+                  && fmc.mdhd_timescale      == 100
+                  && fmc.media_duration      == 34
+                  && fmc.d_comp              == 4
+                  && fmc.ctd_shift           == 4
+                  && fmc.elst_count          == 2
+                  && fmc.elst_dur[0]         == 50
+                  && fmc.elst_mt[0]          == ISOM_EDIT_MODE_EMPTY
+                  && fmc.elst_dur[1]         == 0
+                  && fmc.elst_mt[1]          == 0
+                  && memcmp( fmc.sample_dts, exp_vfr_dts, sizeof(exp_vfr_dts) ) == 0
+                  && memcmp( fmc.sample_cts, exp_vfr_cts, sizeof(exp_vfr_cts) ) == 0,
+                     "Frag Negative-POC Part C (fragmented VFR): both moof #1 and moof #2 have trun v1 (-4/+5), ctd_shift=4, elst=[50/-1, 0/0], and exact VFR DTS/CTS" );
+    }
+
+    rc = 0;
+
+cleanup:
+    for( size_t i = 0; i < sizeof(all_files) / sizeof(all_files[0]); i++ )
+        remove( all_files[i] );
+    TEST_ASSERT( rc == 0, "Fragmented MP4 (moof/trun v1) Negative-POC dump, round-trip remux, and VFR re-edit verified" );
+    return 0;
+}
+
 static int assert_hybrid_vfr_last_duration( const char *f_in_v )
 {
     const char *f_tcv2_np1   = "test_cli_eq_tcv2_np1.txt";
@@ -2283,6 +2771,10 @@ int test_muxer_lshmuxer_cli_equivalence( void )
 
     /* Case 36: Negative-POC (leading picture where decode sample 1 has CTS < decode sample 0) --shift-timeline VFR re-edit & multi-generation remux */
     if( assert_negative_poc_shift_timeline_vfr_reedit( f_tcv2 ) < 0 )
+        goto cleanup;
+
+    /* Case 37: Fragmented MP4 (moof/trun v1) Negative-POC + --shift-timeline multi-fragment generation, boxdumper --timestamp, and round-trip remux/VFR re-edit */
+    if( assert_fragmented_negative_poc_trun_v1_roundtrip() < 0 )
         goto cleanup;
 
     rc = 0;
