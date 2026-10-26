@@ -1198,6 +1198,8 @@ typedef struct
     int32_t  cslg_greatest_delta;
     int32_t  cslg_start_time;
     int32_t  cslg_end_time;
+    uint64_t sample_dts[8];
+    uint64_t sample_cts[8];
 } track_timeline_metrics_t;
 
 static int inspect_track_timeline_metrics( const char *path, uint32_t track_number, track_timeline_metrics_t *m )
@@ -1265,6 +1267,11 @@ static int inspect_track_timeline_metrics( const char *path, uint32_t track_numb
         TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, i, &dts ) == 0, "get sample dts" );
         TEST_ASSERT( lsmash_get_cts_from_media_timeline( root, track_ID, i, &cts ) == 0, "get sample cts" );
         TEST_ASSERT( dts <= cts + ctd_shift, "DTS <= CTS + ctd_shift invariant holds for every sample" );
+        if( i <= 8 )
+        {
+            m->sample_dts[i - 1] = dts;
+            m->sample_cts[i - 1] = cts;
+        }
         if( cts < m->min_cts )
             m->min_cts = cts;
         if( cts > m->max_cts )
@@ -1421,6 +1428,283 @@ static int assert_shift_timeline_vfr_remux_idempotency( const char *raw_v, const
                   && gens[g]->cslg_end_time       == m0.cslg_end_time,
                      "--shift-timeline VFR ctts v1 and all 5 cslg fields match with 0 ticks drift" );
     }
+    return 0;
+}
+
+static int create_synth_negative_poc_mp4( const char *path, int shifted )
+{
+    remove( path );
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "neg_poc: create root" );
+    lsmash_file_parameters_t fp = { 0 };
+    TEST_ASSERT( lsmash_open_file( path, 0, &fp ) == 0, "neg_poc: open file" );
+    fp.major_brand   = ISOM_BRAND_TYPE_MP42;
+    fp.minor_version = 0;
+    lsmash_brand_type brands[4] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_AV01, ISOM_BRAND_TYPE_MP42 };
+    fp.brands        = brands;
+    fp.brand_count   = 4;
+    TEST_ASSERT( lsmash_set_file( root, &fp ) != NULL, "neg_poc: set file" );
+
+    lsmash_movie_parameters_t mp;
+    lsmash_initialize_movie_parameters( &mp );
+    mp.timescale = 1000;
+    TEST_ASSERT( lsmash_set_movie_parameters( root, &mp ) == 0, "neg_poc: set movie params" );
+
+    uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+    TEST_ASSERT( tid == 1, "neg_poc: create track" );
+    lsmash_track_parameters_t tp;
+    lsmash_initialize_track_parameters( &tp );
+    tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+    tp.display_width  = 16 << 16;
+    tp.display_height = 16 << 16;
+    TEST_ASSERT( lsmash_set_track_parameters( root, tid, &tp ) == 0, "neg_poc: set track params" );
+
+    lsmash_media_parameters_t mdp;
+    lsmash_initialize_media_parameters( &mdp );
+    mdp.timescale = 1000;
+    TEST_ASSERT( lsmash_set_media_parameters( root, tid, &mdp ) == 0, "neg_poc: set media params" );
+
+    lsmash_video_summary_t *summary = create_synth_av01_summary( 16, 16 );
+    TEST_ASSERT( summary != NULL, "neg_poc: create synth summary" );
+    uint32_t s_idx = lsmash_add_sample_entry( root, tid, summary );
+    lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    TEST_ASSERT( s_idx == 1, "neg_poc: add sample entry" );
+
+    /* 4 samples where decoding-order sample 0 (IDR, POC = 0, display index c(0) = 1) has a
+     * larger CTS than decoding-order sample 1 (negative POC picture, display index c(1) = 0):
+     * - Shifted   (ctts v1 + cslg, ctd_shift = 40): DTS = [0, 40, 80, 120], CTS = [40, 0, 120, 80]
+     * - Unshifted (ctts v0,        ctd_shift = 0):  DTS = [0, 40, 80, 120], CTS = [80, 40, 160, 120] */
+    const uint64_t dts_arr[4] = { 0, 40, 80, 120 };
+    const uint64_t cts_arr[4] = {
+        shifted ?  40 :  80,
+        shifted ?   0 :  40,
+        shifted ? 120 : 160,
+        shifted ?  80 : 120
+    };
+    for( int i = 0; i < 4; i++ )
+    {
+        lsmash_sample_t *sample = lsmash_create_sample( 4 );
+        memset( sample->data, 0, 4 );
+        sample->dts   = dts_arr[i];
+        sample->cts   = cts_arr[i];
+        sample->index = s_idx;
+        sample->prop.ra_flags = (i == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+        TEST_ASSERT( lsmash_append_sample( root, tid, sample ) == 0, "neg_poc: append sample" );
+    }
+    TEST_ASSERT( lsmash_flush_pooled_samples( root, tid, 40 ) == 0, "neg_poc: flush pooled samples" );
+    TEST_ASSERT( lsmash_update_track_duration( root, tid, 0 ) == 0, "neg_poc: update track duration" );
+
+    lsmash_edit_t edit;
+    edit.duration   = 160;
+    edit.start_time = shifted ? 0 : 40;
+    edit.rate       = ISOM_EDIT_MODE_NORMAL;
+    TEST_ASSERT( lsmash_create_explicit_timeline_map( root, tid, edit ) == 0, "neg_poc: create elst" );
+    TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "neg_poc: finish movie" );
+    lsmash_close_file( &fp );
+    lsmash_destroy_root( root );
+    return 0;
+}
+
+static int assert_negative_poc_shift_timeline_vfr_reedit( const char *tcv2_path )
+{
+    const char *f_base_shifted   = "test_cli_eq_negpoc_shifted.mp4";
+    const char *f_base_unshifted = "test_cli_eq_negpoc_unshifted.mp4";
+    const char *f_te_bare        = "test_cli_eq_negpoc_te_bare.mp4";
+    const char *f_lsh_pos        = "test_cli_eq_negpoc_lsh_pos.mp4";
+    const char *f_lsh_remux      = "test_cli_eq_negpoc_lsh_remux.mp4";
+    const char *f_lsh_shift      = "test_cli_eq_negpoc_lsh_shift.mp4";
+    const char *f_remuxer        = "test_cli_eq_negpoc_remuxer.mp4";
+    const char *f_unsh_to_shift  = "test_cli_eq_negpoc_unsh_to_shift.mp4";
+    const char *f_vfr_te         = "test_cli_eq_negpoc_vfr_te.mp4";
+    const char *f_vfr_lsh_pos    = "test_cli_eq_negpoc_vfr_lsh_pos.mp4";
+    const char *f_vfr_lsh_opt    = "test_cli_eq_negpoc_vfr_lsh_opt.mp4";
+    const char *f_vfr_lsh_shift  = "test_cli_eq_negpoc_vfr_lsh_shift.mp4";
+    const char *f_vfr_unsh_shift = "test_cli_eq_negpoc_vfr_unsh_shift.mp4";
+    const char *f_vfr_te_reedit  = "test_cli_eq_negpoc_vfr_te_reedit.mp4";
+    const char *f_vfr_lsh_from   = "test_cli_eq_negpoc_vfr_lsh_from.mp4";
+    const char *f_vfr_remux_from = "test_cli_eq_negpoc_vfr_remux_from.mp4";
+    const char *all_files[] = {
+        f_base_shifted, f_base_unshifted,
+        f_te_bare, f_lsh_pos, f_lsh_remux, f_lsh_shift, f_remuxer, f_unsh_to_shift,
+        f_vfr_te, f_vfr_lsh_pos, f_vfr_lsh_opt, f_vfr_lsh_shift, f_vfr_unsh_shift,
+        f_vfr_te_reedit, f_vfr_lsh_from, f_vfr_remux_from
+    };
+    char cmd[1024];
+    int rc = -1;
+
+    for( size_t i = 0; i < sizeof(all_files) / sizeof(all_files[0]); i++ )
+        remove( all_files[i] );
+
+    if( create_synth_negative_poc_mp4( f_base_shifted, 1 ) < 0
+     || create_synth_negative_poc_mp4( f_base_unshifted, 0 ) < 0 )
+        goto cleanup;
+
+    /* Part A: Re-edit and remux without a timecode file (preserving negative-POC CTS < timestamp[0].cts) */
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, f_base_shifted, f_te_bare, CLI_DEV_NULL );
+    int rc_a1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_pos, CLI_DEV_NULL );
+    int rc_a2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_remux, CLI_DEV_NULL );
+    int rc_a3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --shift-timeline -i %s -o %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_shift, CLI_DEV_NULL );
+    int rc_a4 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_REMUXER, f_base_shifted, f_remuxer, CLI_DEV_NULL );
+    int rc_a5 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --isom-version 6 --shift-timeline -i %s -o %s >%s 2>&1", CLI_LSHMUXER, f_base_unshifted, f_unsh_to_shift, CLI_DEV_NULL );
+    int rc_a6 = system( cmd );
+
+    TEST_ASSERT( rc_a1 == 0 && rc_a2 == 0 && rc_a3 == 0 && rc_a4 == 0 && rc_a5 == 0 && rc_a6 == 0,
+                 "Negative-POC Part A: all no-timecode re-edit and remux passes succeeded" );
+
+    track_timeline_metrics_t mb, ma1, ma2, ma3, ma4, ma5, ma6;
+    TEST_ASSERT( inspect_track_timeline_metrics( f_base_shifted,  1, &mb  ) == 0
+              && inspect_track_timeline_metrics( f_te_bare,       1, &ma1 ) == 0
+              && inspect_track_timeline_metrics( f_lsh_pos,       1, &ma2 ) == 0
+              && inspect_track_timeline_metrics( f_lsh_remux,     1, &ma3 ) == 0
+              && inspect_track_timeline_metrics( f_lsh_shift,     1, &ma4 ) == 0
+              && inspect_track_timeline_metrics( f_remuxer,       1, &ma5 ) == 0
+              && inspect_track_timeline_metrics( f_unsh_to_shift, 1, &ma6 ) == 0,
+                 "Negative-POC Part A: inspect timeline metrics" );
+
+    /* Verify 1000 Hz remuxes (ma3, ma4, ma5, ma6) match f_base_shifted (mb) with 0 ticks drift */
+    const track_timeline_metrics_t *remux_1000[4] = { &ma3, &ma4, &ma5, &ma6 };
+    for( int g = 0; g < 4; g++ )
+    {
+        TEST_ASSERT( remux_1000[g]->mdhd_timescale      == 1000
+                  && remux_1000[g]->mdhd_duration       == 160
+                  && remux_1000[g]->tkhd_duration       == 160
+                  && remux_1000[g]->stts_last_delta     == 40
+                  && remux_1000[g]->d_comp              == 40
+                  && remux_1000[g]->has_cslg            == 1
+                  && remux_1000[g]->ctts_version        == 1
+                  && remux_1000[g]->cslg_ctd_shift      == 40
+                  && remux_1000[g]->cslg_least_delta    == -40
+                  && remux_1000[g]->cslg_greatest_delta == 40
+                  && remux_1000[g]->cslg_start_time     == 0
+                  && remux_1000[g]->cslg_end_time       == 160
+                  && remux_1000[g]->elst_count          == 1
+                  && remux_1000[g]->elst_dur[0]         == 160
+                  && remux_1000[g]->elst_mt[0]          == 0
+                  && memcmp( remux_1000[g]->sample_dts, mb.sample_dts, 4 * sizeof(uint64_t) ) == 0
+                  && memcmp( remux_1000[g]->sample_cts, mb.sample_cts, 4 * sizeof(uint64_t) ) == 0
+                  && remux_1000[g]->sample_cts[1] == 0
+                  && remux_1000[g]->sample_cts[1] < remux_1000[g]->sample_cts[0],
+                     "Negative-POC Part A (1000 Hz remux): mdhd, tkhd, stts, ctts v1, cslg, elst, and per-sample DTS/CTS match with 0 ticks drift" );
+    }
+
+    /* Verify GCD-reduced 25 Hz bare re-edits (ma1: timelineeditor, ma2: lshmuxer positional) */
+    const track_timeline_metrics_t *reedit_25[2] = { &ma1, &ma2 };
+    for( int g = 0; g < 2; g++ )
+    {
+        TEST_ASSERT( reedit_25[g]->mdhd_timescale      == 25
+                  && reedit_25[g]->mdhd_duration       == 4
+                  && reedit_25[g]->tkhd_duration       == 160
+                  && reedit_25[g]->stts_last_delta     == 1
+                  && reedit_25[g]->d_comp              == 1
+                  && reedit_25[g]->has_cslg            == 1
+                  && reedit_25[g]->ctts_version        == 1
+                  && reedit_25[g]->cslg_ctd_shift      == 1
+                  && reedit_25[g]->cslg_least_delta    == -1
+                  && reedit_25[g]->cslg_greatest_delta == 1
+                  && reedit_25[g]->cslg_start_time     == 0
+                  && reedit_25[g]->cslg_end_time       == 4
+                  && reedit_25[g]->elst_count          == 1
+                  && reedit_25[g]->elst_dur[0]         == 160
+                  && reedit_25[g]->elst_mt[0]          == 0
+                  && reedit_25[g]->sample_dts[0] == 0 && reedit_25[g]->sample_dts[1] == 1
+                  && reedit_25[g]->sample_dts[2] == 2 && reedit_25[g]->sample_dts[3] == 3
+                  && reedit_25[g]->sample_cts[0] == 1 && reedit_25[g]->sample_cts[1] == 0
+                  && reedit_25[g]->sample_cts[2] == 3 && reedit_25[g]->sample_cts[3] == 2,
+                     "Negative-POC Part A (25 Hz bare re-edit): mdhd, tkhd, stts, ctts v1, cslg, elst, and per-sample DTS/CTS match with 0 ticks drift" );
+    }
+
+    /* Part B: Re-edit with VFR Timecode v2 (50ms, 90ms, 140ms, 180ms -> 100 Hz timescale)
+     * across timelineeditor, lshmuxer (positional, -i ?timecode=, --shift-timeline), and multi-generation re-edits */
+    snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+              CLI_TIMELINEEDITOR, tcv2_path, f_base_shifted, f_vfr_te, CLI_DEV_NULL );
+    int rc_b1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+              CLI_LSHMUXER, tcv2_path, f_base_shifted, f_vfr_lsh_pos, CLI_DEV_NULL );
+    int rc_b2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_shifted, tcv2_path, f_vfr_lsh_opt, CLI_DEV_NULL );
+    int rc_b3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --shift-timeline -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_shifted, tcv2_path, f_vfr_lsh_shift, CLI_DEV_NULL );
+    int rc_b4 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --isom-version 6 --shift-timeline -i %s?timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_unshifted, tcv2_path, f_vfr_unsh_shift, CLI_DEV_NULL );
+    int rc_b5 = system( cmd );
+    /* Multi-generation re-edit and remux on top of the VFR-edited container */
+    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
+              CLI_TIMELINEEDITOR, f_vfr_te, f_vfr_te_reedit, CLI_DEV_NULL );
+    int rc_b6 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_vfr_te, f_vfr_lsh_from, CLI_DEV_NULL );
+    int rc_b7 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1",
+              CLI_REMUXER, f_vfr_te, f_vfr_remux_from, CLI_DEV_NULL );
+    int rc_b8 = system( cmd );
+
+    TEST_ASSERT( rc_b1 == 0 && rc_b2 == 0 && rc_b3 == 0 && rc_b4 == 0
+              && rc_b5 == 0 && rc_b6 == 0 && rc_b7 == 0 && rc_b8 == 0,
+                 "Negative-POC Part B: all 8 VFR timecode re-edit and multi-generation remux passes succeeded without uint64_t underflow" );
+
+    track_timeline_metrics_t mv[8];
+    const char *vfr_files[8] = {
+        f_vfr_te, f_vfr_lsh_pos, f_vfr_lsh_opt, f_vfr_lsh_shift,
+        f_vfr_unsh_shift, f_vfr_te_reedit, f_vfr_lsh_from, f_vfr_remux_from
+    };
+    for( int g = 0; g < 8; g++ )
+    {
+        TEST_ASSERT( inspect_track_timeline_metrics( vfr_files[g], 1, &mv[g] ) == 0,
+                     "Negative-POC Part B: inspect VFR timeline metrics" );
+        /* Expected at 100 Hz (10ms timebase):
+         * timecode.ts = [0, 4, 9, 13], sample_delay = 1, sample_delay_time = 4, D_comp = 4, mdhd_duration = 17
+         * Decoding order c(i) = [1, 0, 3, 2]:
+         *   i = 0: DTS = 0,  CTS = 4  (ctts = +4)
+         *   i = 1: DTS = 4,  CTS = 0  (ctts = -4, earliest presentation CTS = 0 < timestamp[0].cts = 4)
+         *   i = 2: DTS = 8,  CTS = 13 (ctts = +5)
+         *   i = 3: DTS = 13, CTS = 9  (ctts = -4)
+         * cslg: ctd_shift = 4, least_delta = -4, greatest_delta = 5, start_time = 0, end_time = 17
+         * elst: [0] empty duration = 50, media_time = -1; [1] segment_duration = 170, media_time = 0
+         * tkhd_duration = 50 + 170 = 220 */
+        /* Note: g = 0..4 take the 1000 Hz base container as input and preserve movie_timescale = 1000 Hz
+         * (tkhd = 220, elst = [50, 170]), whereas g = 5..7 take f_vfr_te (100 Hz) as input and set
+         * movie_timescale = 100 Hz (tkhd = 22, elst = [5, 17]). */
+        uint64_t exp_tkhd  = (g >= 5) ?  22 : 220;
+        uint64_t exp_elst0 = (g >= 5) ?   5 :  50;
+        uint64_t exp_elst1 = (g >= 5) ?  17 : 170;
+        TEST_ASSERT( mv[g].mdhd_timescale      == 100
+                  && mv[g].mdhd_duration       == 17
+                  && mv[g].tkhd_duration       == exp_tkhd
+                  && mv[g].stts_last_delta     == 4
+                  && mv[g].d_comp              == 4
+                  && mv[g].has_cslg            == 1
+                  && mv[g].ctts_version        == 1
+                  && mv[g].cslg_ctd_shift      == 4
+                  && mv[g].cslg_least_delta    == -4
+                  && mv[g].cslg_greatest_delta == 5
+                  && mv[g].cslg_start_time     == 0
+                  && mv[g].cslg_end_time       == 17
+                  && mv[g].elst_count          == 2
+                  && mv[g].elst_dur[0]         == exp_elst0
+                  && mv[g].elst_mt[0]          == ISOM_EDIT_MODE_EMPTY
+                  && mv[g].elst_dur[1]         == exp_elst1
+                  && mv[g].elst_mt[1]          == 0
+                  && mv[g].sample_dts[0] == 0  && mv[g].sample_dts[1] == 4
+                  && mv[g].sample_dts[2] == 8  && mv[g].sample_dts[3] == 13
+                  && mv[g].sample_cts[0] == 4  && mv[g].sample_cts[1] == 0
+                  && mv[g].sample_cts[2] == 13 && mv[g].sample_cts[3] == 9,
+                     "Negative-POC Part B: VFR mdhd, tkhd, stts, ctts v1, cslg, elst, and per-sample DTS/CTS match with 0 ticks drift" );
+    }
+
+    rc = 0;
+
+cleanup:
+    for( size_t i = 0; i < sizeof(all_files) / sizeof(all_files[0]); i++ )
+        remove( all_files[i] );
+    TEST_ASSERT( rc == 0, "Negative-POC --shift-timeline VFR re-edit and multi-generation remux verified" );
     return 0;
 }
 
@@ -1995,6 +2279,10 @@ int test_muxer_lshmuxer_cli_equivalence( void )
 
     /* Case 35: --shift-timeline (ctts v1 + cslg) B-frame VFR container Remux & re-edit idempotency across remuxer, timelineeditor, and lshmuxer */
     if( assert_shift_timeline_vfr_remux_idempotency( f_h264_cfr, f_tcv2 ) < 0 )
+        goto cleanup;
+
+    /* Case 36: Negative-POC (leading picture where decode sample 1 has CTS < decode sample 0) --shift-timeline VFR re-edit & multi-generation remux */
+    if( assert_negative_poc_shift_timeline_vfr_reedit( f_tcv2 ) < 0 )
         goto cleanup;
 
     rc = 0;
