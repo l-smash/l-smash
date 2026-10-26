@@ -84,9 +84,12 @@ static int check_raw_audio_stream( const audio_stream_check_t *chk )
         for( uint32_t i = 0; i < exp->count; i++ )
         {
             lsmash_sample_t *sample = NULL;
-            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "20: reference access unit" );
+            int ret = lsmash_importer_get_access_unit( imp, 1, &sample );
+            TEST_ASSERT( ret >= 0 && sample != NULL, "20: reference access unit" );
             TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0
                       && sample->dts == exp->dts[i] && sample->cts == exp->dts[i], "20: reference access unit is the expected frame" );
+            TEST_ASSERT( (ret > 0) == (i > 0 && exp->index[i] != exp->index[i - 1]),
+                         "20: the importer reports the change of the summary at the right audio frame" );
             ref_prop[i] = sample->prop;
             lsmash_delete_sample( sample );
         }
@@ -189,9 +192,12 @@ static int check_raw_audio_stream( const audio_stream_check_t *chk )
         for( uint32_t i = before; i < exp->count; i++ )
         {
             lsmash_sample_t *sample = NULL;
-            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "20: access unit after timeline" );
+            int ret = lsmash_importer_get_access_unit( imp, 1, &sample );
+            TEST_ASSERT( ret >= 0 && sample != NULL, "20: access unit after timeline" );
             TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0
                       && sample->dts == exp->dts[i], "20: access unit continues from where it stopped" );
+            TEST_ASSERT( (ret > 0) == (i > 0 && exp->index[i] != exp->index[i - 1]),
+                         "20: change of the audio summary is still reported after the timeline" );
             lsmash_delete_sample( sample );
             if( i == before )
             {
@@ -421,14 +427,14 @@ int test_read_file_audio_raw_streams( void )
         memset( exp, 0, sizeof(*exp) );
         pos = 0;
         static const uint32_t indep_size[4] = { 128, 128, 160, 128 };
-        static const uint32_t dep_size[4]   = { 0, 64, 0, 0 };
+        static const uint32_t dep_size[4]   = { 0, 64, 0, 64 };
         for( int i = 0; i < 4; i++ )
         {
             uint8_t  au[AUDIO_EXPECT_MAX_LENGTH];
             uint32_t au_length = build_eac3_frame( au, 0, indep_size[i], (uint8_t)(0x30 + i) );
             if( dep_size[i] )
                 au_length += build_eac3_frame( au + au_length, 1, dep_size[i], (uint8_t)(0x40 + i) );
-            expect_add_sample( exp, au, au_length, (uint64_t)i * 1536, (i == 1) ? 2 : 1 );
+            expect_add_sample( exp, au, au_length, (uint64_t)i * 1536, (i == 1 || i == 3) ? 2 : 1 );
             append_bytes( stream, &pos, au, au_length );
         }
         TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20c: write e-ac-3" );
@@ -487,7 +493,9 @@ int test_read_file_audio_raw_streams( void )
         for( int i = 0; i < 4; i++ )
         {
             length = build_mp3_frame( frame, padding[i], 0, main_data_begin[i], (uint8_t)(0x61 + i) );
-            expect_add_sample( exp, frame, length, (uint64_t)i * 1152, 1 );
+            if( i == 3 )
+                frame[3] = 0xC0; /* mono on the final frame to exercise MP3 IMPORTER_CHANGE at EOF */
+            expect_add_sample( exp, frame, length, (uint64_t)i * 1152, i == 3 ? 2 : 1 );
             append_bytes( stream, &pos, frame, length );
         }
         uint8_t id3v1[128] = { 'T', 'A', 'G' };
@@ -495,8 +503,8 @@ int test_read_file_audio_raw_streams( void )
         TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20e: write mp3" );
         audio_stream_check_t chk =
         {
-            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO, .frequency = 44100, .channels = 2, .channels2 = 0,
-            .summary_count = 1, .media_duration = 4608, .last_delta = 1152
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO, .frequency = 44100, .channels = 2, .channels2 = 1,
+            .summary_count = 2, .media_duration = 4608, .last_delta = 1152
         };
         int ret = check_raw_audio_stream( &chk );
         remove( path );
@@ -905,7 +913,7 @@ static uint32_t build_hevc_vps( uint8_t *rbsp )
     return bw.pos / 8;
 }
 
-static uint32_t build_hevc_sps( uint8_t *rbsp )
+static uint32_t build_hevc_sps( uint8_t *rbsp, uint32_t width )
 {
     memset( rbsp, 0, 96 );
     test_bit_writer_t bw = { rbsp, 0 };
@@ -915,7 +923,7 @@ static uint32_t build_hevc_sps( uint8_t *rbsp )
     build_hevc_profile_tier_level( &bw );
     bw_put_ue( &bw, 0 );            /* sps_seq_parameter_set_id */
     bw_put_ue( &bw, 1 );            /* chroma_format_idc */
-    bw_put_ue( &bw, 64 );           /* pic_width_in_luma_samples */
+    bw_put_ue( &bw, width );        /* pic_width_in_luma_samples */
     bw_put_ue( &bw, 64 );           /* pic_height_in_luma_samples */
     bw_put( &bw, 1, 0 );            /* conformance_window_flag */
     bw_put_ue( &bw, 0 );            /* bit_depth_luma_minus8 */
@@ -1044,7 +1052,7 @@ static void build_hevc_au
 (
     video_builder_t *vb,
     uint32_t         index,
-    int              first,
+    uint32_t         width,
     uint8_t          nal_type,
     uint32_t         slice_type,
     uint32_t         poc_lsb,
@@ -1058,24 +1066,27 @@ static void build_hevc_au
     static const uint8_t aud_header[2]  = { 0x46, 0x01 };
     static const uint8_t aud_payload[1] = { 0x50 };     /* pic_cnt_type and the stop bit */
     vb_add_nal( vb, 1, aud_header, 2, aud_payload, 1, 0, 0 );
-    if( first )
+    if( width )
     {
         static const uint8_t vps_header[2] = { 0x40, 0x01 };
         static const uint8_t sps_header[2] = { 0x42, 0x01 };
         static const uint8_t pps_header[2] = { 0x44, 0x01 };
         length = build_hevc_vps( rbsp );
         vb_add_nal( vb, 1, vps_header, 2, rbsp, length, 0, 0 );
-        length = build_hevc_sps( rbsp );
+        length = build_hevc_sps( rbsp, width );
         vb_add_nal( vb, 1, sps_header, 2, rbsp, length, 0, 0 );
         length = build_hevc_pps( rbsp );
         vb_add_nal( vb, 1, pps_header, 2, rbsp, length, 0, 0 );
-        /* The mastering display colour volume goes into the configuration record, the other SEI stays in the sample. */
-        static const uint8_t mastering_display[24] =
+        if( index == 1 )
         {
-            0x34, 0xC2, 0x86, 0x20, 0x1D, 0x4C, 0x0F, 0xA0, 0x42, 0x68, 0x3D, 0x13,
-            0x3D, 0x13, 0x40, 0x42, 0x00, 0x98, 0x96, 0x80, 0x00, 0x00, 0x00, 0x32
-        };
-        build_hevc_sei( vb, 0, 137, mastering_display, sizeof(mastering_display), 0 );
+            /* The mastering display colour volume goes into the configuration record, the other SEI stays in the sample. */
+            static const uint8_t mastering_display[24] =
+            {
+                0x34, 0xC2, 0x86, 0x20, 0x1D, 0x4C, 0x0F, 0xA0, 0x42, 0x68, 0x3D, 0x13,
+                0x3D, 0x13, 0x40, 0x42, 0x00, 0x98, 0x96, 0x80, 0x00, 0x00, 0x00, 0x32
+            };
+            build_hevc_sei( vb, 0, 137, mastering_display, sizeof(mastering_display), 0 );
+        }
         static const uint8_t user_data[6] = { 0x4C, 0x53, 0x4D, 0x41, 0x53, 0x48 };
         build_hevc_sei( vb, 0, 5, user_data, sizeof(user_data), 1 );
     }
@@ -1375,15 +1386,15 @@ int test_read_file_video_raw_streams( void )
     {
         const char *path = "tests/tmp_test_fake_box.h264";
         vb_put_zero( vb, 1 );   /* a leading zero byte in front of the first start code */
-        /* decoding order: I0 P3 B1 B2 P6 B4 B5, then another sequence with another picture size: I0 P1 */
+        /* decoding order: I0 P3 B1 B2 P6 B4 B5, then P1, and finally an IDR with a new SPS on the last AU */
         static const struct { int idr; uint32_t type; uint32_t frame_num; uint32_t poc; uint32_t zeros; } au[9] =
         {
             { 1, 7, 0,  0, 2 }, { 0, 5, 1,  6, 0 }, { 0, 6, 2,  2, 0 }, { 0, 6, 2,  4, 3 }, { 0, 5, 2, 12, 0 },
-            { 0, 6, 3,  8, 0 }, { 0, 6, 3, 10, 0 }, { 1, 7, 0,  0, 0 }, { 0, 5, 1,  2, 0 }
+            { 0, 6, 3,  8, 0 }, { 0, 6, 3, 10, 0 }, { 0, 5, 3, 14, 0 }, { 1, 7, 0,  0, 0 }
         };
         for( int i = 0; i < 9; i++ )
-            build_h264_au( vb, i < 7 ? 1 : 2, 1, i == 0 ? 4 : i == 7 ? 5 : 0, au[i].idr, au[i].type, au[i].frame_num,
-                           i < 7 ? 0 : 1, au[i].poc, (uint8_t)(0x31 + i), au[i].zeros );
+            build_h264_au( vb, i < 8 ? 1 : 2, 1, i == 0 ? 4 : i == 8 ? 5 : 0, au[i].idr, au[i].type, au[i].frame_num,
+                           i < 8 ? 0 : 1, au[i].poc, (uint8_t)(0x31 + i), au[i].zeros );
         TEST_ASSERT( vb->exp.pos[0] == 1, "21a: the first access unit starts at the start code" );
         TEST_ASSERT( write_test_file( path, vb->stream, vb->size ) == 0, "21a: write h264" );
         video_stream_check_t chk =
@@ -1401,21 +1412,21 @@ int test_read_file_video_raw_streams( void )
         memset( vb, 0, sizeof(*vb) );
     }
 
-    /*---- HEVC: VPS, SPS and PPS, mastering display SEI that goes to the configuration record, prefix and suffix SEI, filler data ----*/
+    /*---- HEVC: VPS, SPS and PPS, mastering display SEI that goes to the configuration record, prefix and suffix SEI, filler data, and SPS change on last AU ----*/
     {
         const char *path = "tests/tmp_test_fake_box.hevc";
-        /* decoding order: IDR0 P3 B1 B2 P6 B4 B5 */
-        static const struct { uint8_t nal_type; uint32_t slice_type; uint32_t poc; uint32_t zeros; } au[7] =
+        /* decoding order: IDR0 P3 B1 B2 P6 B4 B5, then IDR0 with new SPS on the last AU */
+        static const struct { uint8_t nal_type; uint32_t slice_type; uint32_t poc; uint32_t zeros; } au[8] =
         {
-            { 19, 2, 0, 2 }, { 1, 1, 3, 0 }, { 0, 0, 1, 0 }, { 0, 0, 2, 3 }, { 1, 1, 6, 0 }, { 0, 0, 4, 0 }, { 0, 0, 5, 0 }
+            { 19, 2, 0, 2 }, { 1, 1, 3, 0 }, { 0, 0, 1, 0 }, { 0, 0, 2, 3 }, { 1, 1, 6, 0 }, { 0, 0, 4, 0 }, { 0, 0, 5, 0 }, { 19, 2, 0, 0 }
         };
-        for( int i = 0; i < 7; i++ )
-            build_hevc_au( vb, 1, i == 0, au[i].nal_type, au[i].slice_type, au[i].poc, (uint8_t)(0x41 + i), au[i].zeros );
+        for( int i = 0; i < 8; i++ )
+            build_hevc_au( vb, i < 7 ? 1 : 2, i == 0 ? 64 : i == 7 ? 80 : 0, au[i].nal_type, au[i].slice_type, au[i].poc, (uint8_t)(0x41 + i), au[i].zeros );
         TEST_ASSERT( write_test_file( path, vb->stream, vb->size ) == 0, "21b: write hevc" );
         video_stream_check_t chk =
         {
             .path = path, .exp = &vb->exp, .sample_type = ISOM_CODEC_TYPE_HVC1_VIDEO, .timescale = 30000, .timebase = 1001, .last_delta = 1,
-            .summary_count = 1, .width = 64, .height = 64, .width2 = 0, .reordering = 1
+            .summary_count = 2, .width = 64, .height = 64, .width2 = 80, .reordering = 1
         };
         int ret = check_raw_video_stream( &chk );
         remove( path );

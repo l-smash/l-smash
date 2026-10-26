@@ -391,31 +391,31 @@ static int mp3_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     if( ret == 0 )
     {
         importer->status = IMPORTER_EOF;
-        return 0;
+        return current_status;
     }
     if( ret >= 2 && (!memcmp( buf, "TA", 2 ) || !memcmp( buf, "AP", 2 )) )
     {
         /* ID3v1 or APE tag */
         importer->status = IMPORTER_EOF;
-        return 0;
+        return current_status;
     }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
         importer->status = IMPORTER_EOF;
-        return 0;
+        return current_status;
     }
     if( ret != MP4SYS_MP3_HEADER_LENGTH )
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
 
     mp4sys_mp3_header_t new_header = { 0 };
     if( mp3_imp_parse_header( buf, &new_header ) < 0 )
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
     memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
 
@@ -424,7 +424,7 @@ static int mp3_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
      || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
 
     /* currently supported "change(s)". */
@@ -436,7 +436,7 @@ static int mp3_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
 
     if( vbr_header_present )
         return mp3_imp_get_accessunit( importer, track_number, &sample );
-    return 0;
+    return current_status;
 }
 
 static int mp3_imp_probe( importer_t *importer )

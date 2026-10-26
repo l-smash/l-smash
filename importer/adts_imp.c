@@ -358,14 +358,14 @@ static int adts_imp_get_accessunit
      && lsmash_bs_get_bytes_ex( bs, 2, sample->data ) != 2 )
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
     /* current adts_frame() has any more raw_data_block()? */
     if( adts_imp->raw_data_block_idx < adts_imp->variable_header.number_of_raw_data_blocks_in_frame )
     {
         adts_imp->raw_data_block_idx++;
         importer->status = IMPORTER_OK;
-        return 0;
+        return current_status;
     }
     adts_imp->raw_data_block_idx = 0;
 
@@ -376,12 +376,12 @@ static int adts_imp_get_accessunit
     if( ret == 0 )
     {
         importer->status = IMPORTER_EOF;
-        return 0;
+        return current_status;
     }
     if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
     /*
      * NOTE: About the spec of ADTS headers.
@@ -408,7 +408,7 @@ static int adts_imp_get_accessunit
     if( adts_imp_parse_headers( bs, buf, &header, &variable_header ) < 0 )
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
     adts_imp->variable_header = variable_header;
     /*
@@ -428,7 +428,7 @@ static int adts_imp_get_accessunit
      || adts_imp->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
         importer->status = IMPORTER_ERROR;
-        return 0;
+        return current_status;
     }
     /* currently supported "change(s)". */
     if( adts_imp->header.channel_configuration != header.channel_configuration )
@@ -449,11 +449,11 @@ static int adts_imp_get_accessunit
          */
         adts_imp->header = header;
         importer->status = IMPORTER_CHANGE;
-        return 0;
+        return current_status;
     }
     /* no change which matters to mp4 muxing was found */
     importer->status = IMPORTER_OK;
-    return 0;
+    return current_status;
 }
 
 /* returns 0 if it seems adts. */

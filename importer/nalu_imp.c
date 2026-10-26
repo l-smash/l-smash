@@ -603,7 +603,6 @@ static int nalu_imp_h264_get_accessunit
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    nalu_imp_h264_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->avcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -622,8 +621,11 @@ static int nalu_imp_h264_get_accessunit
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
-        importer->status = IMPORTER_OK;
+        summary->sample_per_field = h264_imp->field_pic_present;
+        if( !info->avcC_pending )
+            importer->status = IMPORTER_OK;
     }
+    nalu_imp_h264_check_eof( importer, &info->au );
     lsmash_sample_t *sample = lsmash_create_sample( h264_imp->max_au_length );
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -1541,7 +1543,6 @@ static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_nu
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    nalu_imp_hevc_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->hvcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -1551,6 +1552,8 @@ static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_nu
         if( !cs )
             return LSMASH_ERR_NAMELESS;
         lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
+        if( info->sei.hdr10p_present )
+            hvcC_param->has_hdr10p = 1;
         lsmash_video_summary_t *summary = nalu_imp_hevc_create_summary( hvcC_param, &info->sps, hevc_imp->max_au_length );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
@@ -1560,8 +1563,11 @@ static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_nu
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
-        importer->status = IMPORTER_OK;
+        summary->sample_per_field = hevc_imp->field_pic_present;
+        if( !info->hvcC_pending )
+            importer->status = IMPORTER_OK;
     }
+    nalu_imp_hevc_check_eof( importer, &info->au );
     lsmash_sample_t *sample = lsmash_create_sample( hevc_imp->max_au_length );
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;

@@ -429,8 +429,7 @@ static int a52_imp_eac3_get_next_accessunit_internal( importer_t *importer )
                 }
                 return 0;
             }
-            if( !info->dec3_param_initialized )
-                lsm_a52_update_eac3_specific_param( info );
+            lsm_a52_update_eac3_specific_param( info );
         }
         else
         {
@@ -559,10 +558,11 @@ static int a52_imp_eac3_get_accessunit( importer_t *importer, uint32_t track_num
     sample->cts                    = sample->dts;
     sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     sample->prop.pre_roll.distance = 1; /* MDCT */
-    if( importer->status == IMPORTER_EOF )
+    if( importer->status == IMPORTER_EOF || eac3_imp->incomplete_au_length == 0 )
     {
+        importer->status    = IMPORTER_EOF;
         eac3_imp->au_length = 0;
-        return 0;
+        return current_status == IMPORTER_CHANGE ? IMPORTER_CHANGE : 0;
     }
     uint32_t old_syncframe_count_in_au = eac3_imp->syncframe_count_in_au;
     if( a52_imp_eac3_get_next_accessunit_internal( importer ) < 0 )
