@@ -359,6 +359,74 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void )
             append_bytes( hevc_no_vps, &hevc_no_vps_len, sps_nal, sps_nal_len );
             append_bytes( hevc_no_vps, &hevc_no_vps_len, hevc_no_sps, hevc_no_sps_len );
         }
+        /* VC-1 and IVF (AV1) 0-sample / truncated header negative streams:
+         * 1) VC-1 Sequence Header (0x0F) + Entry Point (0x0E) without any Frame EBDU (0x0D)
+         * 2) VC-1 truncated Sequence Header
+         * 3) IVF 32-byte global header + 12-byte frame header + Sequence Header OBU without Frame OBU (0 output sample bytes)
+         * 4) IVF 32-byte global header + 12-byte frame header with truncated frame payload */
+        uint8_t  vc1_seq_ep_no_frame[64] = { 0 };
+        uint32_t vc1_seq_ep_no_frame_len = 0;
+        uint8_t  vc1_truncated_hdr[8]    = { 0x00, 0x00, 0x01, 0x0F, 0xDF };
+        uint8_t  ivf_seq_no_frame[128]   = { 0 };
+        uint32_t ivf_seq_no_frame_len    = 0;
+        uint8_t  ivf_truncated_frame[64] = { 0 };
+        uint32_t ivf_truncated_frame_len = 0;
+        {
+            static const uint8_t vc1_seq_sc[4] = { 0x00, 0x00, 0x01, 0x0F };
+            static const uint8_t vc1_ep_sc[4]  = { 0x00, 0x00, 0x01, 0x0E };
+            uint8_t seq_rbdu[16] = { 0 };
+            test_bit_writer_t bw = { seq_rbdu, 0 };
+            bw_put( &bw, 2, 3 );        /* profile = 3 (Advanced) */
+            bw_put( &bw, 3, 2 );        /* level = 2 */
+            bw_put( &bw, 2, 1 );        /* colordiff_format = 1 */
+            bw_put( &bw, 9, 0x1FF );    /* frmrtq_postproc, bitrtq_postproc, postproc_flag (non-zero to avoid 0x0000) */
+            bw_put( &bw, 12, 0x11F );   /* max_coded_width */
+            bw_put( &bw, 12, 0x11F );   /* max_coded_height */
+            bw_put( &bw, 6, 0x01 );     /* pulldown..psf */
+            bw_put( &bw, 1, 0 );        /* display_ext = 0 */
+            bw_put_trailing( &bw );
+            append_bytes( vc1_seq_ep_no_frame, &vc1_seq_ep_no_frame_len, vc1_seq_sc, 4 );
+            append_bytes( vc1_seq_ep_no_frame, &vc1_seq_ep_no_frame_len, seq_rbdu, bw.pos >> 3 );
+
+            uint8_t ep_rbdu[8] = { 0 };
+            bw = (test_bit_writer_t){ ep_rbdu, 0 };
+            bw_put( &bw, 1, 0 );        /* broken_link_flag = 0 */
+            bw_put( &bw, 1, 1 );        /* closed_entry_point = 1 */
+            bw_put( &bw, 4, 0 );        /* panscan..fastuvmc */
+            bw_put( &bw, 1, 0 );        /* extended_mv = 0 */
+            bw_put( &bw, 6, 1 );        /* dquant..quantizer */
+            bw_put( &bw, 1, 0 );        /* coded_size_flag = 0 */
+            bw_put( &bw, 1, 0 );        /* range_mapy_flag = 0 */
+            bw_put( &bw, 1, 0 );        /* range_mapuv_flag = 0 */
+            bw_put_trailing( &bw );
+            append_bytes( vc1_seq_ep_no_frame, &vc1_seq_ep_no_frame_len, vc1_ep_sc, 4 );
+            append_bytes( vc1_seq_ep_no_frame, &vc1_seq_ep_no_frame_len, ep_rbdu, bw.pos >> 3 );
+
+            synth_seq_cfg_t seq_cfg =
+            {
+                .seq_profile = 0, .seq_level_idx_0 = 4, .width = 64, .height = 64,
+                .subsampling_x = 1, .subsampling_y = 1, .enable_order_hint = 1, .order_hint_bits_minus_1 = 6,
+            };
+            uint8_t sh_obu[64] = { 0 };
+            uint32_t sh_len = build_seq_hdr_obu( sh_obu, &seq_cfg );
+            memcpy( ivf_seq_no_frame, "DKIF", 4 );
+            put_le16( ivf_seq_no_frame + 6, 32 );
+            memcpy( ivf_seq_no_frame + 8, "AV01", 4 );
+            put_le16( ivf_seq_no_frame + 12, 64 );
+            put_le16( ivf_seq_no_frame + 14, 64 );
+            put_le32( ivf_seq_no_frame + 16, 30 );
+            put_le32( ivf_seq_no_frame + 20, 1 );
+            put_le32( ivf_seq_no_frame + 24, 1 );
+            put_le32( ivf_seq_no_frame + 32, sh_len );
+            put_le64( ivf_seq_no_frame + 36, 0 );
+            memcpy( ivf_seq_no_frame + 44, sh_obu, sh_len );
+            ivf_seq_no_frame_len = 44 + sh_len;
+
+            memcpy( ivf_truncated_frame, ivf_seq_no_frame, 44 );
+            put_le32( ivf_truncated_frame + 32, 200 ); /* Claims 200-byte frame payload, but only 8 bytes follow */
+            memcpy( ivf_truncated_frame + 44, sh_obu, 8 );
+            ivf_truncated_frame_len = 44 + 8;
+        }
         struct
         {
             const char    *label;
@@ -377,6 +445,10 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void )
             { "18c: HEVC stream missing SPS is rejected safely",        hevc_no_sps,         hevc_no_sps_len          },
             { "18c: HEVC stream with corrupted SPS is rejected",        hevc_corrupt_sps,    hevc_corrupt_sps_len     },
             { "18c: HEVC stream missing VPS is rejected without UAF",   hevc_no_vps,         hevc_no_vps_len          },
+            { "18c: VC-1 SeqHdr + EntryPoint without Frame is rejected",vc1_seq_ep_no_frame, vc1_seq_ep_no_frame_len  },
+            { "18c: VC-1 truncated Sequence Header is rejected",        vc1_truncated_hdr,   sizeof(vc1_truncated_hdr)},
+            { "18c: IVF Sequence Header OBU without Frame is rejected", ivf_seq_no_frame,    ivf_seq_no_frame_len     },
+            { "18c: IVF truncated frame payload is rejected",           ivf_truncated_frame, ivf_truncated_frame_len  },
         };
         for( size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++ )
         {

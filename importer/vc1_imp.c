@@ -151,7 +151,8 @@ static int vc1_imp_get_access_unit_internal( importer_t *importer, int probe )
             /* For the last EBDU.
              * This EBDU already has been appended into the latest access unit and parsed. */
             /* The importer is at the end of the stream, which is the end of the last access unit. */
-            vc1_imp_complete_au( vc1_imp, probe, lsmash_bs_get_stream_pos( bs ) );
+            if( !vc1_imp_complete_au( vc1_imp, probe, lsmash_bs_get_stream_pos( bs ) ) )
+                return vc1_imp_get_au_internal_failed( vc1_imp, complete_au, LSMASH_ERR_INVALID_DATA );
             return vc1_imp_get_au_internal_succeeded( vc1_imp );
         }
         else if( bdu_type == 0xFF )
@@ -271,7 +272,8 @@ static int vc1_imp_get_access_unit_internal( importer_t *importer, int probe )
         /* If there is no more data in the stream, and flushed chunk of EBDUs, flush it as complete AU here. */
         else if( access_unit->incomplete_data_length && access_unit->data_length == 0 )
         {
-            vc1_imp_complete_au( vc1_imp, probe, next_ebdu_head_pos );
+            if( !vc1_imp_complete_au( vc1_imp, probe, next_ebdu_head_pos ) )
+                return vc1_imp_get_au_internal_failed( vc1_imp, complete_au, LSMASH_ERR_INVALID_DATA );
             return vc1_imp_get_au_internal_succeeded( vc1_imp );
         }
         if( complete_au )
@@ -405,6 +407,11 @@ static int vc1_imp_analyze_whole_stream
 #endif
         if( (err = vc1_imp_get_access_unit_internal( importer, 1 )) < 0 )
             goto fail;
+        if( info->access_unit.data_length == 0 )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
         vc1_imp_check_eof( importer, &info->access_unit );
         /* In the case where B-pictures exist
          * Decode order

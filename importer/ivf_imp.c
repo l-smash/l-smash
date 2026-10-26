@@ -165,11 +165,11 @@ static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
                                        &prop,
                                        &ivf_imp->av1c_param );
     lsmash_free( packetbuf );
-    if( err < 0 )
+    if( err < 0 || samplesize == 0 )
     {
         lsmash_free( samplebuf );
         importer->status = IMPORTER_ERROR;
-        return err;
+        return err < 0 ? err : LSMASH_ERR_INVALID_DATA;
     }
     uint32_t max_render_width  = ivf_imp->parser.MaxRenderWidth;
     uint32_t max_render_height = ivf_imp->parser.MaxRenderHeight;
@@ -373,17 +373,18 @@ static int ivf_imp_probe( importer_t *importer )
     }
     for( uint32_t i = 0; i < au_length; i++ )
         probe_buf[i] = lsmash_bs_show_byte( bs, 12 + i );
+    uint32_t probe_samplesize = 0;
     err = lsm_av1_parse_temporal_unit( &ivf_imp->parser,
                                        probe_buf,
                                        au_length,
                                        NULL,
-                                       NULL,
+                                       &probe_samplesize,
                                        NULL,
                                        &ivf_imp->av1c_param );
     lsmash_free( probe_buf );
     if( err < 0 )
         goto fail;
-    if( !ivf_imp->parser.seen_seq_header || !ivf_imp->parser.MaxRenderWidth )
+    if( !ivf_imp->parser.seen_seq_header || !ivf_imp->parser.MaxRenderWidth || probe_samplesize == 0 )
     {
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
