@@ -914,6 +914,8 @@ static int assert_timelineeditor_3way_equivalent
     const char *out_path
 )
 {
+    const char *te_mp4_path   = "test_cli_eq_te_out.mp4";
+    const char *lshp_mp4_path = "test_cli_eq_lshp_out.mp4";
     const char *te_box_path   = "test_cli_eq_te_box.txt";
     const char *lshp_box_path = "test_cli_eq_lshp_box.txt";
     const char *lsht_box_path = "test_cli_eq_lsht_box.txt";
@@ -929,7 +931,7 @@ static int assert_timelineeditor_3way_equivalent
     int rc_te = -1, rc_lshp = -1, rc_lsht = 0;
     int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1, rc_bd5 = 0, rc_bd6 = 0;
 
-    for( int attempt = 0; attempt < 3; attempt++ )
+    for( int attempt = 0; attempt < 5; attempt++ )
     {
         lsmash_freep( &te_box );
         lsmash_freep( &lshp_box );
@@ -938,42 +940,51 @@ static int assert_timelineeditor_3way_equivalent
         lsmash_freep( &lshp_ts );
         lsmash_freep( &lsht_ts );
 
+        remove( te_mp4_path );
+        remove( lshp_mp4_path );
+        remove( out_path );
+
         time_t t0 = time( NULL );
 
         /* 1. cli/timelineeditor [options] input output */
-        remove( out_path );
         snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
-                  CLI_TIMELINEEDITOR, pos_opts ? pos_opts : "", in_path, out_path, CLI_DEV_NULL );
+                  CLI_TIMELINEEDITOR, pos_opts ? pos_opts : "", in_path, te_mp4_path, CLI_DEV_NULL );
         rc_te = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, te_box_path, CLI_DEV_NULL );
-        rc_bd1 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, te_ts_path, CLI_DEV_NULL );
-        rc_bd2 = system( cmd );
 
         /* 2. cli/lshmuxer [options] input output (positional mode) */
-        remove( out_path );
         snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
-                  CLI_LSHMUXER, pos_opts ? pos_opts : "", in_path, out_path, CLI_DEV_NULL );
+                  CLI_LSHMUXER, pos_opts ? pos_opts : "", in_path, lshp_mp4_path, CLI_DEV_NULL );
         rc_lshp = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lshp_box_path, CLI_DEV_NULL );
-        rc_bd3 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lshp_ts_path, CLI_DEV_NULL );
-        rc_bd4 = system( cmd );
 
         /* 3. cli/lshmuxer -i input?track_opts -o output (track-option mode) */
         if( track_opts )
         {
-            remove( out_path );
             snprintf( cmd, sizeof(cmd), "%s -i %s?%s -o %s >%s 2>&1",
                       CLI_LSHMUXER, in_path, track_opts, out_path, CLI_DEV_NULL );
             rc_lsht = system( cmd );
+        }
+
+        time_t t1 = time( NULL );
+        if( t0 != t1 && attempt < 4 )
+            continue;
+
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_box_path, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_ts_path, CLI_DEV_NULL );
+        rc_bd2 = system( cmd );
+
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_box_path, CLI_DEV_NULL );
+        rc_bd3 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_ts_path, CLI_DEV_NULL );
+        rc_bd4 = system( cmd );
+
+        if( track_opts )
+        {
             snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_box_path, CLI_DEV_NULL );
             rc_bd5 = system( cmd );
             snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_ts_path, CLI_DEV_NULL );
             rc_bd6 = system( cmd );
         }
-
-        time_t t1 = time( NULL );
 
         te_box   = read_text_file( te_box_path,   &te_box_len );
         lshp_box = read_text_file( lshp_box_path, &lshp_box_len );
@@ -991,6 +1002,8 @@ static int assert_timelineeditor_3way_equivalent
             break;
     }
 
+    remove( te_mp4_path );
+    remove( lshp_mp4_path );
     remove( out_path );
     remove( te_box_path );
     remove( lshp_box_path );
@@ -1062,6 +1075,7 @@ static int assert_pipeline_vs_1pass_equivalent
 {
     const char *s1_mp4       = "test_cli_eq_pipe_s1.mp4";
     const char *s2_mp4       = "test_cli_eq_pipe_s2.mp4";
+    const char *pipe_mp4     = "test_cli_eq_pipe_out.mp4";
     const char *pipe_box_p   = "test_cli_eq_pipe_box.txt";
     const char *lsh_box_p    = "test_cli_eq_1pass_box.txt";
     const char *pipe_ts_p    = "test_cli_eq_pipe_ts.txt";
@@ -1074,18 +1088,19 @@ static int assert_pipeline_vs_1pass_equivalent
     int rc_m1 = -1, rc_te = -1, rc_rem = 0, rc_lsh = -1;
     int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1;
 
-    for( int attempt = 0; attempt < 3; attempt++ )
+    for( int attempt = 0; attempt < 5; attempt++ )
     {
         lsmash_freep( &pipe_box );
         lsmash_freep( &lsh_box );
         lsmash_freep( &pipe_ts );
         lsmash_freep( &lsh_ts );
 
-        time_t t0 = time( NULL );
-
         remove( s1_mp4 );
         remove( s2_mp4 );
+        remove( pipe_mp4 );
         remove( out_path );
+
+        time_t t0 = time( NULL );
 
         snprintf( cmd, sizeof(cmd), "%s -i %s -i %s -o %s >%s 2>&1", CLI_MUXER, raw_v, raw_a, s1_mp4, CLI_DEV_NULL );
         rc_m1 = system( cmd );
@@ -1094,29 +1109,32 @@ static int assert_pipeline_vs_1pass_equivalent
             snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, s2_mp4, CLI_DEV_NULL );
             rc_te = system( cmd );
             snprintf( cmd, sizeof(cmd), "%s %s -i %s -o %s >%s 2>&1",
-                      CLI_REMUXER, remux_opts, s2_mp4, out_path, CLI_DEV_NULL );
+                      CLI_REMUXER, remux_opts, s2_mp4, pipe_mp4, CLI_DEV_NULL );
             rc_rem = system( cmd );
         }
         else
         {
-            snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, out_path, CLI_DEV_NULL );
+            snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, pipe_mp4, CLI_DEV_NULL );
             rc_te  = system( cmd );
             rc_rem = 0;
         }
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, pipe_box_p, CLI_DEV_NULL );
-        rc_bd1 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, pipe_ts_p, CLI_DEV_NULL );
-        rc_bd2 = system( cmd );
 
-        remove( out_path );
         snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, lsh_1pass_args, out_path, CLI_DEV_NULL );
         rc_lsh = system( cmd );
+
+        time_t t1 = time( NULL );
+        if( t0 != t1 && attempt < 4 )
+            continue;
+
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, pipe_mp4, pipe_box_p, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, pipe_mp4, pipe_ts_p, CLI_DEV_NULL );
+        rc_bd2 = system( cmd );
+
         snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_box_p, CLI_DEV_NULL );
         rc_bd3 = system( cmd );
         snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_ts_p, CLI_DEV_NULL );
         rc_bd4 = system( cmd );
-
-        time_t t1 = time( NULL );
 
         pipe_box = read_text_file( pipe_box_p, &pipe_box_len );
         lsh_box  = read_text_file( lsh_box_p,  &lsh_box_len );
@@ -1129,6 +1147,7 @@ static int assert_pipeline_vs_1pass_equivalent
 
     remove( s1_mp4 );
     remove( s2_mp4 );
+    remove( pipe_mp4 );
     remove( out_path );
     remove( pipe_box_p );
     remove( lsh_box_p );
@@ -1155,6 +1174,351 @@ static int assert_pipeline_vs_1pass_equivalent
     TEST_ASSERT( rc_bd1 == 0 && rc_bd2 == 0 && rc_bd3 == 0 && rc_bd4 == 0, "cli/boxdumper succeeded" );
     TEST_ASSERT( box_match, "boxdumper --box is 100% identical between multi-stage pipeline and 1-pass lshmuxer" );
     TEST_ASSERT( ts_match,  "boxdumper --timestamp is 100% identical between multi-stage pipeline and 1-pass lshmuxer" );
+    return 0;
+}
+
+typedef struct
+{
+    uint32_t mdhd_timescale;
+    uint64_t mdhd_duration;
+    uint64_t tkhd_duration;
+    uint64_t stts_sum;
+    uint32_t stts_last_delta;
+    uint32_t d_comp;
+    uint64_t min_cts;
+    uint64_t max_cts;
+    uint64_t last_dts;
+    uint32_t elst_count;
+    uint64_t elst_dur[2];
+    int64_t  elst_mt[2];
+} track_timeline_metrics_t;
+
+static int inspect_track_timeline_metrics( const char *path, uint32_t track_number, track_timeline_metrics_t *m )
+{
+    memset( m, 0, sizeof(*m) );
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "create root for metrics inspection" );
+    lsmash_file_parameters_t fp = { 0 };
+    TEST_ASSERT( lsmash_open_file( path, 1, &fp ) == 0, "open file for metrics inspection" );
+    lsmash_file_t *file = lsmash_set_file( root, &fp );
+    TEST_ASSERT( file != NULL, "set file for metrics inspection" );
+    TEST_ASSERT( lsmash_read_file( file, &fp ) >= 0, "read file for metrics inspection" );
+
+    uint32_t track_ID = lsmash_get_track_ID( root, track_number );
+    TEST_ASSERT( track_ID != 0, "get track_ID for metrics inspection" );
+
+    isom_trak_t *trak = NULL;
+    isom_trak_t *cur_trak = NULL;
+    LSM_ENTRY_LIST_FOR_EACH( cur_trak, &file->moov->trak_list )
+    {
+        if( cur_trak->tkhd && cur_trak->tkhd->track_ID == track_ID )
+        {
+            trak = cur_trak;
+            break;
+        }
+    }
+    TEST_ASSERT( trak && trak->tkhd && trak->mdia && trak->mdia->mdhd && trak->mdia->minf && trak->mdia->minf->stbl && trak->mdia->minf->stbl->stts,
+                 "trak/mdhd/stts boxes exist" );
+
+    m->mdhd_timescale = trak->mdia->mdhd->timescale;
+    m->mdhd_duration  = trak->mdia->mdhd->duration;
+    m->tkhd_duration  = trak->tkhd->duration;
+
+    isom_stts_entry_t *data = NULL;
+    LSM_LIST_FOR_EACH( data, trak->mdia->minf->stbl->stts->list )
+    {
+        m->stts_sum += (uint64_t)data->sample_count * data->sample_delta;
+        m->stts_last_delta = data->sample_delta;
+    }
+
+    TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "construct timeline for metrics inspection" );
+    uint32_t sample_count = lsmash_get_sample_count_in_media_timeline( root, track_ID );
+    TEST_ASSERT( sample_count > 0, "timeline sample_count > 0" );
+
+    m->min_cts = UINT64_MAX;
+    m->max_cts = 0;
+    for( uint32_t i = 1; i <= sample_count; i++ )
+    {
+        uint64_t dts = 0, cts = 0;
+        TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, i, &dts ) == 0, "get sample dts" );
+        TEST_ASSERT( lsmash_get_cts_from_media_timeline( root, track_ID, i, &cts ) == 0, "get sample cts" );
+        TEST_ASSERT( dts <= cts, "DTS <= CTS invariant holds for every sample" );
+        if( cts < m->min_cts )
+            m->min_cts = cts;
+        if( cts > m->max_cts )
+            m->max_cts = cts;
+        if( i == sample_count )
+            m->last_dts = dts;
+    }
+
+    TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &m->d_comp ) == 0,
+                 "get last_sample_delta (D_comp) from media timeline" );
+
+    TEST_ASSERT( m->stts_sum == m->mdhd_duration, "sum(stts) == mdhd->duration invariant holds" );
+    TEST_ASSERT( m->last_dts + m->stts_last_delta == m->mdhd_duration, "last_dts + stts_last_delta == mdhd->duration invariant holds" );
+    TEST_ASSERT( (m->max_cts - m->min_cts) + m->d_comp == m->mdhd_duration, "(max_cts - min_cts) + D_comp == mdhd->duration invariant holds" );
+
+    m->elst_count = lsmash_count_explicit_timeline_map( root, track_ID );
+    for( uint32_t i = 1; i <= m->elst_count && i <= 2; i++ )
+    {
+        lsmash_edit_t edit = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( root, track_ID, i, &edit ) == 0, "get explicit timeline map" );
+        m->elst_dur[i - 1] = edit.duration;
+        m->elst_mt[i - 1]  = edit.start_time;
+    }
+
+    lsmash_destruct_timeline( root, track_ID );
+    lsmash_close_file( &fp );
+    lsmash_destroy_root( root );
+    return 0;
+}
+
+static int assert_remux_idempotency_and_invariants( const char *raw_v, const char *raw_a, const char *tcv2_path )
+{
+    const char *gen0 = "test_cli_eq_idem_gen0.mp4";
+    const char *gen1 = "test_cli_eq_idem_gen1.mp4";
+    const char *gen2 = "test_cli_eq_idem_gen2.mp4";
+    const char *gen3 = "test_cli_eq_idem_gen3.mp4";
+    char cmd[1024];
+
+    remove( gen0 );
+    remove( gen1 );
+    remove( gen2 );
+    remove( gen3 );
+
+    snprintf( cmd, sizeof(cmd),
+              "%s -i %s?timecode=%s,dts-compression,skip=25/1000,delay=50/1000 -i %s -o %s >%s 2>&1",
+              CLI_LSHMUXER, raw_v, tcv2_path, raw_a, gen0, CLI_DEV_NULL );
+    int rc0 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_REMUXER, gen0, gen1, CLI_DEV_NULL );
+    int rc1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_REMUXER, gen1, gen2, CLI_DEV_NULL );
+    int rc2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, gen2, gen3, CLI_DEV_NULL );
+    int rc3 = system( cmd );
+
+    track_timeline_metrics_t m0, m1, m2, m3;
+    int ok = (rc0 == 0 && rc1 == 0 && rc2 == 0 && rc3 == 0)
+          && inspect_track_timeline_metrics( gen0, 1, &m0 ) == 0
+          && inspect_track_timeline_metrics( gen1, 1, &m1 ) == 0
+          && inspect_track_timeline_metrics( gen2, 1, &m2 ) == 0
+          && inspect_track_timeline_metrics( gen3, 1, &m3 ) == 0;
+
+    remove( gen0 );
+    remove( gen1 );
+    remove( gen2 );
+    remove( gen3 );
+
+    TEST_ASSERT( ok, "all 4 remux generations succeeded and satisfied DTS <= CTS and sum(stts) == mdhd->duration" );
+    TEST_ASSERT( m0.stts_last_delta > m0.d_comp, "B-frame + dts-compression track has stretched stts tail delta (> D_comp)" );
+    TEST_ASSERT( m0.mdhd_duration == m1.mdhd_duration && m1.mdhd_duration == m2.mdhd_duration && m2.mdhd_duration == m3.mdhd_duration,
+                 "mdhd->duration is 100% idempotent across repeated remuxer/lshmuxer passes (0 ticks inflation)" );
+    TEST_ASSERT( m0.tkhd_duration == m1.tkhd_duration && m1.tkhd_duration == m2.tkhd_duration && m2.tkhd_duration == m3.tkhd_duration,
+                 "tkhd->duration is 100% idempotent across repeated remuxer/lshmuxer passes" );
+    TEST_ASSERT( m0.stts_last_delta == m1.stts_last_delta && m1.stts_last_delta == m2.stts_last_delta && m2.stts_last_delta == m3.stts_last_delta,
+                 "stts last sample_delta is 100% idempotent across repeated remuxer/lshmuxer passes" );
+    TEST_ASSERT( m0.d_comp == m1.d_comp && m1.d_comp == m2.d_comp && m2.d_comp == m3.d_comp,
+                 "recovered D_comp (last_sample_delta) is 100% idempotent across repeated remuxer/lshmuxer passes" );
+    TEST_ASSERT( m0.elst_count == m1.elst_count && m1.elst_count == m2.elst_count && m2.elst_count == m3.elst_count
+              && memcmp( m0.elst_dur, m3.elst_dur, sizeof(m0.elst_dur) ) == 0
+              && memcmp( m0.elst_mt,  m3.elst_mt,  sizeof(m0.elst_mt) ) == 0,
+                 "elst entries are 100% idempotent across repeated remuxer/lshmuxer passes" );
+    return 0;
+}
+
+static int assert_hybrid_vfr_last_duration( const char *f_in_v )
+{
+    const char *f_tcv2_np1   = "test_cli_eq_tcv2_np1.txt";
+    const char *f_tcv1_still = "test_cli_eq_tcv1_still.txt";
+    const char *f_tcv2_still = "test_cli_eq_tcv2_still.txt";
+    const char *f_out        = "test_cli_eq_hybrid_out.mp4";
+    const char *f_out_reedit = "test_cli_eq_hybrid_reedit.mp4";
+    const char *f_api_noctts = "test_cli_eq_api_noctts.mp4";
+    const char *f_api_ctts   = "test_cli_eq_api_ctts.mp4";
+    char cmd[1024];
+    int rc = -1;
+
+    /* Stage 1: Timecode v2 with (N + 1)-th line explicit end timestamp (t_4 = 250.0 -> explicit D_comp = 70ms vs prev 40ms) */
+    static const char tcv2_np1_text[] =
+        "# timecode format v2\n"
+        "50.0\n"
+        "90.0\n"
+        "140.0\n"
+        "180.0\n"
+        "250.0\n";
+    TEST_ASSERT( write_test_file( f_tcv2_np1, (const uint8_t *)tcv2_np1_text, sizeof(tcv2_np1_text) - 1 ) == 0,
+                 "write (N+1)-line timecode v2 file" );
+
+    /* Stage 2: Timecode v1 with Assume 25.0 where frame N-2 (frame 2) is a 1.0 fps still frame (1000ms) and frame N-1 (frame 3) uses Assume 25.0 (40ms) */
+    static const char tcv1_still_text[] =
+        "# timecode format v1\n"
+        "Assume 25.0\n"
+        "2,2,1.0\n";
+    TEST_ASSERT( write_test_file( f_tcv1_still, (const uint8_t *)tcv1_still_text, sizeof(tcv1_still_text) - 1 ) == 0,
+                 "write still-frame timecode v1 file" );
+
+    /* Stage 3a: N-line Timecode v2 where frame N-2 has a 1000ms still-frame duration vs 40ms median (1000 > 4 * 40 -> falls back to 40ms) */
+    static const char tcv2_still_text[] =
+        "# timecode format v2\n"
+        "0.0\n"
+        "40.0\n"
+        "80.0\n"
+        "1080.0\n";
+    TEST_ASSERT( write_test_file( f_tcv2_still, (const uint8_t *)tcv2_still_text, sizeof(tcv2_still_text) - 1 ) == 0,
+                 "write N-line still-frame timecode v2 file" );
+
+    /* Verify 3-way CLI equivalence for all 3 stages */
+    if( assert_timelineeditor_3way_equivalent(
+            "--timecode test_cli_eq_tcv2_np1.txt --dts-compression",
+            f_in_v,
+            "timecode=test_cli_eq_tcv2_np1.txt,dts-compression",
+            f_out ) < 0 )
+        goto cleanup;
+
+    if( assert_timelineeditor_3way_equivalent(
+            "--timecode test_cli_eq_tcv1_still.txt",
+            f_in_v,
+            "timecode=test_cli_eq_tcv1_still.txt",
+            f_out ) < 0 )
+        goto cleanup;
+
+    if( assert_timelineeditor_3way_equivalent(
+            "--timecode test_cli_eq_tcv2_still.txt",
+            f_in_v,
+            "timecode=test_cli_eq_tcv2_still.txt",
+            f_out ) < 0 )
+        goto cleanup;
+
+    /* Verify exact metrics for Stage 1 ((N+1)-line Timecode v2: span = 180 - 50 = 130ms, explicit D_comp = 250 - 180 = 70ms, total = 200ms) */
+    {
+        remove( f_out );
+        remove( f_out_reedit );
+        snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+                  CLI_TIMELINEEDITOR, f_tcv2_np1, f_in_v, f_out, CLI_DEV_NULL );
+        TEST_ASSERT( system( cmd ) == 0, "Stage 1: timelineeditor succeeded" );
+        track_timeline_metrics_t m1;
+        TEST_ASSERT( inspect_track_timeline_metrics( f_out, 1, &m1 ) == 0, "Stage 1: inspect metrics" );
+        /* GCD of 40, 50, 40, 70ms is 10ms -> reduced timescale = 100 Hz, D_comp = 7, mdhd_duration = 13 + 7 = 20 */
+        TEST_ASSERT( m1.mdhd_timescale == 100 && m1.d_comp == 7 && m1.mdhd_duration == 20,
+                     "Stage 1: (N+1)-line Timecode v2 sets explicit D_comp = 70ms and mdhd_duration = 200ms" );
+
+        /* Re-running timelineeditor without a timecode file must preserve the explicit D_comp = 7 */
+        snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
+                  CLI_TIMELINEEDITOR, f_out, f_out_reedit, CLI_DEV_NULL );
+        TEST_ASSERT( system( cmd ) == 0, "Stage 1 re-edit: timelineeditor succeeded" );
+        track_timeline_metrics_t m1_re;
+        TEST_ASSERT( inspect_track_timeline_metrics( f_out_reedit, 1, &m1_re ) == 0, "Stage 1 re-edit: inspect metrics" );
+        TEST_ASSERT( m1_re.d_comp == 7 && m1_re.mdhd_duration == 20,
+                     "Stage 1 re-edit: explicit D_comp and mdhd_duration are preserved across container re-edit" );
+    }
+
+    /* Verify exact metrics for Stage 2 (Timecode v1 with N-2 still frame: 40ms + 40ms + 1000ms + 40ms = 1120ms -> 56 ticks at 50 Hz, D_comp = 2) */
+    {
+        remove( f_out );
+        snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+                  CLI_TIMELINEEDITOR, f_tcv1_still, f_in_v, f_out, CLI_DEV_NULL );
+        TEST_ASSERT( system( cmd ) == 0, "Stage 2: timelineeditor succeeded" );
+        track_timeline_metrics_t m2;
+        TEST_ASSERT( inspect_track_timeline_metrics( f_out, 1, &m2 ) == 0, "Stage 2: inspect metrics" );
+        TEST_ASSERT( m2.mdhd_timescale == 50 && m2.d_comp == 2 && m2.mdhd_duration == 56,
+                     "Stage 2: Timecode v1 N-2 still frame does not drag N-1 duration (D_comp = 2/50s = 40ms, mdhd_duration = 56)" );
+    }
+
+    /* Verify exact metrics for Stage 3a (N-line Timecode v2 with N-2 still frame: 1000ms > 4 * 40ms -> falls back to D_med = 40ms -> 56 ticks at 50 Hz) */
+    {
+        remove( f_out );
+        snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
+                  CLI_TIMELINEEDITOR, f_tcv2_still, f_in_v, f_out, CLI_DEV_NULL );
+        TEST_ASSERT( system( cmd ) == 0, "Stage 3a: timelineeditor succeeded" );
+        track_timeline_metrics_t m3;
+        TEST_ASSERT( inspect_track_timeline_metrics( f_out, 1, &m3 ) == 0, "Stage 3a: inspect metrics" );
+        TEST_ASSERT( m3.mdhd_timescale == 50 && m3.d_comp == 2 && m3.mdhd_duration == 56,
+                     "Stage 3a: N-line Timecode v2 outlier guard falls back from 1000ms to D_med = 40ms (mdhd_duration = 56)" );
+    }
+
+    /* Stage 3b: Direct C API (core/track.c:track_update_mdhd_duration with last_sample_delta == 0)
+     * Test both non-ctts and ctts (B-frame reordered) tracks where the second-to-last composition interval is 1000 vs median 40 */
+    for( int use_ctts = 0; use_ctts <= 1; use_ctts++ )
+    {
+        const char *api_path = use_ctts ? f_api_ctts : f_api_noctts;
+        remove( api_path );
+
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "Stage 3b: create root" );
+        lsmash_file_parameters_t fp = { 0 };
+        TEST_ASSERT( lsmash_open_file( api_path, 0, &fp ) == 0, "Stage 3b: open file" );
+        fp.major_brand   = ISOM_BRAND_TYPE_MP42;
+        fp.minor_version = 0;
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_AV01, ISOM_BRAND_TYPE_MP42 };
+        fp.brands        = brands;
+        fp.brand_count   = 3;
+        TEST_ASSERT( lsmash_set_file( root, &fp ) != NULL, "Stage 3b: set file" );
+
+        lsmash_movie_parameters_t mp;
+        lsmash_initialize_movie_parameters( &mp );
+        mp.timescale = 1000;
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &mp ) == 0, "Stage 3b: set movie params" );
+
+        uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( tid == 1, "Stage 3b: create track" );
+        lsmash_track_parameters_t tp;
+        lsmash_initialize_track_parameters( &tp );
+        tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+        tp.display_width  = 16 << 16;
+        tp.display_height = 16 << 16;
+        TEST_ASSERT( lsmash_set_track_parameters( root, tid, &tp ) == 0, "Stage 3b: set track params" );
+
+        lsmash_media_parameters_t mdp;
+        lsmash_initialize_media_parameters( &mdp );
+        mdp.timescale = 1000;
+        TEST_ASSERT( lsmash_set_media_parameters( root, tid, &mdp ) == 0, "Stage 3b: set media params" );
+
+        lsmash_video_summary_t *summary = create_synth_av01_summary( 16, 16 );
+        TEST_ASSERT( summary != NULL, "Stage 3b: create synth av01 summary" );
+        uint32_t s_idx = lsmash_add_sample_entry( root, tid, summary );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        TEST_ASSERT( s_idx == 1, "Stage 3b: add sample entry" );
+
+        /* 4 samples:
+         * Non-ctts: DTS = CTS = [0, 40, 80, 1080]
+         * Ctts (I0, P2, B1, P3): DTS = [0, 40, 80, 120], CTS = [40, 120, 80, 1120] -> display CTS = [40, 80, 120, 1120] */
+        const uint64_t dts_arr[4] = { 0, 40, 80, use_ctts ? 120 : 1080 };
+        const uint64_t cts_arr[4] = { use_ctts ? 40 : 0, use_ctts ? 120 : 40, 80, use_ctts ? 1120 : 1080 };
+        for( int i = 0; i < 4; i++ )
+        {
+            lsmash_sample_t *sample = lsmash_create_sample( 4 );
+            memset( sample->data, 0, 4 );
+            sample->dts   = dts_arr[i];
+            sample->cts   = cts_arr[i];
+            sample->index = s_idx;
+            sample->prop.ra_flags = (i == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( root, tid, sample ) == 0, "Stage 3b: append sample" );
+        }
+        /* Pass last_sample_delta = 0 to trigger automatic estimation with outlier guard in track_update_mdhd_duration */
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, tid, 0 ) == 0, "Stage 3b: flush pooled samples with delta=0" );
+        TEST_ASSERT( lsmash_update_track_duration( root, tid, 0 ) == 0, "Stage 3b: update track duration with delta=0" );
+        TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "Stage 3b: finish movie" );
+        lsmash_close_file( &fp );
+        lsmash_destroy_root( root );
+
+        track_timeline_metrics_t m_api;
+        TEST_ASSERT( inspect_track_timeline_metrics( api_path, 1, &m_api ) == 0, "Stage 3b: inspect metrics" );
+        /* Preceding composition interval is 1000, median D_med is 40 (1000 > 4 * 40) -> falls back to D_comp = 40, mdhd_duration = 1080 + 40 = 1120 */
+        TEST_ASSERT( m_api.d_comp == 40 && m_api.mdhd_duration == 1120,
+                     "Stage 3b: core/track.c outlier guard falls back from 1000 to D_med = 40 (mdhd_duration = 1120)" );
+    }
+
+    rc = 0;
+
+cleanup:
+    remove( f_tcv2_np1 );
+    remove( f_tcv1_still );
+    remove( f_tcv2_still );
+    remove( f_out );
+    remove( f_out_reedit );
+    remove( f_api_noctts );
+    remove( f_api_ctts );
+    TEST_ASSERT( rc == 0, "3-stage hybrid VFR last-frame composition duration (D_comp) verified across CLI and core API" );
     return 0;
 }
 
@@ -1510,6 +1874,25 @@ int test_muxer_lshmuxer_cli_equivalence( void )
             NULL,
             "-i test_cli_eq_cfr.h264?timecode=test_cli_eq_tcv2.txt,dts-compression,skip=25/1000,delay=50/1000 -i test_cli_eq_audio.aac",
             "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 32: 3-stage pipeline (muxer -> timelineeditor --dts-compression -> remuxer) vs 1-pass lshmuxer
+     * (verifies remuxer preserves exact mdhd->duration and stts tail delta without double-adding CTS-DTS span) */
+    if( assert_pipeline_vs_1pass_equivalent(
+            f_h264_cfr,
+            f_adts,
+            "--timecode test_cli_eq_tcv2.txt --dts-compression --skip 25/1000 --delay 50/1000",
+            "--chapter test_cli_eq_chapters.txt",
+            "--chapter test_cli_eq_chapters.txt -i test_cli_eq_cfr.h264?timecode=test_cli_eq_tcv2.txt,dts-compression,skip=25/1000,delay=50/1000 -i test_cli_eq_audio.aac",
+            "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+
+    /* Case 33: Multi-generation Remux idempotency & ISOBMFF timeline invariants (DTS <= CTS, sum(stts) == mdhd->duration) */
+    if( assert_remux_idempotency_and_invariants( f_h264_cfr, f_adts, f_tcv2 ) < 0 )
+        goto cleanup;
+
+    /* Case 34: 3-stage hybrid VFR last-frame composition duration (D_comp) across Timecode v2 (N+1), Timecode v1 still-frame, and statistical outlier guard */
+    if( assert_hybrid_vfr_last_duration( f_in_v ) < 0 )
         goto cleanup;
 
     rc = 0;

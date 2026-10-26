@@ -196,6 +196,7 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void )
             noise[i] = (uint8_t)(0x10 | (seed >> 24));     /* never zero, so that no start code can appear */
         }
         uint8_t zeros[64] = { 0 };
+        uint8_t zeros_4k[4096] = { 0 };
         uint8_t parameter_sets_only[64];
         uint32_t truncated_length = 0;
         {
@@ -204,6 +205,160 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void )
             memcpy( parameter_sets_only, sps_pps, sizeof(sps_pps) );
             truncated_length = sizeof(sps_pps);
         }
+        /* H.264 Annex-B with missing SPS (PPS + IDR slice only) and corrupted SPS */
+        uint8_t  h264_no_sps[128]      = { 0 };
+        uint32_t h264_no_sps_len       = 0;
+        uint8_t  h264_corrupt_sps[128] = { 0 };
+        uint32_t h264_corrupt_sps_len  = 0;
+        uint8_t  h264_sei_only[32]     = { 0, 0, 0, 1, 0x06, 0x05, 0x01, 0x00, 0x80 };
+        {
+            /* Find second start code in h264[] (which is the PPS) to build PPS + slice without SPS */
+            uint32_t pps_offset = 4;
+            while( pps_offset + 4 < h264_length
+                && !(h264[pps_offset] == 0 && h264[pps_offset + 1] == 0 && h264[pps_offset + 2] == 0 && h264[pps_offset + 3] == 1) )
+                ++pps_offset;
+            h264_no_sps_len = h264_length - pps_offset;
+            memcpy( h264_no_sps, h264 + pps_offset, h264_no_sps_len );
+
+            /* Corrupted SPS (truncated 1-byte SPS header 0x67 followed by PPS + slices) */
+            static const uint8_t bad_sps[] = { 0, 0, 0, 1, 0x67, 0xFF };
+            append_bytes( h264_corrupt_sps, &h264_corrupt_sps_len, bad_sps, sizeof(bad_sps) );
+            append_bytes( h264_corrupt_sps, &h264_corrupt_sps_len, h264 + pps_offset, h264_no_sps_len );
+        }
+        /* HEVC Annex-B negative streams:
+         * 1) Missing SPS (PPS + IDR slice only)
+         * 2) Corrupted SPS + PPS + IDR slice
+         * 3) Valid SPS + PPS + IDR slice but missing VPS (triggers nalu_imp_hevc_setup_first_summary failure after hvcC_list append) */
+        uint8_t  hevc_no_sps[128]      = { 0 };
+        uint32_t hevc_no_sps_len       = 0;
+        uint8_t  hevc_corrupt_sps[128] = { 0 };
+        uint32_t hevc_corrupt_sps_len  = 0;
+        uint8_t  hevc_no_vps[256]      = { 0 };
+        uint32_t hevc_no_vps_len       = 0;
+        {
+            static const uint8_t sc[4] = { 0, 0, 0, 1 };
+            /* Build minimal HEVC SPS RBSP and convert to EBSP (nal_unit_type = 33 -> header 0x42, 0x01) */
+            uint8_t sps_rbsp[64] = { 0 };
+            test_bit_writer_t bw = { sps_rbsp, 0 };
+            bw_put( &bw, 4, 0 );            /* sps_video_parameter_set_id = 0 */
+            bw_put( &bw, 3, 0 );            /* sps_max_sub_layers_minus1 = 0 */
+            bw_put( &bw, 1, 1 );            /* sps_temporal_id_nesting_flag = 1 */
+            bw_put( &bw, 2, 0 );            /* general_profile_space = 0 */
+            bw_put( &bw, 1, 0 );            /* general_tier_flag = 0 */
+            bw_put( &bw, 5, 1 );            /* general_profile_idc = 1 */
+            bw_put( &bw, 32, 0x60000000u ); /* general_profile_compatibility_flags */
+            bw_put( &bw, 1, 1 );            /* general_progressive_source_flag */
+            bw_put( &bw, 1, 0 );            /* general_interlaced_source_flag */
+            bw_put( &bw, 1, 1 );            /* general_non_packed_constraint_flag */
+            bw_put( &bw, 1, 1 );            /* general_frame_only_constraint_flag */
+            bw_put( &bw, 32, 0 );           /* general_reserved_zero_44bits (hi) */
+            bw_put( &bw, 12, 0 );           /* general_reserved_zero_44bits (lo) */
+            bw_put( &bw, 8, 93 );           /* general_level_idc = 93 */
+            bw_put_ue( &bw, 0 );            /* sps_seq_parameter_set_id = 0 */
+            bw_put_ue( &bw, 1 );            /* chroma_format_idc = 1 */
+            bw_put_ue( &bw, 64 );           /* pic_width_in_luma_samples = 64 */
+            bw_put_ue( &bw, 64 );           /* pic_height_in_luma_samples = 64 */
+            bw_put( &bw, 1, 0 );            /* conformance_window_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* bit_depth_luma_minus8 = 0 */
+            bw_put_ue( &bw, 0 );            /* bit_depth_chroma_minus8 = 0 */
+            bw_put_ue( &bw, 0 );            /* log2_max_pic_order_cnt_lsb_minus4 = 0 */
+            bw_put( &bw, 1, 0 );            /* sps_sub_layer_ordering_info_present_flag = 0 */
+            bw_put_ue( &bw, 1 );            /* sps_max_dec_pic_buffering_minus1[0] = 1 */
+            bw_put_ue( &bw, 0 );            /* sps_max_num_reorder_pics[0] = 0 */
+            bw_put_ue( &bw, 0 );            /* sps_max_latency_increase_plus1[0] = 0 */
+            bw_put_ue( &bw, 0 );            /* log2_min_luma_coding_block_size_minus3 = 0 */
+            bw_put_ue( &bw, 3 );            /* log2_diff_max_min_luma_coding_block_size = 3 */
+            bw_put_ue( &bw, 0 );            /* log2_min_transform_block_size_minus2 = 0 */
+            bw_put_ue( &bw, 3 );            /* log2_diff_max_min_transform_block_size = 3 */
+            bw_put_ue( &bw, 0 );            /* max_transform_hierarchy_depth_inter = 0 */
+            bw_put_ue( &bw, 0 );            /* max_transform_hierarchy_depth_intra = 0 */
+            bw_put( &bw, 1, 0 );            /* scaling_list_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* amp_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* sample_adaptive_offset_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* pcm_enabled_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* num_short_term_ref_pic_sets = 0 */
+            bw_put( &bw, 1, 0 );            /* long_term_ref_pics_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* sps_temporal_mvp_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* strong_intra_smoothing_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* vui_parameters_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* sps_extension_present_flag = 0 */
+            bw_put_trailing( &bw );
+            uint32_t sps_rbsp_len = bw.pos >> 3;
+            uint8_t  sps_nal[80]  = { 0x42, 0x01 };
+            uint32_t sps_nal_len  = 2;
+            uint32_t zero_run     = 0;
+            for( uint32_t i = 0; i < sps_rbsp_len; i++ )
+            {
+                if( zero_run == 2 && sps_rbsp[i] <= 0x03 )
+                {
+                    sps_nal[sps_nal_len++] = 0x03;
+                    zero_run = 0;
+                }
+                sps_nal[sps_nal_len++] = sps_rbsp[i];
+                zero_run = (sps_rbsp[i] == 0x00) ? (zero_run + 1) : 0;
+            }
+
+            /* Build minimal HEVC PPS (nal_unit_type = 34 -> header 0x44, 0x01) */
+            uint8_t pps_nal[32] = { 0x44, 0x01 };
+            bw = (test_bit_writer_t){ pps_nal + 2, 0 };
+            bw_put_ue( &bw, 0 );            /* pps_pic_parameter_set_id = 0 */
+            bw_put_ue( &bw, 0 );            /* pps_seq_parameter_set_id = 0 */
+            bw_put( &bw, 1, 0 );            /* dependent_slice_segments_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* output_flag_present_flag = 0 */
+            bw_put( &bw, 3, 0 );            /* num_extra_slice_header_bits = 0 */
+            bw_put( &bw, 1, 0 );            /* sign_data_hiding_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* cabac_init_present_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* num_ref_idx_l0_default_active_minus1 = 0 */
+            bw_put_ue( &bw, 0 );            /* num_ref_idx_l1_default_active_minus1 = 0 */
+            bw_put_ue( &bw, 0 );            /* init_qp_minus26 = 0 */
+            bw_put( &bw, 1, 0 );            /* constrained_intra_pred_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* transform_skip_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* cu_qp_delta_enabled_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* pps_cb_qp_offset = 0 */
+            bw_put_ue( &bw, 0 );            /* pps_cr_qp_offset = 0 */
+            bw_put( &bw, 1, 0 );            /* pps_slice_chroma_qp_offsets_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* weighted_pred_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* weighted_bipred_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* transquant_bypass_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* tiles_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* entropy_coding_sync_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* pps_loop_filter_across_slices_enabled_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* deblocking_filter_control_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* pps_scaling_list_data_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* lists_modification_present_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* log2_parallel_merge_level_minus2 = 0 */
+            bw_put( &bw, 1, 0 );            /* slice_segment_header_extension_present_flag = 0 */
+            bw_put( &bw, 1, 0 );            /* pps_extension_present_flag = 0 */
+            bw_put_trailing( &bw );
+            uint32_t pps_nal_len = 2 + (bw.pos >> 3);
+
+            /* Build minimal HEVC IDR_W_RADL slice (nal_unit_type = 19 -> header 0x26, 0x01) */
+            uint8_t idr_nal[16] = { 0x26, 0x01 };
+            bw = (test_bit_writer_t){ idr_nal + 2, 0 };
+            bw_put( &bw, 1, 1 );            /* first_slice_segment_in_pic_flag = 1 */
+            bw_put( &bw, 1, 0 );            /* no_output_of_prior_pics_flag = 0 */
+            bw_put_ue( &bw, 0 );            /* slice_pic_parameter_set_id = 0 */
+            bw_put_ue( &bw, 2 );            /* slice_type = 2 (I) */
+            bw_put_trailing( &bw );
+            uint32_t idr_nal_len = 2 + (bw.pos >> 3);
+            idr_nal[idr_nal_len++] = 0x80;
+
+            /* 1) HEVC missing SPS (PPS + IDR slice) */
+            append_bytes( hevc_no_sps, &hevc_no_sps_len, sc, 4 );
+            append_bytes( hevc_no_sps, &hevc_no_sps_len, pps_nal, pps_nal_len );
+            append_bytes( hevc_no_sps, &hevc_no_sps_len, sc, 4 );
+            append_bytes( hevc_no_sps, &hevc_no_sps_len, idr_nal, idr_nal_len );
+
+            /* 2) HEVC corrupted SPS + PPS + IDR slice */
+            static const uint8_t bad_hevc_sps[] = { 0, 0, 0, 1, 0x42, 0x01, 0x01, 0xFF };
+            append_bytes( hevc_corrupt_sps, &hevc_corrupt_sps_len, bad_hevc_sps, sizeof(bad_hevc_sps) );
+            append_bytes( hevc_corrupt_sps, &hevc_corrupt_sps_len, hevc_no_sps, hevc_no_sps_len );
+
+            /* 3) HEVC with valid SPS + PPS + IDR slice but missing VPS */
+            append_bytes( hevc_no_vps, &hevc_no_vps_len, sc, 4 );
+            append_bytes( hevc_no_vps, &hevc_no_vps_len, sps_nal, sps_nal_len );
+            append_bytes( hevc_no_vps, &hevc_no_vps_len, hevc_no_sps, hevc_no_sps_len );
+        }
         struct
         {
             const char    *label;
@@ -211,10 +366,17 @@ int test_read_file_fake_box_and_raw_stream_acceptance( void )
             size_t         size;
         } cases[] =
         {
-            { "18c: noise is rejected",                     noise,               sizeof(noise)       },
-            { "18c: a lone start code is rejected",         h264,                4                   },
-            { "18c: parameter sets without picture are rejected", parameter_sets_only, truncated_length    },
-            { "18c: zero bytes are rejected",               zeros,               sizeof(zeros)       },
+            { "18c: noise is rejected",                                 noise,               sizeof(noise)            },
+            { "18c: a lone start code is rejected",                     h264,                4                        },
+            { "18c: parameter sets without picture are rejected",       parameter_sets_only, truncated_length         },
+            { "18c: zero bytes (64B) are rejected",                     zeros,               sizeof(zeros)            },
+            { "18c: zero bytes (4KB) are rejected without hang",        zeros_4k,            sizeof(zeros_4k)         },
+            { "18c: H.264 stream missing SPS is rejected safely",       h264_no_sps,         h264_no_sps_len          },
+            { "18c: H.264 stream with corrupted SPS is rejected",       h264_corrupt_sps,    h264_corrupt_sps_len     },
+            { "18c: H.264 SEI-only stream without slice is rejected",   h264_sei_only,       9                        },
+            { "18c: HEVC stream missing SPS is rejected safely",        hevc_no_sps,         hevc_no_sps_len          },
+            { "18c: HEVC stream with corrupted SPS is rejected",        hevc_corrupt_sps,    hevc_corrupt_sps_len     },
+            { "18c: HEVC stream missing VPS is rejected without UAF",   hevc_no_vps,         hevc_no_vps_len          },
         };
         for( size_t k = 0; k < sizeof(cases) / sizeof(cases[0]); k++ )
         {

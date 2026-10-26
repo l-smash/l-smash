@@ -238,7 +238,7 @@ timelineeditor [options] input output
 | Option | Argument | Description |
 | :--- | :--- | :--- |
 | `--track` | `<integer>` | Specify target track number to edit (default: `1`). |
-| `--timecode` | `<path>` | Edit timeline using a **Matroska timecode format v2** file (`# timecode format v2`). |
+| `--timecode` | `<path>` | Edit timeline using a **Matroska timecode format v1 or v2** file (`# timecode format v1` or `# timecode format v2`). |
 | `--media-timescale` | `<integer>` | Specify new media timescale (`mdhd.timescale`) before applying edits. |
 | `--Media-timescale` | `<integer>` | Specify new media timescale (`mdhd.timescale`) and rescale existing timestamps after applying edits. |
 | `--movie-timescale` | `<integer>` | Specify new movie timescale (`mvhd.timescale`). |
@@ -265,15 +265,16 @@ CHAPTER02NAME=Main Story
 ```
 Each chapter is a pair of lines: a start time (`hh:mm:ss.mmm`) and its name. Use it as `muxer --chapter chapters.txt ...`.
 
-#### Timecode file for `timelineeditor --timecode` (Matroska timecode format v2)
+#### Timecode file for `timelineeditor --timecode` (Matroska timecode format v1 / v2)
 ```text
 # timecode format v2
 0
 41.708
 83.417
 125.125
+166.833
 ```
-The first line is the fixed header. Each following line is the presentation time in milliseconds of one frame, in decoding order, so the file needs exactly one line per frame of the target track.
+The first line is the header (`# timecode format v1` or `# timecode format v2`). In format v2, each following line is the presentation timestamp in milliseconds of one frame in composition order (`N` lines for `N` frames). An optional `(N + 1)`-th line (`t_N > t_{N-1}`) may be provided to specify the explicit end timestamp of the last frame (`D_comp = t_N - t_{N-1}`); if omitted, the last frame's duration is estimated from the preceding interval with a statistical outlier guard against still frames. In format v1, `Assume <FPS>` defines the baseline frame rate and `start,end,<FPS>` lines override specific frame ranges, including the duration of the final frame `N - 1`.
 
 ---
 
