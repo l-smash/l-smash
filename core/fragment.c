@@ -113,7 +113,7 @@ static int fragment_set_overall_duration( lsmash_file_t *file )
             return LSMASH_ERR_NAMELESS;
         uint64_t duration;
         uint64_t implicit_segment_duration = fragment_get_implicit_segment_duration( trak->cache );
-        if( !trak->edts->elst->list )
+        if( !lsm_list_count( trak->edts->elst->list ) )
             duration = (uint64_t)(((double)implicit_segment_duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
         else
         {
@@ -657,7 +657,7 @@ static int fragment_make_segment_index_entry
         if( subsegment->smallest_cts != LSMASH_TIMESTAMP_UNDEFINED
          && subsegment->largest_cts  != LSMASH_TIMESTAMP_UNDEFINED )
             composition_duration += track_fragment->last_duration;
-        if( trak->edts->elst->list )
+        if( lsm_list_count( trak->edts->elst->list ) )
         {
             /**-- Explicit edits --**/
             const isom_elst_t       *elst = trak->edts->elst;
@@ -709,7 +709,7 @@ static int fragment_make_segment_index_entry
                     if( subsegment_in_presentation == 0 )
                     {
                         subsegment_in_presentation = 1;
-                        if( subsegment->smallest_cts >= edit->media_time )
+                        if( subsegment->smallest_cts >= edit->media_time && rate > 0.0 )
                             TEPT = pts + (uint64_t)((subsegment->smallest_cts - start_time) / rate);
                         else
                             TEPT = pts;
@@ -722,7 +722,7 @@ static int fragment_make_segment_index_entry
                     {
                         /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
                         first_rp_in_presentation = 1;
-                        if( subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts )
+                        if( subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts && rate > 0.0 )
                             TSAP = pts + (uint64_t)((subsegment->first_ed_cts - start_time) / rate);
                         else
                             TSAP = pts;
@@ -733,10 +733,18 @@ static int fragment_make_segment_index_entry
                      && subsegment->first_sample_cts >= edit->media_time && subsegment->first_sample_cts < edit_end_cts )
                     {
                         first_sample_in_presentation = 1;
-                        TPTF = pts + (uint64_t)((subsegment->first_sample_cts - start_time) / rate);
+                        if( rate > 0.0 )
+                            TPTF = pts + (uint64_t)((subsegment->first_sample_cts - start_time) / rate);
+                        else
+                            TPTF = pts;
                     }
-                    uint64_t subsegment_end_pts = pts + (uint64_t)(composition_duration / rate);
-                    pts = LSMASH_MIN( edit_end_pts, subsegment_end_pts );
+                    if( rate > 0.0 )
+                    {
+                        uint64_t subsegment_end_pts = pts + (uint64_t)(composition_duration / rate);
+                        pts = LSMASH_MIN( edit_end_pts, subsegment_end_pts );
+                    }
+                    else
+                        pts = edit_end_pts;
                     /* Update subsegment_duration. */
                     data->subsegment_duration = pts - subsegment->segment_duration;
                 }

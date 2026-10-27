@@ -86,7 +86,11 @@ static int meta_set_itunes_metadata_string( lsmash_file_t *file,
                                             lsmash_itunes_metadata_item item,
                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
+    if( !value.string )
+        return LSMASH_ERR_FUNCTION_PARAM;
     uint32_t value_length = strlen( value.string );
+    if( value_length == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
         item = ITUNES_METADATA_ITEM_LONG_DESCRIPTION;
     isom_data_t *data = meta_add_metadata( file, item, meaning, name );
@@ -185,9 +189,8 @@ static int meta_set_itunes_metadata_binary( lsmash_file_t *file,
                                             lsmash_itunes_metadata_item item,
                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
-    isom_data_t *data = meta_add_metadata( file, item, meaning, name );
-    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
-        return LSMASH_ERR_NAMELESS;
+    if( !value.binary.data || value.binary.size == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     switch( item )
     {
         case ITUNES_METADATA_ITEM_COVER_ART :
@@ -230,6 +233,9 @@ static int meta_set_itunes_metadata_binary( lsmash_file_t *file,
         default :
             break;
     }
+    isom_data_t *data = meta_add_metadata( file, item, meaning, name );
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
+        return LSMASH_ERR_NAMELESS;
     data->type_code    = value.binary.subtype;
     data->value_length = value.binary.size;
     data->value        = lsmash_memdup( value.binary.data, value.binary.size );
@@ -399,7 +405,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
         return LSMASH_ERR_FUNCTION_PARAM;
     memset( metadata, 0, sizeof( *metadata ) );
     lsmash_file_t *file = root->file->initializer;
-    if( !file->moov->udta->meta->ilst )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->ilst ) )
         return LSMASH_ERR_NAMELESS;
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_list_get_entry_data( &ilst->metaitem_list, metadata_number );

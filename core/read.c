@@ -442,12 +442,16 @@ static int read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     return read_leaf_box_common_last_process( file, box, level, iods );
 }
 
-static int read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
+static int read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table, uint64_t end_pos )
 {
+    uint64_t pos = lsmash_bs_count( bs );
+    if( end_pos < pos || end_pos - pos < 8 )
+        return LSMASH_ERR_INVALID_DATA;
     color_table->seed  = lsmash_bs_get_be32( bs );
     color_table->flags = lsmash_bs_get_be16( bs );
     color_table->size  = lsmash_bs_get_be16( bs );
-    if( bs->eob )
+    pos = lsmash_bs_count( bs );
+    if( bs->eob || end_pos < pos || (end_pos - pos) / 8 < (uint64_t)color_table->size + 1 )
         return LSMASH_ERR_INVALID_DATA;
     isom_qt_color_array_t *array = lsmash_malloc_zero( ((size_t)color_table->size + 1) * sizeof(isom_qt_color_array_t) );
     if( !array )
@@ -461,6 +465,8 @@ static int read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_ta
         array[i].g     = (color >> 16) & 0xffff;
         array[i].b     =  color        & 0xffff;
     }
+    if( bs->eob )
+        return LSMASH_ERR_INVALID_DATA;
     return 0;
 }
 
@@ -468,7 +474,7 @@ static int read_ctab( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
 {
     ADD_BOX( ctab, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
-    int ret = read_qt_color_table( bs, &ctab->color_table );
+    int ret = read_qt_color_table( bs, &ctab->color_table, box->size );
     if( ret < 0 )
         return ret;
     return read_leaf_box_common_last_process( file, box, level, ctab );
@@ -591,10 +597,16 @@ static int read_elst( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_EDTS )
      || LSMASH_IS_EXISTING_BOX( ((isom_edts_t *)parent)->elst ) )
         return read_unknown_box( file, box, parent, level );
+    if( box->size < ISOM_FULLBOX_COMMON_SIZE + 4 )
+        return LSMASH_ERR_INVALID_DATA;
     ADD_BOX( elst, isom_edts_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( elst->list ) < entry_count; pos = lsmash_bs_count( bs ) )
+    uint64_t pos = lsmash_bs_count( bs );
+    uint64_t entry_size = box->version == 1 ? 20 : 12;
+    if( bs->eob || box->size < pos || (box->size - pos) / entry_size < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
+    for( ; pos < box->size && lsm_list_count( elst->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)lsm_list_append( elst->list );
         if( !data )
@@ -610,7 +622,11 @@ static int read_elst( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
             data->media_time       = (int32_t)lsmash_bs_get_be32( bs );
         }
         data->media_rate = lsmash_bs_get_be32( bs );
+        if( bs->eob || data->media_time < ISOM_EDIT_MODE_EMPTY )
+            return LSMASH_ERR_INVALID_DATA;
     }
+    if( lsm_list_count( elst->list ) < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, elst );
 }
 
@@ -631,22 +647,27 @@ static int read_track_reference_type( lsmash_file_t *file, isom_box_t *box, isom
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
         return read_unknown_box( file, box, parent, level );
-    isom_tref_type_t *ref = lsm_box_add_track_reference_type( (isom_tref_t *)parent, box->type.fourcc );
-    if( !ref )
-        return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
     uint64_t pos = lsmash_bs_count( bs );
-    ref->ref_count = box->size > pos ? (box->size - pos) / sizeof(uint32_t) : 0;
-    if( ref->ref_count )
+    if( box->size <= pos
+     || (box->size - pos) % sizeof(uint32_t) != 0
+     || (box->size - pos) / sizeof(uint32_t) > UINT32_MAX / sizeof(uint32_t) )
+        return LSMASH_ERR_INVALID_DATA;
+    isom_tref_type_t *ref = lsm_box_add_track_reference_type( (isom_tref_t *)parent, box->type.fourcc );
+    if( LSMASH_IS_NON_EXISTING_BOX( ref ) )
+        return LSMASH_ERR_NAMELESS;
+    ref->ref_count = (uint32_t)((box->size - pos) / sizeof(uint32_t));
+    ref->track_ID = lsmash_malloc( ref->ref_count * sizeof(uint32_t) );
+    if( !ref->track_ID )
     {
-        ref->track_ID = lsmash_malloc( ref->ref_count * sizeof(uint32_t) );
-        if( !ref->track_ID )
-        {
-            ref->ref_count = 0;
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
-        for( uint32_t i = 0; i < ref->ref_count; i++ )
-            ref->track_ID[i] = lsmash_bs_get_be32( bs );
+        ref->ref_count = 0;
+        return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    for( uint32_t i = 0; i < ref->ref_count; i++ )
+    {
+        ref->track_ID[i] = lsmash_bs_get_be32( bs );
+        if( bs->eob || ref->track_ID[i] == 0 )
+            return LSMASH_ERR_INVALID_DATA;
     }
     return read_leaf_box_common_last_process( file, box, level, ref );
 }
@@ -1314,8 +1335,8 @@ static int read_visual_description( lsmash_file_t *file, isom_box_t *box, isom_b
     visual->color_table_ID        = lsmash_bs_get_be16( bs );
     int ret;
     if( visual->color_table_ID == 0
-     && lsmash_bs_get_pos( bs ) < box->size
-     && (ret = read_qt_color_table( bs, &visual->color_table )) < 0 )
+     && lsmash_bs_count( bs ) < box->size
+     && (ret = read_qt_color_table( bs, &visual->color_table, box->size )) < 0 )
         return ret;
     box->parent   = parent;
     box->manager |= LSMASH_VIDEO_DESCRIPTION;
@@ -2236,7 +2257,7 @@ static int read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     isom_stco_t *stco = is_stco
                       ? lsm_box_add_stco( (isom_stbl_t *)parent )
                       : lsm_box_add_co64( (isom_stbl_t *)parent );
-    if( !stco )
+    if( LSMASH_IS_NON_EXISTING_BOX( stco ) )
         return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
@@ -2367,6 +2388,8 @@ static int read_chpl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA )
      || LSMASH_IS_EXISTING_BOX( ((isom_udta_t *)parent)->chpl ) )
         return read_unknown_box( file, box, parent, level );
+    if( box->size < ISOM_FULLBOX_COMMON_SIZE + (box->version == 1 ? 5 : 1) )
+        return LSMASH_ERR_INVALID_DATA;
     ADD_BOX( chpl, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count;
@@ -2377,8 +2400,13 @@ static int read_chpl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     }
     else
         entry_count   = lsmash_bs_get_byte( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && chpl->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    uint64_t pos = lsmash_bs_count( bs );
+    if( bs->eob || box->size < pos || (box->size - pos) / 9 < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
+    for( ; pos < box->size && chpl->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
     {
+        if( box->size - pos < 9 )
+            return LSMASH_ERR_INVALID_DATA;
         isom_chpl_entry_t *data = lsmash_malloc_zero( sizeof(isom_chpl_entry_t) );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -2389,13 +2417,20 @@ static int read_chpl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
         }
         data->start_time          = lsmash_bs_get_be64( bs );
         data->chapter_name_length = lsmash_bs_get_byte( bs );
+        pos = lsmash_bs_count( bs );
+        if( bs->eob || box->size < pos || box->size - pos < data->chapter_name_length )
+            return LSMASH_ERR_INVALID_DATA;
         data->chapter_name        = lsmash_malloc( data->chapter_name_length + 1 );
         if( !data->chapter_name )
             return LSMASH_ERR_MEMORY_ALLOC;
         for( uint8_t i = 0; i < data->chapter_name_length; i++ )
             data->chapter_name[i] = lsmash_bs_get_byte( bs );
+        if( bs->eob )
+            return LSMASH_ERR_INVALID_DATA;
         data->chapter_name[data->chapter_name_length] = '\0';
     }
+    if( chpl->list->entry_count < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, chpl );
 }
 
@@ -2640,11 +2675,18 @@ static int read_keys( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     if( (!lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_META ) && !(parent->manager & LSMASH_QTFF_BASE))
      || LSMASH_IS_EXISTING_BOX( ((isom_meta_t *)parent)->keys ) )
         return read_unknown_box( file, box, parent, level );
+    if( box->size < ISOM_FULLBOX_COMMON_SIZE + 4 )
+        return LSMASH_ERR_INVALID_DATA;
     ADD_BOX( keys, isom_meta_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && keys->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    uint64_t pos = lsmash_bs_count( bs );
+    if( bs->eob || box->size < pos || (box->size - pos) / 8 < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
+    for( ; pos < box->size && keys->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
     {
+        if( box->size - pos < 8 )
+            return LSMASH_ERR_INVALID_DATA;
         isom_keys_entry_t *data = lsmash_malloc_zero( sizeof(isom_keys_entry_t) );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -2655,15 +2697,21 @@ static int read_keys( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
         }
         data->key_size      = lsmash_bs_get_be32( bs );
         data->key_namespace = lsmash_bs_get_be32( bs );
+        if( bs->eob || data->key_size < 8 || data->key_size > box->size - pos )
+            return LSMASH_ERR_INVALID_DATA;
         if( data->key_size > 8 )
         {
             data->key_value = lsmash_bs_get_bytes( bs, data->key_size - 8 );
             if( !data->key_value )
                 return LSMASH_ERR_NAMELESS;
+            if( bs->eob || lsmash_bs_count( bs ) < pos + data->key_size )
+                return LSMASH_ERR_INVALID_DATA;
         }
         else
             data->key_value = NULL;
     }
+    if( keys->list->entry_count < entry_count )
+        return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, keys );
 }
 
@@ -2687,7 +2735,7 @@ static int read_metaitem( lsmash_file_t *file, isom_box_t *box, isom_box_t *pare
      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_ILST ) )
         return read_unknown_box( file, box, parent, level );
     isom_metaitem_t *metaitem = lsm_box_add_metaitem( (isom_ilst_t *)parent, box->type.fourcc );
-    if( !metaitem )
+    if( LSMASH_IS_NON_EXISTING_BOX( metaitem ) )
         return -1;
     box->parent = parent;
     read_box_common_copy( metaitem, box );
@@ -2705,12 +2753,14 @@ static int read_mean( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     ADD_BOX( mean, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     uint64_t pos = lsmash_bs_count( bs );
-    if( box->size < pos )
+    if( box->size <= pos || box->size - pos > UINT32_MAX )
         return LSMASH_ERR_INVALID_DATA;
     mean->meaning_string_length = box->size - pos;
     mean->meaning_string = lsmash_bs_get_bytes( bs, mean->meaning_string_length );
     if( !mean->meaning_string )
         return LSMASH_ERR_NAMELESS;
+    if( bs->eob || lsmash_bs_count( bs ) < box->size )
+        return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, mean );
 }
 
@@ -2722,12 +2772,14 @@ static int read_name( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     ADD_BOX( name, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     uint64_t pos = lsmash_bs_count( bs );
-    if( box->size < pos )
+    if( box->size <= pos || box->size - pos > UINT32_MAX )
         return LSMASH_ERR_INVALID_DATA;
     name->name_length = box->size - pos;
     name->name = lsmash_bs_get_bytes( bs, name->name_length );
     if( !name->name )
         return LSMASH_ERR_NAMELESS;
+    if( bs->eob || lsmash_bs_count( bs ) < box->size )
+        return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, name );
 }
 
@@ -2738,18 +2790,22 @@ static int read_data( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     ADD_BOX( data, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     uint64_t pos = lsmash_bs_count( bs );
-    if( box->size < pos + 8 )
+    if( box->size < pos + 8 || box->size - pos - 8 > UINT32_MAX )
         return LSMASH_ERR_INVALID_DATA;
     data->value_length = box->size - pos - 8;
     data->reserved            = lsmash_bs_get_be16( bs );
     data->type_set_identifier = lsmash_bs_get_byte( bs );
     data->type_code           = lsmash_bs_get_byte( bs );
     data->the_locale          = lsmash_bs_get_be32( bs );
+    if( bs->eob )
+        return LSMASH_ERR_INVALID_DATA;
     if( data->value_length )
     {
         data->value = lsmash_bs_get_bytes( bs, data->value_length );
         if( !data->value )
             return LSMASH_ERR_NAMELESS;
+        if( bs->eob || lsmash_bs_count( bs ) < box->size )
+            return LSMASH_ERR_INVALID_DATA;
     }
     return read_leaf_box_common_last_process( file, box, level, data );
 }

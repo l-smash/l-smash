@@ -1968,7 +1968,9 @@ static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     uint32_t timescale;
     if( !chpl->version )
     {
-        if( !file->moov || !file->moov->mvhd )
+        if( LSMASH_IS_NON_EXISTING_BOX( file->moov )
+         || LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
+         || file->moov->mvhd->timescale == 0 )
             return LSMASH_ERR_INVALID_DATA;
         timescale = file->moov->mvhd->timescale;
     }
@@ -1994,7 +1996,8 @@ static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
         int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
         int with_bom = 0;
         const char *chapter_name = data->chapter_name;
-        if( !memcmp( chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
+        if( data->chapter_name_length >= 3
+         && !memcmp( chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
         {
             chapter_name += 3;
             with_bom = 1;
@@ -2032,6 +2035,8 @@ static int print_keys( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     for( lsmash_entry_t *entry = keys->list->head; entry; entry = entry->next )
     {
         isom_keys_entry_t *data = (isom_keys_entry_t *)entry->data;
+        if( data->key_size < 8 )
+            return LSMASH_ERR_INVALID_DATA;
         lsmash_ifprintf( fp, indent++, "[key %"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "key_size = %"PRIu32"\n", data->key_size );
         lsmash_ifprintf( fp, indent, "key_namespace = %s\n", lsm_box_4cc2str( data->key_namespace ) );
@@ -2039,7 +2044,8 @@ static int print_keys( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
         char *str = lsmash_malloc( value_length + 1 );
         if( !str )
             return LSMASH_ERR_MEMORY_ALLOC;
-        memcpy( str, data->key_value, value_length );
+        if( value_length && data->key_value )
+            memcpy( str, data->key_value, value_length );
         str[value_length] = 0;
         lsmash_ifprintf( fp, indent--, "key_value = %s\n", str );
         lsmash_free( str );

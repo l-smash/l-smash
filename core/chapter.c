@@ -253,20 +253,32 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     /* Create a track_ID for a new chapter track. */
     uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
     if( !id )
+    {
+        if( trak->tref->ref_list.entry_count == 0 )
+            lsm_box_remove_by_itself( trak->tref );
         goto error_message;
+    }
     uint32_t chapter_track_ID = *id = file->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
     isom_tref_type_t *chap = lsm_box_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
     if( LSMASH_IS_NON_EXISTING_BOX( chap ) )
     {
         lsmash_free( id );
+        if( trak->tref->ref_list.entry_count == 0 )
+            lsm_box_remove_by_itself( trak->tref );
         goto error_message;
     }
     chap->ref_count = 1;
     chap->track_ID  = id;
     /* Create a reference chapter track. */
     if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
+    {
+        if( trak->tref->ref_list.tail )
+            lsm_box_remove_by_itself( trak->tref->ref_list.tail->data );
+        if( trak->tref->ref_list.entry_count == 0 )
+            lsm_box_remove_by_itself( trak->tref );
         goto error_message;
+    }
     /* Set track parameters. */
     lsmash_track_parameters_t track_param;
     lsmash_initialize_track_parameters( &track_param );
@@ -382,7 +394,7 @@ uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 
 char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *timestamp )
 {
-    if( lsm_movie_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 || !timestamp )
         return NULL;
     lsmash_file_t *file = root->file->initializer;
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
@@ -390,11 +402,14 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
         return NULL;
     isom_chpl_t *chpl = file->moov->udta->chpl;
     isom_chpl_entry_t *data = (isom_chpl_entry_t *)lsmash_list_get_entry_data( chpl->list, index );
-    if( !data )
+    if( !data || !data->chapter_name )
         return NULL;
     double timescale = chpl->version ? 10000000.0 : file->moov->mvhd->timescale;
+    if( timescale == 0.0 )
+        return NULL;
     *timestamp = data->start_time / timescale;
-    if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )
+    if( data->chapter_name_length >= UTF8_BOM_LENGTH
+     && !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )
         return data->chapter_name + UTF8_BOM_LENGTH;
     return data->chapter_name;
 }
@@ -412,7 +427,8 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         uint32_t timescale;
         if( chpl->version == 0 )
         {
-            if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd ) )
+            if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
+             || file->moov->mvhd->timescale == 0 )
                 return LSMASH_ERR_NAMELESS;
             timescale = file->moov->mvhd->timescale;
         }
@@ -428,7 +444,8 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
             int ss =  start_time         % 60;
             int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
             const char *chapter_name = data->chapter_name;
-            if( !memcmp( chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
+            if( data->chapter_name_length >= UTF8_BOM_LENGTH
+             && !memcmp( chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
             {
                 chapter_name += UTF8_BOM_LENGTH;
 #ifdef _WIN32

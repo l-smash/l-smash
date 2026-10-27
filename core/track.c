@@ -544,7 +544,8 @@ int lsm_track_update_tkhd_duration( isom_trak_t *trak )
     isom_tkhd_t   *tkhd = trak->tkhd;
     tkhd->duration = 0;
     if( file->fragment
-     || LSMASH_IS_NON_EXISTING_BOX( trak->edts->elst ) )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->edts->elst )
+     || !lsm_list_count( trak->edts->elst->list ) )
     {
         /* If this presentation might be extended or this track doesn't have edit list, calculate track duration from media duration. */
         if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
@@ -590,7 +591,8 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     /* If the presentation won't be extended and this track has any edit, we don't change or update duration in tkhd. */
     if( !file->fragment
      && LSMASH_IS_EXISTING_BOX( trak->edts )
-     && LSMASH_IS_EXISTING_BOX( trak->edts->elst ) )
+     && LSMASH_IS_EXISTING_BOX( trak->edts->elst )
+     && lsm_list_count( trak->edts->elst->list ) )
         err = lsm_movie_update_mvhd_duration( file->moov );  /* Only update movie duration. */
     else
         err = lsm_track_update_tkhd_duration( trak );        /* Also update movie duration internally. */
