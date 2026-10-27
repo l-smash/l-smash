@@ -59,13 +59,13 @@ All command-line creation, remultiplexing, fragmentation, and timeline editing w
 ./cli/boxdumper --box movie.mp4
 
 # 4. Apply VFR timestamps from a Matroska timecode v2 file to track 1 of an existing MP4
-./cli/lshmuxer --track 1 --timecode timecodes.txt -i movie.mp4 -o movie_vfr.mp4
+./cli/lshmuxer -i movie.mp4?1:timecode=timecodes.txt -o movie_vfr.mp4
 
 # 5. 1-Pass Multiplex + VFR Timecode + Chapter + Audio in a single command
 ./cli/lshmuxer -i video.h264?timecode=timecodes.txt -i audio.aac?language=jpn,encoder-delay=2112 \
                --chapter chapters.txt --optimize-pd -o movie_vfr_1pass.mp4
 ```
-See [2.3](#23-cli-concepts--input-text-file-formats-chapters--timecodes) for explanations of `--optimize-pd`, `encoder-delay`, and `--shift-timeline`, as well as the text file formats for `--chapter` and `--timecode`.
+See [2.3](#23-cli-concepts--input-text-file-formats-chapters--timecodes) for explanations of `--optimize-pd`, `encoder-delay`, and `--shift-timeline`, as well as the text file formats for `--chapter` and `timecode=`.
 
 ---
 
@@ -77,11 +77,7 @@ See [2.3](#23-cli-concepts--input-text-file-formats-chapters--timecodes) for exp
 
 #### Synopsis
 ```sh
-# Standard multi-input syntax (raw streams, containers, or mixed)
 lshmuxer [global_options] -i input1[?track_options] [-i input2[?track_options] ...] -o output.[mp4|mov|m4a|m4v|3gp|3g2]
-
-# Positional single-input timeline-editing syntax (automatically enables --optimize-pd)
-lshmuxer [global_options] input[?track_options] output.[mp4|mov|m4a|m4v|3gp|3g2]
 ```
 
 #### Supported Input Formats (`lshmuxer`)
@@ -133,22 +129,6 @@ lshmuxer [global_options] input[?track_options] output.[mp4|mov|m4a|m4v|3gp|3g2]
 | `--language` | `<string>` | Specify the default 3-letter ISO-639-2/T language code for all output tracks. |
 | `--dry-run` | *(none)* | Perform full input probing, option validation, and timeline calculation without writing output files. |
 
-#### Global Timeline-Editing Shortcuts (`lshmuxer`)
-These global flags apply timeline edits to `--track <int>` (default: track `1`) of the first input file (`input[0]`), providing drop-in compatibility with standalone timeline-editing workflows (for multi-input or multi-track editing, use the equivalent per-track `?timecode=`, `?skip=`, `?delay=` options below):
-
-| Option | Argument | Description |
-| :--- | :--- | :--- |
-| `--track` | `<integer>` | Target 1-based track number in the first input file for global timeline options (default: `1`). |
-| `--timecode` | `<path>` | Rewrite track timestamps using a **Matroska timecode format v1 or v2** file. |
-| `--media-timescale` | `<integer>` | Convert the target track's media timescale (`mdhd.timescale`) to `<integer>`. |
-| `--media-timebase` | `<integer>` | Convert the target track's timestamp unit step (timebase) to `<integer>`. |
-| `--skip` | `<int>` or `<num>/<den>` | Skip duration at the start of the media presentation via Edit List (`elst` `media_time`). |
-| `--delay` | `<int>` or `<num>/<den>` | Insert an Empty Edit (`elst` `media_time = -1`) delay before the media presentation. |
-| `--dts-compression` | *(none)* | Eliminate initial composition-to-decode delay (`ctts` offset) by compressing initial DTS intervals and compensating via Edit List. |
-
-> [!WARNING]
-> **`--dts-compression` (and `?dts-compression`) can break HRD / VBV conformance.** This option squeezes the DTS spacing of the initial frames and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `--dts-compression`, and keep `--skip` / `--delay` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
-
 #### iTunes Metadata Options (`lshmuxer`, valid for `mp4`, `m4a`, `m4v`)
 | Option | Argument | Description |
 | :--- | :--- | :--- |
@@ -193,11 +173,14 @@ Per-track options are appended to an input path after `?`.
 | `seek=<int>` | `<integer>` | Container | Start remultiplexing from 1-based sample number `<int>`. |
 | `safe-seek=<int>` | `<integer>` | Container | Seek to the Random Access Point (RAP) at or preceding sample `<int>` and prepend an Edit List to skip leading frames prior to `<int>`. |
 | `timecode=<path>` | `<path>` | Raw / Container | Rewrite this track's timeline in 1 pass using a Matroska timecode v1 or v2 file. |
-| `media-timescale=<int>` | `<integer>` | Raw / Container | Convert this track's media timescale (`mdhd.timescale`) to `<int>`. |
-| `media-timebase=<int>` | `<integer>` | Raw / Container | Convert this track's timestamp unit step (timebase) to `<int>`. |
+| `media-timescale=<int>` | `<integer>` | Raw / Container | Convert this track's media timescale (`mdhd.timescale`) to `<int>` (`timescale=<int>` is also accepted as an alias). |
+| `media-timebase=<int>` | `<integer>` | Raw / Container | Convert this track's timestamp unit step (timebase) to `<int>` (`timebase=<int>` is also accepted as an alias). |
 | `skip=<arg>` | `<int>` or `<num>/<den>` | Raw / Container | Skip duration at the start of this track's presentation via Edit List. |
 | `delay=<arg>` | `<int>` or `<num>/<den>` | Raw / Container | Insert an Empty Edit delay before this track's presentation via Edit List. |
 | `dts-compression` | *(flag)* | Raw / Container | Eliminate initial composition-to-decode delay on this track via DTS compression. |
+
+> [!WARNING]
+> **`dts-compression` can break HRD / VBV conformance.** This option squeezes the DTS spacing of the initial frames and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `dts-compression`, and keep `skip=` / `delay=` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
 
 #### `lshmuxer` Practical Examples
 ```sh
@@ -263,7 +246,7 @@ boxdumper [options] input
 - **`--optimize-pd` (FastStart / progressive download)**: By default, a single-pass MP4 writes the Movie Box (`moov`) after the Media Data Box (`mdat`), requiring a player to seek to the end of the file before starting playback. `--optimize-pd` relocates `moov` in front of `mdat` and adjusts all chunk offsets (`stco`/`co64`) so web and streaming playback can begin immediately while downloading.
 - **`encoder-delay=<n>`**: Lossy audio encoders (such as AAC, Opus, and MP3) prepend `n` priming samples of silence at stream startup. Specifying `encoder-delay=<n>` writes an Edit List (`elst` `media_time = n`) and an audio pre-roll sample group (`'roll'` with negative `roll_distance`) so the player discards the priming silence and maintains exact A/V synchronization (see [3.6.1](#361-what-an-edit-list-really-is)).
 - **`--shift-timeline`**: When video contains B-frames, a frame's composition timestamp can precede its decoding timestamp. `--shift-timeline` shifts composition offsets using signed negative offsets (`ctts` version 1 in ISOBMFF `iso4`+ or signed `ctts` version 0 in QuickTime, accompanied by a `cslg` Composition-to-Decode Box) or an Edit List so the earliest presentation starts at `0` without delaying decode times (see [3.6.2](#362-dual-timelines-and-cslg)).
-- **Delay precision (`--delay` / `delay=`)**: An Empty Edit delay is expressed in the **Movie Timescale (`mvhd.timescale`)**. See [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap) when sample-accurate audio delay is required.
+- **Delay precision (`delay=`)**: An Empty Edit delay is expressed in the **Movie Timescale (`mvhd.timescale`)**. See [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap) when sample-accurate audio delay is required.
 
 #### Chapter Text File Formats (`--chapter`)
 L-SMASH accepts two plain-text chapter formats (auto-detected from the first line, with optional leading UTF-8 BOM):
@@ -285,7 +268,7 @@ Depending on the target container format, `--chapter chapters.txt` populates:
 - **Reference Chapter Track (`tref.chap`)**: Available in QuickTime (`.mov`) and iTunes/MP4 (`.mp4`, `.m4v`, `.m4a`). Creates a dedicated timed text track (`text` in `.mov`, `tx3g` in `.mp4`/`.m4v`/`.m4a`) linked from `--chapter-track` (default: track `1`) via a `'chap'` Track Reference Box (`tref`).
 - **User Data Chapter List (`moov.udta.chpl`)**: Available in `.mp4`, `.m4v`, and `.m4a` (and 3GPP family). Writes a table-based `chpl` FullBox inside `moov.udta` storing chapter start timestamps in 100 ns units and UTF-8 title strings (pass `--chpl-with-bom` to prefix each title string with a UTF-8 BOM).
 
-#### Matroska Timecode Format v1 / v2 Text Files (`--timecode` / `timecode=`)
+#### Matroska Timecode Format v1 / v2 Text Files (`timecode=`)
 - **Format v2 (Per-Frame Presentation Timestamps in Milliseconds)**:
   ```text
   # timecode format v2
@@ -316,7 +299,7 @@ The standalone binaries `muxer`, `remuxer`, and `timelineeditor` are **legacy co
 | :--- | :--- | :--- |
 | `muxer [opts] -i raw1?opt=val -i raw2 -o out.mp4` | `lshmuxer [opts] -i raw1?opt=val -i raw2 -o out.mp4` | **100% drop-in compatible.** All `muxer` global options, iTunes metadata flags, and per-input `?opt=val` flags work identically in `lshmuxer`. |
 | `remuxer [opts] -i in.mp4?1:opt=val?2:remove -o out.mp4` | `lshmuxer [opts] -i in.mp4?1:opt=val?2:remove -o out.mp4` | **100% drop-in compatible.** Per-track options for multiple tracks on a single input are separated by `?` (`?1:...?2:...`) in both tools. |
-| `timelineeditor [opts] in.mp4 out.mp4` | `lshmuxer [opts] in.mp4 out.mp4`<br>*(or)* `lshmuxer [opts] -i in.mp4 -o out.mp4` | Supports both positional (`lshmuxer [opts] in.mp4 out.mp4`) and `-i`/`-o` syntax, as well as per-track `?timecode=`, `?skip=`, `?delay=`, `?dts-compression`, `?media-timescale=`, and `?media-timebase=`. Note that `timelineeditor`'s `--Media-timescale` (capital `M`, rescaling timebase) corresponds to `--media-timebase` (or `?media-timebase=`) in `lshmuxer`. |
+| `timelineeditor [opts] in.mp4 out.mp4` | `lshmuxer -i in.mp4?[track:]opt=val -o out.mp4` | Map `timelineeditor` options (`--track <n>`, `--timecode <f>`, `--skip <s>`, `--delay <d>`, `--dts-compression`, `--media-timescale <ts>`, `--media-timebase <tb>` / `--Media-timescale <tb>`) to `lshmuxer` per-track options (`-i in.mp4?[n:]timecode=<f>,skip=<s>,delay=<d>,dts-compression,media-timescale=<ts>,media-timebase=<tb>`). |
 | **3-step pipeline**: `muxer` → `timelineeditor` → `remuxer` | **Single 1-pass command**: `lshmuxer -i raw.h264?timecode=tc.txt -i audio.aac -o out.mp4` | Eliminates intermediate temporary MP4 files by applying VFR timecode editing, multiplexing, and optional fragmentation in a single pass. |
 
 ---
@@ -795,7 +778,7 @@ Presentation:        0======== video ========         no delay
 Both behaviours are valid per the specification. To make every player present at the same timing, write an explicit Edit List (`start_time = CT0`, which maps the first sample to Presentation `0`).
 
 #### 3.6.4 Warning: Edit Lists and the Decoder Buffer (HRD / VBV)
-An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `--dts-compression` (see [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor)) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
+An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `dts-compression` (see [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor)) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
 
 
 #### 3.6.5 Empty Edit and Movie Timescale Precision: the Sample-Accuracy Trap
@@ -818,7 +801,7 @@ If the Movie Timescale is coarser than the audio Media Timescale (or not an inte
 | `1000` | not divisible (48 samples per tick); always rounded | not divisible |
 | `9000` / `90000` | `90000` is not divisible by 48000; `9000` neither | not divisible |
 
-**Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `lshmuxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `lshmuxer`, set `--movie-timescale` alongside `--delay` (or `?delay=`).
+**Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `lshmuxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `lshmuxer`, set `--movie-timescale` alongside `?delay=`.
 
 **Why the Movie Timescale is not set to the LCM of the track timescales:** with several tracks (for example video `30000` and audio `44100`), the least common multiple (`4,410,000` here) would make every Movie Timescale tick extremely fine. Long durations and large sample durations expressed in such ticks can easily overflow `mvhd` / `tkhd` / `elst` `duration` fields and intermediate calculations, especially in Version 0 boxes where these fields are 32-bit. For multi-track output L-SMASH therefore deliberately keeps a safe, modest fixed value (such as `600` or `1000`) and accepts the coarser Empty Edit granularity as a design trade-off; use the countermeasures above when sample-accurate audio delay matters.
 
