@@ -2621,7 +2621,7 @@ int test_muxer_lshmuxer_cli_equivalence( void )
             "test_cli_eq_out.mp4", NULL ) < 0 )
         goto cleanup;
 
-    /* Case 17: M4A container remuxing preserving iTunes metadata without duplicate encoding tool + reference/Nero chapters with BOM */
+    /* Case 17: M4A container remuxing preserving iTunes metadata without duplicate encoding tool + reference and moov.udta.chpl chapters with BOM */
     if( assert_remuxer_equivalent(
             "--chapter test_cli_eq_chapters.txt --chpl-with-bom --chapter-track 1 -i test_cli_eq_in_meta.m4a",
             "test_cli_eq_out.m4a", NULL ) < 0 )
