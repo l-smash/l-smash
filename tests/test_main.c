@@ -458,6 +458,7 @@ int main( void )
     RUN_TEST( test_read_file_audio_raw_streams );
     RUN_TEST( test_read_file_video_raw_streams );
     RUN_TEST( test_muxer_lshmuxer_cli_equivalence );
+    RUN_TEST( test_container_metadata_and_edit_list_roundtrip );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );

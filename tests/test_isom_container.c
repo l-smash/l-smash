@@ -539,6 +539,581 @@ int test_malformed_boxes_and_sample_tables( void )
         remove( bad_mp4 );
     }
 
+    /* 13j. Truncated elst (version 0 and version 1) with excessive entry_count */
+    for( int ver = 0; ver <= 1; ver++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        uint32_t entry_sz = ver == 1 ? 20 : 12;
+        uint32_t elst_sz  = 16 + entry_sz; /* header(12) + entry_count(4) + 1 entry */
+        uint32_t edts_sz  = 8 + elst_sz;
+        uint32_t trak_sz  = 8 + edts_sz;
+        uint32_t moov_sz  = 8 + trak_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be32( bs, edts_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 'd', 't', 's' ) );
+        lsmash_bs_put_be32( bs, elst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 'l', 's', 't' ) );
+        lsmash_bs_put_byte( bs, (uint8_t)ver );
+        lsmash_bs_put_be24( bs, 0 );
+        lsmash_bs_put_be32( bs, 0x10000000U ); /* excessive entry_count */
+        if( ver == 1 )
+        {
+            lsmash_bs_put_be64( bs, 1000 );
+            lsmash_bs_put_be64( bs, 0 );
+        }
+        else
+        {
+            lsmash_bs_put_be32( bs, 1000 );
+            lsmash_bs_put_be32( bs, 0 );
+        }
+        lsmash_bs_put_be32( bs, 0x00010000U );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13j: write bad_mp4 (truncated elst)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13j: open bad_mp4 (truncated elst)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13j: lsmash_read_file rejects truncated elst with excessive entry_count" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13j: 100% rollback after truncated elst" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13k. Malformed elst with invalid negative media_time (< -1) */
+    for( int ver = 0; ver <= 1; ver++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        uint32_t entry_sz = ver == 1 ? 20 : 12;
+        uint32_t elst_sz  = 16 + entry_sz;
+        uint32_t edts_sz  = 8 + elst_sz;
+        uint32_t trak_sz  = 8 + edts_sz;
+        uint32_t moov_sz  = 8 + trak_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be32( bs, edts_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 'd', 't', 's' ) );
+        lsmash_bs_put_be32( bs, elst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 'l', 's', 't' ) );
+        lsmash_bs_put_byte( bs, (uint8_t)ver );
+        lsmash_bs_put_be24( bs, 0 );
+        lsmash_bs_put_be32( bs, 1 );
+        if( ver == 1 )
+        {
+            lsmash_bs_put_be64( bs, 1000 );
+            lsmash_bs_put_be64( bs, (uint64_t)(int64_t)-2 ); /* invalid negative media_time = -2 */
+        }
+        else
+        {
+            lsmash_bs_put_be32( bs, 1000 );
+            lsmash_bs_put_be32( bs, (uint32_t)(int32_t)-2 ); /* invalid negative media_time = -2 */
+        }
+        lsmash_bs_put_be32( bs, 0x00010000U );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13k: write bad_mp4 (elst media_time=-2)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13k: open bad_mp4 (elst media_time=-2)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13k: lsmash_read_file rejects elst with media_time < -1" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13k: 100% rollback after elst with media_time < -1" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13l. Empty elst (entry_count == 0) and dwell edit (media_rate == 0) safety in timeline & track duration */
+    {
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 0, &mux_param ) == 0, "13l: open file for elst edge cases" );
+        lsmash_brand_type brands[2] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_MP42 };
+        mux_param.major_brand = ISOM_BRAND_TYPE_MP42;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 2;
+        lsmash_file_t *mux_file = lsmash_set_file( mux_root, &mux_param );
+        TEST_ASSERT( mux_file != NULL, "13l: set file" );
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        movie_param.timescale = 600;
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "13l: set movie params" );
+        uint32_t vtid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t vtp;
+        lsmash_initialize_track_parameters( &vtp );
+        vtp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( mux_root, vtid, &vtp );
+        lsmash_media_parameters_t vmp;
+        lsmash_initialize_media_parameters( &vmp );
+        vmp.timescale = 1000;
+        lsmash_set_media_parameters( mux_root, vtid, &vmp );
+        lsmash_video_summary_t *vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, vtid, vsum ) == 1, "13l: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum );
+        for( uint32_t i = 0; i < 4; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 16 );
+            memset( s->data, (int)(0x20 + i), 16 );
+            s->dts = i * 100;
+            s->cts = i * 100;
+            s->index = 1;
+            s->prop.ra_flags = (i == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( mux_root, vtid, s ) == 0, "13l: append sample" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, vtid, 100 ) == 0, "13l: flush samples" );
+        /* Create an empty elst box (0 entries) directly on Track 1 and verify lsmash_update_track_duration falls back to mdhd duration */
+        isom_trak_t *trak = (isom_trak_t *)mux_file->moov->trak_list.head->data;
+        TEST_ASSERT( !LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_edts( trak ) ), "13l: add edts" );
+        TEST_ASSERT( !LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_elst( trak->edts ) ), "13l: add empty elst" );
+        TEST_ASSERT( lsmash_update_track_duration( mux_root, vtid, 100 ) == 0, "13l: update_track_duration with empty elst" );
+        TEST_ASSERT( trak->tkhd->duration == 240, "13l: empty elst falls back to mdhd duration (400 * 600 / 1000 = 240)" );
+        /* Now add a dwell edit (media_rate == 0) and finish movie */
+        lsmash_edit_t dwell_edit = { .duration = 120, .start_time = 0, .rate = ISOM_EDIT_MODE_DWELL };
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( mux_root, vtid, dwell_edit ) == 0, "13l: add dwell edit (rate=0)" );
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "13l: finish movie" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+
+        lsmash_root_t *rd_root = lsmash_create_root();
+        lsmash_file_parameters_t rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &rd_param ) == 0, "13l: open dwell edit movie" );
+        lsmash_file_t *rd_file = lsmash_set_file( rd_root, &rd_param );
+        TEST_ASSERT( lsmash_read_file( rd_file, &rd_param ) >= 0, "13l: read dwell edit movie" );
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( rd_root, 1 ) == 1, "13l: count dwell edit" );
+        lsmash_edit_t got_edit = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( rd_root, 1, 1, &got_edit ) == 0, "13l: get dwell edit" );
+        TEST_ASSERT( got_edit.duration == 120 && got_edit.start_time == 0 && got_edit.rate == 0, "13l: dwell edit fields match" );
+        TEST_ASSERT( lsmash_construct_timeline( rd_root, 1 ) == 0, "13l: construct timeline with dwell edit (rate=0) succeeds" );
+        lsmash_close_file( &rd_param );
+        lsmash_destroy_root( rd_root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13l: 0 leak after empty elst and dwell edit verification" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13m. Malformed tref.chap (empty box, non-4-byte-aligned payload, and forbidden track_ID == 0) */
+    for( int case_idx = 0; case_idx < 3; case_idx++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        uint32_t chap_sz = (case_idx == 0) ? 8 : (case_idx == 1) ? 10 : 12;
+        uint32_t tref_sz = 8 + chap_sz;
+        uint32_t trak_sz = 8 + tref_sz;
+        uint32_t moov_sz = 8 + trak_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be32( bs, tref_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'e', 'f' ) );
+        lsmash_bs_put_be32( bs, chap_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 'h', 'a', 'p' ) );
+        if( case_idx == 1 )
+            lsmash_bs_put_be16( bs, 0x0001 ); /* 2 bytes (non-multiple of 4) */
+        else if( case_idx == 2 )
+            lsmash_bs_put_be32( bs, 0 );      /* forbidden track_ID == 0 */
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13m: write bad_mp4 (malformed tref.chap)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13m: open bad_mp4 (malformed tref.chap)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13m: lsmash_read_file rejects empty, unaligned, or track_ID==0 tref.chap" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13m: 100% rollback after malformed tref.chap" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13n. tref.chap with non-existent track_ID (999) or self-referential track_ID (1) */
+    for( int self_ref = 0; self_ref <= 1; self_ref++ )
+    {
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 0, &mux_param ) == 0, "13n: open file" );
+        lsmash_brand_type brands[2] = { ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+        mux_param.major_brand = ISOM_BRAND_TYPE_MP42;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 2;
+        lsmash_file_t *mux_file = lsmash_set_file( mux_root, &mux_param );
+        TEST_ASSERT( mux_file != NULL, "13n: set file" );
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "13n: set movie params" );
+        uint32_t vtid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t vtp;
+        lsmash_initialize_track_parameters( &vtp );
+        vtp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( mux_root, vtid, &vtp );
+        lsmash_media_parameters_t vmp;
+        lsmash_initialize_media_parameters( &vmp );
+        vmp.timescale = 1000;
+        lsmash_set_media_parameters( mux_root, vtid, &vmp );
+        lsmash_video_summary_t *vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, vtid, vsum ) == 1, "13n: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum );
+        lsmash_sample_t *s = lsmash_create_sample( 16 );
+        memset( s->data, 0x42, 16 );
+        s->dts = 0; s->cts = 0; s->index = 1;
+        s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( mux_root, vtid, s ) == 0, "13n: append sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, vtid, 100 ) == 0, "13n: flush sample" );
+
+        /* Attach tref.chap with non-existent track_ID=999 or self-referential track_ID=1 */
+        isom_trak_t *trak = (isom_trak_t *)mux_file->moov->trak_list.head->data;
+        TEST_ASSERT( !LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tref( trak ) ), "13n: add tref" );
+        isom_tref_type_t *chap = lsm_box_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
+        TEST_ASSERT( !LSMASH_IS_NON_EXISTING_BOX( chap ), "13n: add chap reference" );
+        chap->ref_count = 1;
+        chap->track_ID  = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
+        TEST_ASSERT( chap->track_ID != NULL, "13n: alloc track_ID" );
+        chap->track_ID[0] = self_ref ? 1 : 999;
+
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "13n: finish movie" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+
+        lsmash_root_t *rd_root = lsmash_create_root();
+        lsmash_file_parameters_t rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &rd_param ) == 0, "13n: open movie with dangling/self tref.chap" );
+        rd_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *rd_file = lsmash_set_file( rd_root, &rd_param );
+        TEST_ASSERT( lsmash_read_file( rd_file, &rd_param ) >= 0, "13n: read movie with dangling/self tref.chap" );
+        TEST_ASSERT( lsmash_construct_timeline( rd_root, 1 ) == 0, "13n: construct timeline safely ignores invalid tref.chap target" );
+        lsmash_destruct_timeline( rd_root, 1 );
+        lsmash_close_file( &rd_param );
+        lsmash_destroy_root( rd_root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13n: 0 leak after dangling/self-referential tref.chap" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13o. Corrupted moov.udta.chpl (truncated entry_count & chapter_name_length exceeding box boundary) */
+    for( int case_idx = 0; case_idx < 2; case_idx++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* chpl v1: header(12) + unknown(1) + entry_count(4) + 1 entry: start_time(8) + len(1) + "abc"(3) = 29 bytes */
+        uint32_t chpl_sz = 29;
+        uint32_t udta_sz = 8 + chpl_sz;
+        uint32_t moov_sz = 8 + udta_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, udta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'u', 'd', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, chpl_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 'h', 'p', 'l' ) );
+        lsmash_bs_put_byte( bs, 1 ); /* version = 1 */
+        lsmash_bs_put_be24( bs, 0 );
+        lsmash_bs_put_byte( bs, 0 ); /* unknown */
+        lsmash_bs_put_be32( bs, case_idx == 0 ? 50 : 1 ); /* case 0: excessive entry_count=50; case 1: entry_count=1 */
+        lsmash_bs_put_be64( bs, 0 );                      /* start_time = 0 */
+        lsmash_bs_put_byte( bs, case_idx == 0 ? 3 : 200 ); /* case 1: chapter_name_length=200 > remaining 3 bytes! */
+        lsmash_bs_put_bytes( bs, 3, (void *)"abc" );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13o: write bad_mp4 (corrupted chpl)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13o: open bad_mp4 (corrupted chpl)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13o: lsmash_read_file rejects truncated chpl or oversized chapter_name_length" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13o: 100% rollback after corrupted chpl" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13p. chpl edge cases: 0-length chapter_name, 1-byte 0xEF partial BOM chapter_name, and mvhd timescale == 0 guard */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* mvhd v0 (108 bytes) + udta -> chpl v0 with 2 entries:
+         * entry 0: start_time=1000, len=0 ("") -> 9 bytes
+         * entry 1: start_time=2000, len=1 ("\xEF") -> 10 bytes */
+        uint32_t mvhd_sz = 108;
+        uint32_t chpl_sz = 12 + 1 + 9 + 10; /* 32 bytes */
+        uint32_t udta_sz = 8 + chpl_sz;
+        uint32_t moov_sz = 8 + mvhd_sz + udta_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, mvhd_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'v', 'h', 'd' ) );
+        lsmash_bs_put_be32( bs, 0 );    /* version=0, flags=0 */
+        lsmash_bs_put_be32( bs, 0 );    /* creation_time */
+        lsmash_bs_put_be32( bs, 0 );    /* modification_time */
+        lsmash_bs_put_be32( bs, 1000 ); /* timescale = 1000 */
+        lsmash_bs_put_be32( bs, 5000 ); /* duration */
+        lsmash_bs_put_be32( bs, 0x00010000U ); /* rate */
+        lsmash_bs_put_be16( bs, 0x0100 );      /* volume */
+        for( int i = 0; i < 70; i++ )
+            lsmash_bs_put_byte( bs, 0 );
+        lsmash_bs_put_be32( bs, 1 ); /* next_track_ID */
+
+        lsmash_bs_put_be32( bs, udta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'u', 'd', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, chpl_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 'h', 'p', 'l' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version=0, flags=0 */
+        lsmash_bs_put_byte( bs, 2 ); /* entry_count = 2 */
+        /* entry 0: 0-length chapter name */
+        lsmash_bs_put_be64( bs, 1000 );
+        lsmash_bs_put_byte( bs, 0 );
+        /* entry 1: 1-byte 0xEF chapter name (< 3 bytes UTF-8 BOM) */
+        lsmash_bs_put_be64( bs, 2000 );
+        lsmash_bs_put_byte( bs, 1 );
+        lsmash_bs_put_byte( bs, 0xEF );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13p: write chpl short-name file" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13p: open chpl short-name file" );
+        param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        /* Note: moov without tracks returns incompatible at the end of lsm_read_file, but chpl is parsed into file->moov->udta->chpl */
+        (void)lsmash_read_file( file, &param );
+        file->root->file = file;
+        file->initializer = file;
+        TEST_ASSERT( lsmash_count_tyrant_chapter( root ) == 2, "13p: count_tyrant_chapter == 2" );
+        double ts = -1.0;
+        char *chap0 = lsmash_get_tyrant_chapter( root, 1, &ts );
+        TEST_ASSERT( chap0 != NULL && strcmp( chap0, "" ) == 0 && ts == 1.0,
+                     "13p: 0-length chapter name retrieved safely without BOM memcmp over-read" );
+        char *chap1 = lsmash_get_tyrant_chapter( root, 2, &ts );
+        TEST_ASSERT( chap1 != NULL && (uint8_t)chap1[0] == 0xEF && chap1[1] == '\0' && ts == 2.0,
+                     "13p: 1-byte 0xEF chapter name retrieved safely without BOM memcmp over-read" );
+        TEST_ASSERT( lsmash_get_tyrant_chapter( root, 1, NULL ) == NULL, "13p: NULL timestamp rejected safely" );
+        /* Verify timescale == 0 guard on chpl v0 */
+        file->moov->mvhd->timescale = 0;
+        TEST_ASSERT( lsmash_get_tyrant_chapter( root, 1, &ts ) == NULL, "13p: timescale==0 guarded in lsmash_get_tyrant_chapter" );
+        TEST_ASSERT( lsmash_print_chapter_list( root ) < 0, "13p: timescale==0 guarded in lsmash_print_chapter_list" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13p: 0 leak after chpl short-name and zero-timescale checks" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13q. Corrupted meta / ilst / data / mean / name (payload exceeding parent box, header < 16B, and EOF truncation) */
+    for( int case_idx = 0; case_idx < 3; case_idx++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_MP42 );
+        lsmash_bs_put_be32( bs, 0 );
+        if( case_idx == 0 )
+        {
+            /* data box claiming size 500 inside a 32-byte metaitem box */
+            uint32_t item_sz = 32;
+            uint32_t ilst_sz = 8 + item_sz;
+            uint32_t meta_sz = 12 + ilst_sz;
+            uint32_t udta_sz = 8 + meta_sz;
+            uint32_t moov_sz = 8 + udta_sz;
+            lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+            lsmash_bs_put_be32( bs, udta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'u', 'd', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, meta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, ilst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'l', 's', 't' ) );
+            lsmash_bs_put_be32( bs, item_sz ); lsmash_bs_put_be32( bs, ITUNES_METADATA_ITEM_TITLE );
+            lsmash_bs_put_be32( bs, 500 );     lsmash_bs_put_be32( bs, LSMASH_4CC( 'd', 'a', 't', 'a' ) );
+            lsmash_bs_put_be64( bs, 0 );
+            lsmash_bs_put_be64( bs, 0 );
+        }
+        else if( case_idx == 1 )
+        {
+            /* data box with size 12 (< 16 minimum required for 8-byte box header + 8-byte data header) */
+            uint32_t data_sz = 12;
+            uint32_t item_sz = 8 + data_sz;
+            uint32_t ilst_sz = 8 + item_sz;
+            uint32_t meta_sz = 12 + ilst_sz;
+            uint32_t udta_sz = 8 + meta_sz;
+            uint32_t moov_sz = 8 + udta_sz;
+            lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+            lsmash_bs_put_be32( bs, udta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'u', 'd', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, meta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, ilst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'l', 's', 't' ) );
+            lsmash_bs_put_be32( bs, item_sz ); lsmash_bs_put_be32( bs, ITUNES_METADATA_ITEM_TITLE );
+            lsmash_bs_put_be32( bs, data_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'd', 'a', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, 0 );
+        }
+        else
+        {
+            /* custom '----' metaitem where 'mean' box claims 100 bytes (fitting inside parent sizes) but stream is truncated at EOF after 16 bytes */
+            uint32_t mean_sz = 100;
+            uint32_t item_sz = 8 + mean_sz;
+            uint32_t ilst_sz = 8 + item_sz;
+            uint32_t meta_sz = 12 + ilst_sz;
+            uint32_t udta_sz = 8 + meta_sz;
+            uint32_t moov_sz = 8 + udta_sz;
+            lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+            lsmash_bs_put_be32( bs, udta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'u', 'd', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, meta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 't', 'a' ) );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, ilst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'l', 's', 't' ) );
+            lsmash_bs_put_be32( bs, item_sz ); lsmash_bs_put_be32( bs, ITUNES_METADATA_ITEM_CUSTOM );
+            lsmash_bs_put_be32( bs, mean_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 'a', 'n' ) );
+            lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+            lsmash_bs_put_be32( bs, 0x636F6D2EU ); /* only 4 payload bytes instead of 88! */
+        }
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13q: write bad_mp4 (corrupted ilst/data/mean)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13q: open bad_mp4 (corrupted ilst/data/mean)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13q: lsmash_read_file rejects corrupted ilst/data/mean box" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13q: 100% rollback after corrupted ilst/data/mean" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13r. Corrupted QTFF meta.keys (key_size < 8 underflow, key_size > box boundary, and excessive entry_count) */
+    for( int case_idx = 0; case_idx < 3; case_idx++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_QT );
+        lsmash_bs_put_be32( bs, 0 );
+        /* QTFF meta (not FullBox: next 4 bytes are hdlr size != 0) + keys */
+        uint32_t hdlr_sz = 33;
+        uint32_t keys_sz = 24; /* 12 (FullBox) + 4 (entry_count) + 8 (key_size + key_namespace) */
+        uint32_t meta_sz = 8 + hdlr_sz + keys_sz;
+        uint32_t moov_sz = 8 + meta_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, meta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, hdlr_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'h', 'd', 'l', 'r' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_byte( bs, 0 );
+        lsmash_bs_put_be32( bs, keys_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'k', 'e', 'y', 's' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+        lsmash_bs_put_be32( bs, case_idx == 2 ? 1000 : 1 ); /* entry_count */
+        lsmash_bs_put_be32( bs, case_idx == 0 ? 4 : 200 );  /* case 0: key_size=4 (<8); case 1: key_size=200 (>box) */
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 't', 'a' ) );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13r: write bad_mp4 (corrupted keys)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13r: open bad_mp4 (corrupted keys)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13r: lsmash_read_file rejects corrupted keys box" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13r: 100% rollback after corrupted keys" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13s. Truncated ctab box with excessive color_table->size */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_QT );
+        lsmash_bs_put_be32( bs, 0 );
+        uint32_t ctab_sz = 24; /* 8 (header) + 4 (seed) + 2 (flags) + 2 (size=255) + 8 (only 1 entry instead of 256!) */
+        uint32_t moov_sz = 8 + ctab_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, ctab_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 't', 'a', 'b' ) );
+        lsmash_bs_put_be32( bs, 0 );   /* color_table_seed */
+        lsmash_bs_put_be16( bs, 0 );   /* color_table_flags */
+        lsmash_bs_put_be16( bs, 255 ); /* color_table_size = 255 (256 entries = 2048 bytes, but only 8 bytes remain) */
+        lsmash_bs_put_be64( bs, 0 );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13s: write bad_mp4 (truncated ctab)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13s: open bad_mp4 (truncated ctab)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13s: lsmash_read_file rejects truncated ctab with excessive color_table_size" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13s: 100% rollback after truncated ctab" );
+#endif
+        remove( bad_mp4 );
+    }
+
     printf( "[PASS] test_malformed_boxes_and_sample_tables\n" );
     return 0;
 }
@@ -1109,5 +1684,485 @@ int test_external_data_reference_roundtrip( void )
     remove( movie_path );
     remove( media_path );
     printf( "[PASS] test_external_data_reference_roundtrip\n" );
+    return 0;
+}
+
+/*---------------------------------------------------------------------------
+ * Test 23: Container Metadata, Chapter, Track Reference & Edit List Round-Trip
+ *---------------------------------------------------------------------------*/
+int test_container_metadata_and_edit_list_roundtrip( void )
+{
+    const char *mp4_path  = "tests/tmp_test_container_meta_elst.mp4";
+    const char *bom_path  = "tests/tmp_test_container_chpl_bom.mp4";
+    const char *qt_path   = "tests/tmp_test_container_qt_ctab_keys.mov";
+    const char *chap_file = "tests/tmp_test_chapters.txt";
+    const char *dump_path = "tests/tmp_test_container_dump.txt";
+
+    /* Prepare a synthetic chapter file with 3 entries */
+    {
+        const char *chap_text =
+            "CHAPTER01=00:00:00.000\n"
+            "CHAPTER01NAME=Opening Scene\n"
+            "CHAPTER02=00:00:01.200\n"
+            "CHAPTER02NAME=Main Part\n"
+            "CHAPTER03=00:00:02.500\n"
+            "CHAPTER03NAME=Finale\n";
+        TEST_ASSERT( write_test_file( chap_file, (const uint8_t *)chap_text, strlen( chap_text ) ) == 0,
+                     "23: write synthetic chapter file" );
+    }
+
+    /* 23a. Build MP4 with elst v0 (Empty Edit + media offset), elst v1 (64-bit duration),
+     *      tref.chap reference chapter track, moov.udta.chpl, and iTunes metadata (meta/ilst) */
+    char long_desc[300];
+    memset( long_desc, 'D', sizeof(long_desc) - 1 );
+    long_desc[sizeof(long_desc) - 1] = '\0';
+    static const uint8_t png_sig[8]  = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+    static const uint8_t trkn_bin[8] = { 0x00, 0x00, 0x00, 0x03, 0x00, 0x10, 0x00, 0x00 };
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "23a: create root" );
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 0, &param ) == 0, "23a: open mp4_path" );
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_M4V, ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+        param.major_brand   = ISOM_BRAND_TYPE_M4V;
+        param.brands        = brands;
+        param.brand_count   = 3;
+        param.minor_version = 0;
+        TEST_ASSERT( lsmash_set_file( root, &param ) != NULL, "23a: set file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        movie_param.timescale = 600;
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_param ) == 0, "23a: set movie params" );
+
+        /* Track 1: Video track (will carry elst v0 + tref.chap reference) */
+        uint32_t vtid1 = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( vtid1 == 1, "23a: create video track 1" );
+        lsmash_track_parameters_t vtp;
+        lsmash_initialize_track_parameters( &vtp );
+        vtp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+        TEST_ASSERT( lsmash_set_track_parameters( root, vtid1, &vtp ) == 0, "23a: set track 1 params" );
+        lsmash_media_parameters_t vmp;
+        lsmash_initialize_media_parameters( &vmp );
+        vmp.timescale = 1000;
+        TEST_ASSERT( lsmash_set_media_parameters( root, vtid1, &vmp ) == 0, "23a: set media 1 params" );
+        lsmash_video_summary_t *vsum1 = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( root, vtid1, vsum1 ) == 1, "23a: add sample entry on track 1" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum1 );
+
+        for( uint32_t i = 0; i < 6; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 24 );
+            fill_pattern( s->data, 24, (uint8_t)(0x30 + i) );
+            s->dts   = i * 500;
+            s->cts   = i * 500;
+            s->index = 1;
+            s->prop.ra_flags = (i % 3 == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( root, vtid1, s ) == 0, "23a: append sample to track 1" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, vtid1, 500 ) == 0, "23a: flush track 1" );
+
+        /* Track 2: Second video track (will carry 64-bit elst v1) */
+        uint32_t vtid2 = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( vtid2 == 2, "23a: create video track 2" );
+        TEST_ASSERT( lsmash_set_track_parameters( root, vtid2, &vtp ) == 0, "23a: set track 2 params" );
+        TEST_ASSERT( lsmash_set_media_parameters( root, vtid2, &vmp ) == 0, "23a: set media 2 params" );
+        lsmash_video_summary_t *vsum2 = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( root, vtid2, vsum2 ) == 1, "23a: add sample entry on track 2" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum2 );
+        for( uint32_t i = 0; i < 2; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 16 );
+            fill_pattern( s->data, 16, (uint8_t)(0x70 + i) );
+            s->dts   = i * 500;
+            s->cts   = i * 500;
+            s->index = 1;
+            s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            TEST_ASSERT( lsmash_append_sample( root, vtid2, s ) == 0, "23a: append sample to track 2" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, vtid2, 500 ) == 0, "23a: flush track 2" );
+
+        /* Explicit Edit List on Track 1 (v0): Empty Edit (-1) + media start offset (500), plus modify test */
+        lsmash_edit_t e1 = { .duration = 300, .start_time = ISOM_EDIT_MODE_EMPTY, .rate = ISOM_EDIT_MODE_NORMAL };
+        lsmash_edit_t e2 = { .duration = 999, .start_time = 250,                  .rate = ISOM_EDIT_MODE_NORMAL };
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( root, vtid1, e1 ) == 0, "23a: create edit 1 (empty edit) on track 1" );
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( root, vtid1, e2 ) == 0, "23a: create edit 2 (offset edit) on track 1" );
+        e2.duration   = 1500;
+        e2.start_time = 500;
+        TEST_ASSERT( lsmash_modify_explicit_timeline_map( root, vtid1, 2, e2 ) == 0, "23a: modify edit 2 on track 1" );
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( root, vtid1 ) == 2, "23a: count edits on track 1 == 2" );
+
+        /* Test delete_explicit_timeline_map on Track 2, then re-populate with an offset + dwell edit */
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( root, vtid2, e1 ) == 0, "23a: create temp edit on track 2" );
+        TEST_ASSERT( lsmash_delete_explicit_timeline_map( root, vtid2 ) == 0, "23a: delete edits on track 2" );
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( root, vtid2 ) == 0, "23a: count edits on track 2 after delete == 0" );
+        lsmash_edit_t e_t2 = { .duration = 600, .start_time = 100, .rate = ISOM_EDIT_MODE_NORMAL };
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( root, vtid2, e_t2 ) == 0, "23a: create edit on track 2" );
+
+        /* Track Reference Chapter (tref.chap) on Track 1 -> creates Track 3 (text chapter track) */
+        TEST_ASSERT( lsmash_create_reference_chapter_track( root, vtid1, (char *)chap_file ) == 0,
+                     "23a: create reference chapter track (tref.chap)" );
+
+        /* User Data Chapter List (moov.udta.chpl) */
+        TEST_ASSERT( lsmash_set_tyrant_chapter( root, (char *)chap_file, 0 ) == 0,
+                     "23a: set moov.udta.chpl chapter list" );
+
+        /* iTunes Metadata (moov.udta.meta.ilst): string, >255B long description, integer, boolean, binary, and custom '----' */
+        lsmash_itunes_metadata_t meta_title = {
+            .item = ITUNES_METADATA_ITEM_TITLE,
+            .type = ITUNES_METADATA_TYPE_STRING,
+            .value.string = "Container Unit Test Title"
+        };
+        lsmash_itunes_metadata_t meta_desc = {
+            .item = ITUNES_METADATA_ITEM_DESCRIPTION,
+            .type = ITUNES_METADATA_TYPE_STRING,
+            .value.string = long_desc /* > 255 bytes -> promoted to ITUNES_METADATA_ITEM_LONG_DESCRIPTION ('ldes') */
+        };
+        lsmash_itunes_metadata_t meta_bpm = {
+            .item = ITUNES_METADATA_ITEM_BEATS_PER_MINUTE,
+            .type = ITUNES_METADATA_TYPE_INTEGER,
+            .value.integer = 140
+        };
+        lsmash_itunes_metadata_t meta_compil = {
+            .item = ITUNES_METADATA_ITEM_DISC_COMPILATION,
+            .type = ITUNES_METADATA_TYPE_BOOLEAN,
+            .value.boolean = LSMASH_BOOLEAN_TRUE
+        };
+        lsmash_itunes_metadata_t meta_cover = {
+            .item = ITUNES_METADATA_ITEM_COVER_ART,
+            .type = ITUNES_METADATA_TYPE_BINARY,
+            .value.binary = { .subtype = ITUNES_METADATA_SUBTYPE_PNG, .size = sizeof(png_sig), .data = (uint8_t *)png_sig }
+        };
+        lsmash_itunes_metadata_t meta_trkn = {
+            .item = ITUNES_METADATA_ITEM_TRACK_NUMBER,
+            .type = ITUNES_METADATA_TYPE_BINARY,
+            .value.binary = { .subtype = ITUNES_METADATA_SUBTYPE_IMPLICIT, .size = sizeof(trkn_bin), .data = (uint8_t *)trkn_bin }
+        };
+        lsmash_itunes_metadata_t meta_custom = {
+            .item = ITUNES_METADATA_ITEM_CUSTOM,
+            .type = ITUNES_METADATA_TYPE_STRING,
+            .meaning = "com.apple.iTunes",
+            .name    = "REPLAYGAIN_TRACK_GAIN",
+            .value.string = "-4.50 dB"
+        };
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_title )  == 0, "23a: set title metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_desc )   == 0, "23a: set >255B description metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_bpm )    == 0, "23a: set BPM integer metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_compil ) == 0, "23a: set compilation boolean metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_cover )  == 0, "23a: set PNG cover art binary metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_trkn )   == 0, "23a: set track number binary metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, meta_custom ) == 0, "23a: set custom '----' metadata" );
+
+        /* Negative API validation: invalid string/binary metadata must fail without leaving dangling metaitem in ilst */
+        lsmash_itunes_metadata_t bad_str = {
+            .item = ITUNES_METADATA_ITEM_ARTIST,
+            .type = ITUNES_METADATA_TYPE_STRING,
+            .value.string = NULL
+        };
+        lsmash_itunes_metadata_t bad_cover = {
+            .item = ITUNES_METADATA_ITEM_COVER_ART,
+            .type = ITUNES_METADATA_TYPE_BINARY,
+            .value.binary = { .subtype = ITUNES_METADATA_SUBTYPE_UTF8, .size = 4, .data = (uint8_t *)png_sig }
+        };
+        lsmash_itunes_metadata_t bad_uuid = {
+            .item = ITUNES_METADATA_ITEM_CUSTOM,
+            .type = ITUNES_METADATA_TYPE_BINARY,
+            .meaning = "com.apple.iTunes",
+            .name    = "BAD_UUID",
+            .value.binary = { .subtype = ITUNES_METADATA_SUBTYPE_UUID, .size = 8, .data = (uint8_t *)png_sig }
+        };
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, bad_str )   == LSMASH_ERR_FUNCTION_PARAM, "23a: reject NULL string metadata" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, bad_cover ) == LSMASH_ERR_FUNCTION_PARAM, "23a: reject invalid COVER_ART subtype" );
+        TEST_ASSERT( lsmash_set_itunes_metadata( root, bad_uuid )  == LSMASH_ERR_FUNCTION_PARAM, "23a: reject invalid UUID size != 16" );
+
+        TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "23a: finish movie" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+
+    /* 23b. Re-open MP4 and verify full round-trip of elst (v0/v1), tref.chap, chpl, and meta/ilst */
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 1, &param ) == 0, "23b: open mp4_path for reading" );
+        param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "23b: read mp4_path" );
+        TEST_ASSERT( lsmash_print_movie( root, dump_path ) == 0, "23b: print movie box hierarchy" );
+        remove( dump_path );
+
+        /* Verify Track 1 elst (version 0: Empty Edit + modified offset edit) */
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( root, 1 ) == 2, "23b: track 1 has 2 edits" );
+        lsmash_edit_t got1 = { 0 }, got2 = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( root, 1, 1, &got1 ) == 0, "23b: get track 1 edit 1" );
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( root, 1, 2, &got2 ) == 0, "23b: get track 1 edit 2" );
+        TEST_ASSERT( got1.duration == 300 && got1.start_time == ISOM_EDIT_MODE_EMPTY && got1.rate == ISOM_EDIT_MODE_NORMAL,
+                     "23b: track 1 edit 1 (Empty Edit media_time == -1) round-trip" );
+        TEST_ASSERT( got2.duration == 1500 && got2.start_time == 500 && got2.rate == ISOM_EDIT_MODE_NORMAL,
+                     "23b: track 1 edit 2 (media start offset) round-trip" );
+
+        /* Verify Track 2 elst after delete + re-create */
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( root, 2 ) == 1, "23b: track 2 has 1 edit" );
+        lsmash_edit_t got_t2 = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( root, 2, 1, &got_t2 ) == 0, "23b: get track 2 edit" );
+        TEST_ASSERT( got_t2.duration == 600 && got_t2.start_time == 100 && got_t2.rate == ISOM_EDIT_MODE_NORMAL,
+                     "23b: track 2 elst round-trip after delete + re-create" );
+
+        /* Verify Track 1 tref.chap points to Track 3 (text chapter track) and Track 3 samples round-trip */
+        isom_trak_t *trak1 = (isom_trak_t *)file->moov->trak_list.head->data;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( trak1->tref ) && trak1->tref->ref_list.head != NULL, "23b: track 1 tref exists" );
+        isom_tref_type_t *chap_ref = (isom_tref_type_t *)trak1->tref->ref_list.head->data;
+        TEST_ASSERT( chap_ref != NULL
+                  && chap_ref->type.fourcc == QT_TREF_TYPE_CHAP
+                  && chap_ref->ref_count == 1
+                  && chap_ref->track_ID != NULL
+                  && chap_ref->track_ID[0] == 3,
+                     "23b: track 1 tref.chap references chapter track 3" );
+        TEST_ASSERT( lsmash_construct_timeline( root, 3 ) == 0, "23b: construct timeline for chapter track 3" );
+        lsmash_sample_t *chap_s1 = lsmash_get_sample_from_media_timeline( root, 3, 1 );
+        lsmash_sample_t *chap_s2 = lsmash_get_sample_from_media_timeline( root, 3, 2 );
+        lsmash_sample_t *chap_s3 = lsmash_get_sample_from_media_timeline( root, 3, 3 );
+        TEST_ASSERT( chap_s1 && chap_s2 && chap_s3, "23b: retrieve all 3 chapter text samples" );
+        TEST_ASSERT( chap_s1->length >= 2 + 13 && memcmp( chap_s1->data + 2, "Opening Scene", 13 ) == 0,
+                     "23b: chapter track sample 1 payload matches 'Opening Scene'" );
+        TEST_ASSERT( chap_s2->dts == 1200 && chap_s2->length >= 2 + 9 && memcmp( chap_s2->data + 2, "Main Part", 9 ) == 0,
+                     "23b: chapter track sample 2 dts and payload match 'Main Part'" );
+        TEST_ASSERT( chap_s3->dts == 2500 && chap_s3->length >= 2 + 6 && memcmp( chap_s3->data + 2, "Finale", 6 ) == 0,
+                     "23b: chapter track sample 3 dts and payload match 'Finale'" );
+        lsmash_delete_sample( chap_s1 );
+        lsmash_delete_sample( chap_s2 );
+        lsmash_delete_sample( chap_s3 );
+        lsmash_destruct_timeline( root, 3 );
+
+        /* Verify moov.udta.chpl chapter list */
+        TEST_ASSERT( lsmash_count_tyrant_chapter( root ) == 3, "23b: chpl count == 3" );
+        double ts1 = -1.0, ts2 = -1.0, ts3 = -1.0;
+        char *cname1 = lsmash_get_tyrant_chapter( root, 1, &ts1 );
+        char *cname2 = lsmash_get_tyrant_chapter( root, 2, &ts2 );
+        char *cname3 = lsmash_get_tyrant_chapter( root, 3, &ts3 );
+        TEST_ASSERT( cname1 && strcmp( cname1, "Opening Scene" ) == 0 && ts1 == 0.0, "23b: chpl entry 1 matches" );
+        TEST_ASSERT( cname2 && strcmp( cname2, "Main Part" ) == 0     && ts2 == 1.2, "23b: chpl entry 2 matches" );
+        TEST_ASSERT( cname3 && strcmp( cname3, "Finale" ) == 0        && ts3 == 2.5, "23b: chpl entry 3 matches" );
+        lsmash_delete_tyrant_chapter( root );
+        TEST_ASSERT( lsmash_count_tyrant_chapter( root ) == 0, "23b: chpl count == 0 after delete" );
+
+        /* Verify iTunes metadata (meta/ilst) round-trip (7 valid items; the 3 rejected calls left no items) */
+        TEST_ASSERT( lsmash_count_itunes_metadata( root ) == 7, "23b: count_itunes_metadata == 7" );
+        lsmash_itunes_metadata_t got_meta;
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 1, &got_meta ) == 0, "23b: get metadata 1 (title)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_TITLE
+                  && got_meta.type == ITUNES_METADATA_TYPE_STRING
+                  && got_meta.value.string != NULL
+                  && strcmp( got_meta.value.string, "Container Unit Test Title" ) == 0,
+                     "23b: title metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 2, &got_meta ) == 0, "23b: get metadata 2 (long description)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_LONG_DESCRIPTION
+                  && got_meta.type == ITUNES_METADATA_TYPE_STRING
+                  && got_meta.value.string != NULL
+                  && strcmp( got_meta.value.string, long_desc ) == 0,
+                     "23b: >255B description promoted to LONG_DESCRIPTION and matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 3, &got_meta ) == 0, "23b: get metadata 3 (BPM)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_BEATS_PER_MINUTE
+                  && got_meta.type == ITUNES_METADATA_TYPE_INTEGER
+                  && got_meta.value.integer == 140,
+                     "23b: BPM integer metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 4, &got_meta ) == 0, "23b: get metadata 4 (compilation)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_DISC_COMPILATION
+                  && got_meta.type == ITUNES_METADATA_TYPE_BOOLEAN
+                  && got_meta.value.boolean == LSMASH_BOOLEAN_TRUE,
+                     "23b: compilation boolean metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 5, &got_meta ) == 0, "23b: get metadata 5 (cover art)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_COVER_ART
+                  && got_meta.type == ITUNES_METADATA_TYPE_BINARY
+                  && got_meta.value.binary.subtype == ITUNES_METADATA_SUBTYPE_PNG
+                  && got_meta.value.binary.size == sizeof(png_sig)
+                  && memcmp( got_meta.value.binary.data, png_sig, sizeof(png_sig) ) == 0,
+                     "23b: cover art binary metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 6, &got_meta ) == 0, "23b: get metadata 6 (track number)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_TRACK_NUMBER
+                  && got_meta.type == ITUNES_METADATA_TYPE_BINARY
+                  && got_meta.value.binary.subtype == ITUNES_METADATA_SUBTYPE_IMPLICIT
+                  && got_meta.value.binary.size == sizeof(trkn_bin)
+                  && memcmp( got_meta.value.binary.data, trkn_bin, sizeof(trkn_bin) ) == 0,
+                     "23b: track number binary metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 7, &got_meta ) == 0, "23b: get metadata 7 (custom)" );
+        TEST_ASSERT( got_meta.item == ITUNES_METADATA_ITEM_CUSTOM
+                  && got_meta.type == ITUNES_METADATA_TYPE_STRING
+                  && got_meta.meaning != NULL && strcmp( got_meta.meaning, "com.apple.iTunes" ) == 0
+                  && got_meta.name    != NULL && strcmp( got_meta.name, "REPLAYGAIN_TRACK_GAIN" ) == 0
+                  && got_meta.value.string != NULL && strcmp( got_meta.value.string, "-4.50 dB" ) == 0,
+                     "23b: custom '----' mean/name/data metadata matches" );
+        lsmash_cleanup_itunes_metadata( &got_meta );
+
+        TEST_ASSERT( lsmash_get_itunes_metadata( root, 8, &got_meta ) < 0, "23b: out-of-range metadata index rejected" );
+
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+
+    /* 23c. Verify 64-bit elst version 1 (pure ISOBMFF MP42+ISOM) and moov.udta.chpl with UTF-8 BOM (add_bom = 1) round-trip */
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bom_path, 0, &param ) == 0, "23c: open bom_path" );
+        lsmash_brand_type brands[2] = { ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+        param.major_brand = ISOM_BRAND_TYPE_MP42;
+        param.brands      = brands;
+        param.brand_count = 2;
+        TEST_ASSERT( lsmash_set_file( root, &param ) != NULL, "23c: set file" );
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_param ) == 0, "23c: set movie params" );
+        uint32_t vtid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t vtp;
+        lsmash_initialize_track_parameters( &vtp );
+        vtp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( root, vtid, &vtp );
+        lsmash_media_parameters_t vmp;
+        lsmash_initialize_media_parameters( &vmp );
+        vmp.timescale = 1000;
+        lsmash_set_media_parameters( root, vtid, &vmp );
+        lsmash_video_summary_t *vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( root, vtid, vsum ) == 1, "23c: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum );
+        lsmash_sample_t *s = lsmash_create_sample( 16 );
+        memset( s->data, 0x55, 16 );
+        s->dts = 0; s->cts = 0; s->index = 1;
+        s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( root, vtid, s ) == 0, "23c: append sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, vtid, 1000 ) == 0, "23c: flush sample" );
+        lsmash_edit_t e_v1 = { .duration = 0x100000200ULL, .start_time = 0x100000100LL, .rate = ISOM_EDIT_MODE_NORMAL };
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( root, vtid, e_v1 ) == 0, "23c: create 64-bit elst v1 edit" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( root, (char *)chap_file, 1 ) == 0, "23c: set chpl with BOM" );
+        TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "23c: finish movie" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+
+        lsmash_root_t *rd_root = lsmash_create_root();
+        lsmash_file_parameters_t rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bom_path, 1, &rd_param ) == 0, "23c: open bom_path for reading" );
+        rd_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *rd_file = lsmash_set_file( rd_root, &rd_param );
+        TEST_ASSERT( lsmash_read_file( rd_file, &rd_param ) >= 0, "23c: read bom_path" );
+        TEST_ASSERT( lsmash_print_movie( rd_root, dump_path ) == 0, "23c: print movie with BOM chpl and elst v1" );
+        remove( dump_path );
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( rd_root, 1 ) == 1, "23c: count 64-bit elst v1 edit == 1" );
+        lsmash_edit_t got_v1 = { 0 };
+        TEST_ASSERT( lsmash_get_explicit_timeline_map( rd_root, 1, 1, &got_v1 ) == 0, "23c: get 64-bit elst v1 edit" );
+        TEST_ASSERT( got_v1.duration == 0x100000200ULL && got_v1.start_time == 0x100000100LL && got_v1.rate == ISOM_EDIT_MODE_NORMAL,
+                     "23c: 64-bit elst v1 segment_duration and media_time round-trip" );
+        TEST_ASSERT( lsmash_count_tyrant_chapter( rd_root ) == 3, "23c: chpl with BOM count == 3" );
+        double ts = -1.0;
+        char *cname = lsmash_get_tyrant_chapter( rd_root, 1, &ts );
+        TEST_ASSERT( cname && strcmp( cname, "Opening Scene" ) == 0 && ts == 0.0,
+                     "23c: lsmash_get_tyrant_chapter strips 3-byte UTF-8 BOM" );
+        lsmash_close_file( &rd_param );
+        lsmash_destroy_root( rd_root );
+    }
+
+    /* 23d. Verify QTFF moov.ctab and moov.meta.keys + ilst parsing and dump round-trip */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_QT );
+        lsmash_bs_put_be32( bs, 0 );
+        /* ctab with 2 entries (size_field = 1): 8 (header) + 8 (seed/flags/size) + 2*8 (entries) = 32 bytes */
+        uint32_t ctab_sz = 32;
+        /* QTFF meta: hdlr (33 bytes) + keys (1 entry "com.apple.quicktime.author" = 26 chars -> key_size = 34, keys_sz = 16 + 34 = 50)
+         * + ilst (8 + metaitem(index=1, size=8 + data(16 + 6 = 22) = 30) = 38) -> meta_sz = 8 + 33 + 50 + 38 = 129 */
+        const char *key_str = "com.apple.quicktime.author";
+        uint32_t key_len  = (uint32_t)strlen( key_str ); /* 26 */
+        uint32_t key_sz   = 8 + key_len;                 /* 34 */
+        uint32_t keys_sz  = 16 + key_sz;                 /* 50 */
+        uint32_t hdlr_sz  = 33;
+        uint32_t data_sz  = 16 + 6;                      /* "LSMASH" */
+        uint32_t item_sz  = 8 + data_sz;                 /* 30 */
+        uint32_t ilst_sz  = 8 + item_sz;                 /* 38 */
+        uint32_t meta_sz  = 8 + hdlr_sz + keys_sz + ilst_sz;
+        uint32_t moov_sz  = 8 + ctab_sz + meta_sz;
+
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        /* ctab */
+        lsmash_bs_put_be32( bs, ctab_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 't', 'a', 'b' ) );
+        lsmash_bs_put_be32( bs, 0 );      /* seed */
+        lsmash_bs_put_be16( bs, 0x8000 ); /* flags */
+        lsmash_bs_put_be16( bs, 1 );      /* size = 1 (2 entries) */
+        lsmash_bs_put_be16( bs, 0 ); lsmash_bs_put_be16( bs, 0x1111 ); lsmash_bs_put_be16( bs, 0x2222 ); lsmash_bs_put_be16( bs, 0x3333 );
+        lsmash_bs_put_be16( bs, 1 ); lsmash_bs_put_be16( bs, 0xAAAA ); lsmash_bs_put_be16( bs, 0xBBBB ); lsmash_bs_put_be16( bs, 0xCCCC );
+        /* QTFF meta */
+        lsmash_bs_put_be32( bs, meta_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'e', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, hdlr_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'h', 'd', 'l', 'r' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 't', 'a' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_byte( bs, 0 );
+        /* keys */
+        lsmash_bs_put_be32( bs, keys_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'k', 'e', 'y', 's' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+        lsmash_bs_put_be32( bs, 1 ); /* entry_count = 1 */
+        lsmash_bs_put_be32( bs, key_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 't', 'a' ) );
+        lsmash_bs_put_bytes( bs, key_len, (void *)key_str );
+        /* ilst */
+        lsmash_bs_put_be32( bs, ilst_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'l', 's', 't' ) );
+        lsmash_bs_put_be32( bs, item_sz ); lsmash_bs_put_be32( bs, 1 ); /* 1-based key index = 1 */
+        lsmash_bs_put_be32( bs, data_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'd', 'a', 't', 'a' ) );
+        lsmash_bs_put_be16( bs, 0 );
+        lsmash_bs_put_byte( bs, 0 );
+        lsmash_bs_put_byte( bs, ITUNES_METADATA_SUBTYPE_UTF8 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_bytes( bs, 6, (void *)"LSMASH" );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( qt_path, raw, raw_len ) == 0, "23d: write qt_path" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( qt_path, 1, &param ) == 0, "23d: open qt_path" );
+        param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        (void)lsmash_read_file( file, &param );
+        file->root->file = file;
+        file->initializer = file;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( file->moov->ctab )
+                  && file->moov->ctab->color_table.size == 1
+                  && file->moov->ctab->color_table.array != NULL
+                  && file->moov->ctab->color_table.array[1].r == 0xAAAA,
+                     "23d: moov.ctab parsed accurately" );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( file->moov->meta )
+                  && LSMASH_IS_EXISTING_BOX( file->moov->meta->keys )
+                  && file->moov->meta->keys->list->entry_count == 1,
+                     "23d: QTFF moov.meta.keys parsed accurately" );
+        TEST_ASSERT( lsmash_print_movie( root, dump_path ) == 0, "23d: print_movie dumps ctab and keys cleanly" );
+        remove( dump_path );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+
+    remove( mp4_path );
+    remove( bom_path );
+    remove( qt_path );
+    remove( chap_file );
+    printf( "[PASS] test_container_metadata_and_edit_list_roundtrip\n" );
     return 0;
 }
