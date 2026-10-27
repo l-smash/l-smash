@@ -70,10 +70,10 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 - **Container Metadata & Chapters (Three Distinct Mechanisms)**:
   1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Key-value tagging (album, artist, title, encoder, BPM, cover art, and custom `----` `mean`/`name`/`data` items) stored inside the Item List Box (`ilst`) under an ISO FullBox `meta` (`hdlr` subtype `'mdir'`) or QTFF BaseBox `meta` (`hdlr` subtype `'mdta'` with `keys`).
   2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` in QTFF `.mov` or `tx3g` in `.mp4`/`.m4a`/`.m4v`) whose samples hold chapter titles at their exact presentation timestamps, linked from the main media track via a Track Reference Box (`tref`) of type `'chap'`.
-  3. **Nero Chapter List (`moov.udta.chpl`)**: A single table-based FullBox (`chpl`) stored directly inside `moov.udta` listing chapter start timestamps (100 ns units) and UTF-8 chapter title strings (supported in `.mp4`/`.m4v`/`.m4a` alongside or independently of reference chapter tracks).
+  3. **User Data Chapter List (`moov.udta.chpl`)**: A single table-based FullBox (`chpl`) stored directly inside `moov.udta` listing chapter start timestamps (100 ns units) and UTF-8 chapter title strings (supported in `.mp4`/`.m4v`/`.m4a` alongside or independently of reference chapter tracks).
 
 ### Architecture Highlights
-- **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in `2^8 = 256`-element pages, providing `O(1)` bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
+- **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment tables (`trun` per-sample rows, `tfra`, `sidx`, and fragment sample pools), and Media Timelines (per-sample info and chunk tables) store value elements contiguously in `2^8 = 256`-element pages, providing `O(1)` bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
 - **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 22 synthetic test suites (152,002 assertions, `v2.23.7`) requiring zero external media files.
@@ -136,33 +136,31 @@ make test
 
 ## CLI Tools Quick Start
 
-Building `all` (the default target) produces five command-line utilities in `cli/`:
+The L-SMASH command-line workflow is centered on two primary utilities in `cli/` (with `muxer`, `remuxer`, and `timelineeditor` retained as legacy compatibility tools superseded by `lshmuxer`):
 
-| Tool | Purpose |
-| :--- | :--- |
-| **`lshmuxer`** | Unified CLI multiplexer, remultiplexer, fragmenter, and timeline editor supporting 1-pass multiplexing of raw elementary streams and existing ISOBMFF/QTFF containers with optional VFR timecode v2 editing (`--timecode` or `?timecode=...`), Fragmented MP4 (`--fragment`), and MPEG-DASH segments (`--dash`). |
-| **`muxer`** | Multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1) or single-track containers into ISOBMFF (`.mp4`, `.m4a`, `.m4v`), QTFF (`.mov`), or 3GPP (`.3gp`, `.3g2`). |
-| **`remuxer`** | Remultiplexes existing ISOBMFF/QTFF containers, converts standard movies to **Fragmented MP4** (`--fragment`) or **MPEG-DASH segments** (`--dash`), filters tracks, and performs RAP-aligned seeking. |
-| **`boxdumper`** | Dumps the complete hierarchical Box tree (`--box`), per-sample DTS/CTS timestamps (`--timestamp`), or chapter lists (`--chapter`). |
-| **`timelineeditor`** | Edits track timescales, rewrites VFR timestamps from Matroska timecode v2 files (`--timecode`), and constructs explicit Edit Lists (`--skip`, `--delay`, `--dts-compression`). |
+| Tool | Role | Purpose |
+| :--- | :--- | :--- |
+| **`lshmuxer`** | **Primary Multiplexer / Remuxer / Timeline Editor** | Unified 1-pass CLI utility that multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1, ALS) and existing ISOBMFF/QTFF containers into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`, with built-in support for **Fragmented MP4** (`--fragment`), **MPEG-DASH segments** (`--dash`), track filtering/RAP seeking (`?1:safe-seek=`, `?2:remove`), iTunes metadata, chapters (`tref.chap` and `moov.udta.chpl`), and **Matroska timecode v1/v2 / Edit List timeline editing** (`--timecode` or `?timecode=`). |
+| **`boxdumper`** | **Primary Container & Timestamp Inspector** | Inspects and dumps the complete hierarchical Box/Atom tree (`--box`), per-sample Decode/Composition timestamps (`--timestamp`), or chapter lists (`--chapter`). |
+| **`muxer`**, **`remuxer`**, **`timelineeditor`** | *Legacy Compatibility Utilities* | Legacy standalone tools for raw stream multiplexing (`muxer`), container remultiplexing/fragmentation (`remuxer`), and single-track timecode/Edit List editing (`timelineeditor`). All features of these three tools are unified in **`lshmuxer`** (see [Legacy CLI Migration in `USAGE.md`](USAGE.md#24-legacy-cli-tools-muxer-remuxer-timelineeditor--migration-to-lshmuxer)). |
 
 ### Common CLI Examples
 
 ```sh
 # 1. Multiplex H.264 (Annex B) and AAC (ADTS) into an ISOBMFF MP4 with progressive download optimization
-./cli/muxer -i video.h264?fps=24000/1001 -i audio.aac?language=eng --optimize-pd -o movie.mp4
+./cli/lshmuxer -i video.h264?fps=24000/1001 -i audio.aac?language=eng,encoder-delay=2112 --optimize-pd -o movie.mp4
 
 # 2. Multiplex AV1 (.ivf) and 24-bit 96 kHz Stereo WAVE (.wav -> ISO/IEC 23003-5 ipcm) into MP4
-./cli/muxer -i video.ivf?fps=24000/1001 -i audio_96k_24b.wav?language=jpn --optimize-pd -o av1_lpcm.mp4
+./cli/lshmuxer -i video.ivf?fps=24000/1001 -i audio_96k_24b.wav?language=jpn --optimize-pd -o av1_lpcm.mp4
 
-# 3. Convert a standard MP4 into Fragmented MP4
-./cli/remuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
+# 3. Convert a standard MP4 into Fragmented MP4 (or add --dash 0 for a self-initializing MPEG-DASH segment)
+./cli/lshmuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
 
 # 4. Inspect the complete Box hierarchy and sample tables
 ./cli/boxdumper --box movie_frag.mp4
 
-# 5. Apply a Matroska v2 VFR timecode file to track 1
-./cli/timelineeditor --track 1 --timecode timecodes_v2.txt movie.mp4 movie_vfr.mp4
+# 5. Apply a Matroska v2 VFR timecode file to track 1 (or pass -i video.h264?timecode=timecodes_v2.txt in 1 pass)
+./cli/lshmuxer --track 1 --timecode timecodes_v2.txt -i movie.mp4 -o movie_vfr.mp4
 ```
 
 For the complete CLI option reference and the `liblsmash` C API programming manual, see **[`USAGE.md`](USAGE.md)**: start with its [Quick Start & Tool Overview](USAGE.md#1-quick-start--tool-overview), and see the [C API Mental Model](USAGE.md#mental-model-workflow-and-object-hierarchy) if you program against `liblsmash`.
@@ -173,7 +171,7 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 
 | Document | Contents |
 | :--- | :--- |
-| **[`USAGE.md`](USAGE.md)** | Quick Start, complete user guide for `lshmuxer`, `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
+| **[`USAGE.md`](USAGE.md)** | Quick Start, complete self-contained user guide for `lshmuxer` and `boxdumper` (plus legacy CLI migration from `muxer`, `remuxer`, and `timelineeditor`), and the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
 | **[`ARCHITECTURE.md`](ARCHITECTURE.md)** | Master Architecture & Specification Index (strict standard compliance principles, `box_default` Sentinel Box Architecture, Dual-List Box ownership, symbol naming conventions, and specification syntax identifier preservation). |
 | **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)** | Official C11 coding style, Allman layout conventions, internal header policy, symbol prefixes, and Git contribution guidelines. |
 | **[`docs/HISTORY.md`](docs/HISTORY.md)** | Project history, branch lineage (`master`, `av1`, `vimeo`, `dev`), and architectural evolution. |

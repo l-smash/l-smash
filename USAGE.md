@@ -1,6 +1,6 @@
 # L-SMASH User & C API Manual (`USAGE.md`)
 
-This manual provides a comprehensive guide to the **L-SMASH** command-line utilities (`lshmuxer`, `muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and the **`liblsmash` C API**.
+This manual provides a comprehensive guide to the **L-SMASH** command-line utilities (**`lshmuxer`** and **`boxdumper`**, plus migration guidance for the legacy `muxer`, `remuxer`, and `timelineeditor` binaries) and the **`liblsmash` C API**.
 
 ---
 
@@ -10,11 +10,10 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
    - [1.1 Which Tool Do I Use?](#11-which-tool-do-i-use)
    - [1.2 One-Minute Recipes](#12-one-minute-recipes)
 2. [Command-Line Tools (`cli/`)](#2-command-line-tools-cli)
-   - [2.1 `muxer` — Elementary Stream Multiplexer](#21-muxer--elementary-stream-multiplexer)
-   - [2.2 `remuxer` — Container Remultiplexer & Fragmenter](#22-remuxer--container-remultiplexer--fragmenter)
-   - [2.3 `boxdumper` — Box Hierarchy, Timestamp & Chapter Inspector](#23-boxdumper--box-hierarchy-timestamp--chapter-inspector)
-   - [2.4 `timelineeditor` — VFR Timecode & Edit List Editor](#24-timelineeditor--vfr-timecode--edit-list-editor)
-   - [2.5 CLI Concepts for Non-Experts and Text-File Examples](#25-cli-concepts-for-non-experts-and-text-file-examples)
+   - [2.1 `lshmuxer` — Unified Multiplexer, Remultiplexer, Fragmenter & Timeline Editor](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor)
+   - [2.2 `boxdumper` — Box Hierarchy, Timestamp & Chapter Inspector](#22-boxdumper--box-hierarchy-timestamp--chapter-inspector)
+   - [2.3 CLI Concepts & Input Text-File Formats (Chapters & Timecodes)](#23-cli-concepts--input-text-file-formats-chapters--timecodes)
+   - [2.4 Legacy CLI Tools (`muxer`, `remuxer`, `timelineeditor`) & Migration to `lshmuxer`](#24-legacy-cli-tools-muxer-remuxer-timelineeditor--migration-to-lshmuxer)
 3. [`liblsmash` C API Programming Guide](#3-liblsmash-c-api-programming-guide)
    - [Mental Model: Workflow and Object Hierarchy](#mental-model-workflow-and-object-hierarchy)
    - [3.1 Core Lifecycle: Root, File Parameters & Movie Setup](#31-core-lifecycle-root-file-parameters--movie-setup)
@@ -37,168 +36,200 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
 
 ### 1.1 Which Tool Do I Use?
 
-| I want to... | Use | Section |
+All command-line creation, remultiplexing, fragmentation, and timeline editing workflows are consolidated into **`lshmuxer`**, paired with **`boxdumper`** for container inspection:
+
+| I want to... | Primary Tool | Section |
 | :--- | :--- | :--- |
-| Multiplex raw streams, remux containers, fragment MP4 / DASH segments, and apply VFR timecodes in a single 1-pass tool | `lshmuxer` | [2.1](#21-muxer--elementary-stream-multiplexer)–[2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
-| Turn raw streams (H.264, HEVC, AV1, AAC, WAVE, ...) into an `.mp4` / `.mov` / `.m4a` | `muxer` (or `lshmuxer`) | [2.1](#21-muxer--elementary-stream-multiplexer) |
-| Convert an existing file: drop tracks, trim at a keyframe, make fragmented MP4 / DASH segments | `remuxer` (or `lshmuxer`) | [2.2](#22-remuxer--container-remultiplexer--fragmenter) |
-| Look inside a file (Box tree, DTS/CTS, chapters) | `boxdumper` | [2.3](#23-boxdumper--box-hierarchy-timestamp--chapter-inspector) |
-| Apply a VFR timecode file, or change skip / delay / timescales of one track without re-encoding | `timelineeditor` (or `lshmuxer`) | [2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
-| Read or write MP4 / MOV from your own C/C++ program | `liblsmash` | [3](#3-liblsmash-c-api-programming-guide) |
+| Multiplex raw streams (H.264, HEVC, AV1, VC-1, AAC, FLAC, AC-3/E-AC-3, DTS, WAVE, AMR, MP3, ALS) into `.mp4` / `.mov` / `.m4a` / `.m4v` / `.3gp` / `.3g2` | **`lshmuxer`** | [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor) |
+| Remultiplex existing containers, filter/remove tracks, trim from a keyframe, or generate **Fragmented MP4** (`moof`/`trun`) and **MPEG-DASH segments** (`sidx`) | **`lshmuxer`** | [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor) |
+| Apply a VFR Matroska timecode v1/v2 file or edit skip / delay / timescales on raw or container tracks (in 1 pass or standalone) | **`lshmuxer`** | [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor) |
+| Inspect a file's Box/Atom hierarchy (`--box`), per-sample DTS/CTS timestamps (`--timestamp`), or chapters (`--chapter`) | **`boxdumper`** | [2.2](#22-boxdumper--box-hierarchy-timestamp--chapter-inspector) |
+| Migrate existing scripts from the legacy `muxer`, `remuxer`, or `timelineeditor` tools | **`lshmuxer`** | [2.4](#24-legacy-cli-tools-muxer-remuxer-timelineeditor--migration-to-lshmuxer) |
+| Read or write MP4 / MOV from your own C/C++ program | **`liblsmash`** | [3](#3-liblsmash-c-api-programming-guide) |
 
 ### 1.2 One-Minute Recipes
 ```sh
-# 1. H.264 + AAC into a web-friendly MP4 (moov placed first so playback starts while downloading)
-./cli/muxer -i video.h264?fps=30000/1001 -i audio.aac?language=eng --optimize-pd -o movie.mp4
+# 1. Multiplex H.264 + AAC into a web-friendly MP4 (moov placed first so playback starts while downloading)
+./cli/lshmuxer -i video.h264?fps=30000/1001 -i audio.aac?language=eng,encoder-delay=2112 --optimize-pd -o movie.mp4
 
-# 2. Make a fragmented MP4 (2-second fragments) from an existing MP4
-./cli/remuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
+# 2. Convert an existing MP4 into a Fragmented MP4 (2-second fragments aligned to track 1)
+./cli/lshmuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
 
-# 3. See what is inside a file: Box tree to stdout
-./cli/boxdumper movie.mp4
+# 3. Inspect a file: dump complete Box tree to stdout
+./cli/boxdumper --box movie.mp4
 
-# 4. Apply per-frame timestamps (VFR) from a timecode v2 file to track 1
-./cli/timelineeditor --track 1 --timecode timecodes.txt movie.mp4 movie_vfr.mp4
+# 4. Apply VFR timestamps from a Matroska timecode v2 file to track 1 of an existing MP4
+./cli/lshmuxer --track 1 --timecode timecodes.txt -i movie.mp4 -o movie_vfr.mp4
+
+# 5. 1-Pass Multiplex + VFR Timecode + Chapter + Audio in a single command
+./cli/lshmuxer -i video.h264?timecode=timecodes.txt -i audio.aac?language=jpn,encoder-delay=2112 \
+               --chapter chapters.txt --optimize-pd -o movie_vfr_1pass.mp4
 ```
-See [2.5](#25-cli-concepts-for-non-experts-and-text-file-examples) for what `--optimize-pd`, `encoder-delay` and `--shift-timeline` mean and for the chapter / timecode file formats.
+See [2.3](#23-cli-concepts--input-text-file-formats-chapters--timecodes) for explanations of `--optimize-pd`, `encoder-delay`, and `--shift-timeline`, as well as the text file formats for `--chapter` and `--timecode`.
 
 ---
 
 ## 2. Command-Line Tools (`cli/`)
 
-### 2.1 `muxer` — Elementary Stream Multiplexer
+### 2.1 `lshmuxer` — Unified Multiplexer, Remultiplexer, Fragmenter & Timeline Editor
 
-`muxer` imports raw elementary streams (or single-track WAVE/FLAC containers) and multiplexes them into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`.
+`lshmuxer` is the unified 1-pass command-line multiplexer, container remultiplexer, MP4 fragmenter / MPEG-DASH segmenter, and VFR timeline editor. It accepts any combination of raw elementary streams and existing ISOBMFF/QTFF containers in a single invocation, applies optional per-track timecode v1/v2 or Edit List modifications in memory, and writes a standard, progressive-download-optimized, fragmented, or DASH-segmented output container.
 
 #### Synopsis
 ```sh
-muxer [global_options] -i input1[?track_options] [-i input2[?track_options] ...] -o output.[mp4|mov|m4a|m4v|3gp|3g2]
+# Standard multi-input syntax (raw streams, containers, or mixed)
+lshmuxer [global_options] -i input1[?track_options] [-i input2[?track_options] ...] -o output.[mp4|mov|m4a|m4v|3gp|3g2]
+
+# Positional single-input timeline-editing syntax (automatically enables --optimize-pd)
+lshmuxer [global_options] input[?track_options] output.[mp4|mov|m4a|m4v|3gp|3g2]
 ```
 
-#### Supported Input Formats
-- **Video**:
-  - Raw ITU-T H.264 / AVC Annex-B byte stream (`.h264`, `.264`, `.avc`)
-  - Raw ITU-T H.265 / HEVC Annex-B byte stream (`.h265`, `.265`, `.hevc`)
+#### Supported Input Formats (`lshmuxer`)
+- **Containers (Standard & Fragmented)**:
+  - ISOBMFF / MP4 (`.mp4`, `.m4a`, `.m4v`), Apple QuickTime (`.mov`), and 3GPP / 3GPP2 (`.3gp`, `.3g2`), including multi-track containers and files with external `dref` media references.
+- **Raw Video Elementary Streams**:
+  - ITU-T H.264 / MPEG-4 AVC Annex-B byte stream (`.h264`, `.264`, `.avc`)
+  - ITU-T H.265 / MPEG-H HEVC Annex-B byte stream (`.h265`, `.265`, `.hevc`)
   - AOM AV1 in IVF container (`.ivf`)
   - SMPTE VC-1 Advanced Profile elementary stream (`.vc1`)
-- **Audio**:
-  - Xiph FLAC stream (`.flac`, RFC 9639 / FLAC-in-ISOBMFF `fLaC`/`dfLa`)
-  - Raw AAC ADTS stream (`.aac`, `.adts`)
-  - Raw MPEG-4 ALS stream (`.als`)
-  - Raw Dolby AC-3 (`.ac3`) and Enhanced AC-3 (`.eac3`, `.ec3`)
-  - Raw DTS / DTS-HD stream (`.dts`, `.dtshd`)
-  - RIFF WAVE / RF64 Uncompressed LPCM (`.wav`: `WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, `WAVE_FORMAT_EXTENSIBLE`)
-  - 3GPP AMR-NB / AMR-WB (`.amr`, `.awb`)
-  - MPEG-1/2 Layer III (`.mp3`)
+- **Raw & Single-Track Audio Streams**:
+  - Xiph FLAC stream (`.flac`, RFC 9639 / FLAC-in-ISOBMFF `fLaC` + `dfLa`)
+  - MPEG-4 AAC ADTS stream (`.aac`, `.adts`)
+  - MPEG-4 Audio Lossless Coding stream (`.als`)
+  - Dolby AC-3 (`.ac3`) and Enhanced AC-3 (`.eac3`, `.ec3`)
+  - DTS and DTS-HD stream (`.dts`, `.dtshd`)
+  - RIFF WAVE / RF64 Uncompressed LPCM (`.wav`: `WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, `WAVE_FORMAT_EXTENSIBLE`; mapped to ISO/IEC 23003-5 `ipcm`/`fpcm` + `pcmC`/`chnl`/`srat` in ISOBMFF or `lpcm`/`sowt`/`in24`/`fl32` Sound Descriptions in QTFF `.mov`)
+  - 3GPP AMR-NB and AMR-WB (`.amr`, `.awb`)
+  - MPEG-1/2 Audio Layer III (`.mp3`)
 
-#### Global Options (`muxer`)
+#### Global Options (`lshmuxer`)
 
 | Option | Argument | Description |
 | :--- | :--- | :--- |
 | `--help` | *(none)* | Display help message and exit. |
 | `--version` | *(none)* | Display L-SMASH version and exit. |
-| `-i` | `<path>[?<opts>]` | Specify an input file and optional per-input track options. |
-| `-o` | `<path>` | Specify the output file path (extension determines brand defaults). |
-| `--file-format` | `mp4\|mov\|m4a\|m4v\|3gp\|3g2` | Explicitly override the output file format. |
-| `--optimize-pd` | *(none)* | Optimize for progressive download (places `moov` before `mdat`). |
-| `--interleave` | `<integer>` | Specify maximum interleave chunk interval in milliseconds. |
-| `--chapter` | `<path>` | Set chapters from a Nero/Ogg-style chapter text file. |
-| `--chpl-with-bom` | *(none)* | Add UTF-8 BOM to chapter strings in the Nero `chpl` box (`mp4`/`m4v`/`m4a`). |
-| `--chapter-track` | `<integer>` | Specify which track number the reference chapter track applies to (default: `1`). |
-| `--copyright-notice` | `<arg>` | Specify copyright notice as `<language>/<string>` (`mp4`/`m4v`/`m4a`/`3gp`/`3g2`). |
-| `--language` | `<string>` | Specify the default ISO-639-2/T language code for all tracks (`mp4`/`m4v`/`m4a`). |
-| `--compact-size-table` | *(none)* | Compress Sample Size boxes (`stsz` → `stz2`) when all sample sizes fit in 4, 8, or 16 bits. |
+| `-i` | `<path>[?<opts>]` | Specify an input file (raw stream or container) and optional per-track options. |
+| `-o` | `<path>` | Specify the output file path (the file extension selects default container brands). |
+| `--file-format` | `mp4\|mov\|3gp\|3g2\|m4a\|m4v` | Explicitly specify the output container format regardless of file extension. |
 | `--isom-version` | `<1..6>` | Specify maximum compatible ISO Base Media version (`iso1`–`iso6`). |
-| `--shift-timeline` | *(none)* | Enable composition-to-decode timeline shift (uses negative `ctts` v1 offsets or Edit List). |
 | `--brands` | `<4CC,4CC,...>` | Specify comma-separated compatible brand FourCCs (`--brands help` lists known brands). |
-| `--major-brand` | `<4CC>` | Specify major brand FourCC. |
-| `--minor-version` | `<integer>` | Specify minor version integer for `ftyp`. |
+| `--major-brand` | `<4CC>` | Specify major brand FourCC in `ftyp`. |
+| `--minor-version` | `<integer>` | Specify minor version integer in `ftyp`. |
+| `--optimize-pd` | *(none)* | Optimize for progressive download (places `moov` before `mdat`; FastStart). |
+| `--interleave` | `<integer>` | Specify maximum interleave chunk duration in milliseconds (default: `1000`). |
+| `--max-chunk-duration` | `<integer>` | Alias for `--interleave` (maximum chunk duration in milliseconds). |
+| `--max-chunk-size` | `<integer>` | Specify maximum chunk size in bytes (default: `4194304` = 4 MiB). |
+| `--movie-timescale` | `<integer>` | Specify movie timescale (`mvhd.timescale`). |
+| `--shift-timeline` | *(none)* | Enable composition-to-decode timeline shift (`ctts` v1 / QTFF negative composition offsets + `cslg`, or Edit List). |
+| `--compact-size-table` | *(none)* | Compress Sample Size boxes (`stsz` → `stz2`) when all sample sizes fit in 4, 8, or 16 bits. |
+| `--fragment` | `<track_num>` | Enable **Fragmented Movie (`moof`/`traf`/`trun`)** output using 1-based `<track_num>` as the reference track for fragment boundaries (cannot be combined with `--optimize-pd`). |
+| `--min-frag-duration` | `<float>` | Specify minimum fragment duration in seconds when `--fragment` is active. |
+| `--last-frag-merge-thresh` | `<float>` | Threshold in `(0.0, 1.0)` below which the trailing fragment is merged into its predecessor (requires `--fragment` and `--min-frag-duration`). |
+| `--dash` | `[integer]` | Enable **MPEG-DASH ISOBMFF** output (`sidx` + `dash`/`msdh`/`msix`/`iso6` brands; requires `--fragment`). Pass `0` (or omit the integer) for a single self-initializing segment; pass `N >= 1` to write a separate Initialization Segment (`output.mp4`) and Media Segments (`output_1.mp4`, `output_2.mp4`, ...) containing `N` subsegments each. |
+| `--chapter` | `<path>` | Set chapters from a timestamp-based or Ogg-style chapter text file (writes a `moov.udta.chpl` User Data chapter list in `.mp4`/`.m4v`/`.m4a` and/or a `tref.chap` reference chapter track in `.mov`/`.mp4`/`.m4v`/`.m4a`). |
+| `--chpl-with-bom` | *(none)* | Prepend a 3-byte UTF-8 BOM (`0xEF 0xBB 0xBF`) to chapter title strings in the `moov.udta.chpl` chapter list box (`mp4`/`m4v`/`m4a`). |
+| `--chapter-track` | `<integer>` | Specify which 1-based output track number references the `tref.chap` chapter track (default: `1`). |
+| `--copyright-notice` | `<arg>` | Set movie-level copyright notice (`cprt` in `moov.udta`) as `<language>/<string>` or `<string>` (`mp4`/`m4v`/`m4a`/`3gp`/`3g2`). |
+| `--language` | `<string>` | Specify the default 3-letter ISO-639-2/T language code for all output tracks. |
+| `--dry-run` | *(none)* | Perform full input probing, option validation, and timeline calculation without writing output files. |
 
-#### iTunes Metadata Options (`muxer`, valid for `mp4`, `m4a`, `m4v`)
-`--album-name`, `--artist`, `--comment`, `--release-date` (`YYYY-MM-DD`), `--encoder`, `--genre`, `--lyrics`, `--title`, `--composer`, `--album-artist`, `--copyright`, `--description`, `--grouping`, `--beats-per-minute <int>`.
-
-#### Per-Input Track Options (`-i input?opt1=val1,opt2=val2`)
-
-| Track Option | Value Format | Description |
-| :--- | :--- | :--- |
-| `fps=<arg>` | `<num>` or `<num>/<den>` | Video framerate (e.g., `fps=24000/1001`, `fps=60`). |
-| `language=<arg>` | 3-letter code | Media language code (e.g., `language=eng`, `language=jpn`). |
-| `alternate-group=<int>` | `<integer>` | Alternate group ID (`tkhd.alternate_group`). |
-| `encoder-delay=<int>` | `<integer>` | Audio encoder delay (priming samples) to strip via Edit List. |
-| `sbr` | *(flag)* | Explicitly signal HE-AAC v1 Spectral Band Replication (SBR). |
-| `ps` | *(flag)* | Explicitly signal HE-AAC v2 Parametric Stereo (PS; implies `sbr`). |
-| `par=<w>:<h>` | `<int>:<int>` | Pixel Aspect Ratio (`pasp` box, e.g., `par=16:15`). |
-| `clap=<args>` | `wN:wD,hN:hD,hON:hOD,vON:vOD` | Clean Aperture (`clap` box) rational parameters. |
-| `handler=<string>` | `<string>` | Set the media handler name (`hdlr.name`). |
-
-#### `muxer` Practical Examples
-```sh
-# Multiplex H.264 Annex-B video + AAC ADTS audio with encoder delay compensation into MP4
-./cli/muxer -i video.h264?fps=30000/1001 -i audio.aac?language=eng,encoder-delay=2112 \
-            --optimize-pd --title "Demo Movie" -o movie.mp4
-
-# Multiplex AV1 (.ivf) + 5.1ch 24-bit 48 kHz WAVE into ISOBMFF MP4 (creates av01/av1C + ipcm/pcmC/chnl)
-./cli/muxer -i stream.ivf?fps=24 -i surround_51ch_24bit.wav?language=eng --optimize-pd -o av1_51ch.mp4
-
-# Multiplex WAVE into QuickTime .mov (creates QTFF lpcm/sowt/in24 Sound Description)
-./cli/muxer -i surround_51ch_24bit.wav -o audio.mov
-```
-
----
-
-### 2.2 `remuxer` — Container Remultiplexer & Fragmenter
-
-`remuxer` reads one or more existing container files (`.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, `.3g2`), optionally filters or re-configures tracks, and writes a new standard or **Fragmented ISOBMFF** container.
-
-#### Synopsis
-```sh
-remuxer [global_options] -i input1[?track_opts] [-i input2 ...] -o output.[mp4|mov|m4a|m4v|3gp|3g2]
-```
-
-#### Global Options (`remuxer`)
+#### Global Timeline-Editing Shortcuts (`lshmuxer`)
+These global flags apply timeline edits to `--track <int>` (default: track `1`) of the first input file (`input[0]`), providing drop-in compatibility with standalone timeline-editing workflows (for multi-input or multi-track editing, use the equivalent per-track `?timecode=`, `?skip=`, `?delay=` options below):
 
 | Option | Argument | Description |
 | :--- | :--- | :--- |
-| `-i` | `<path>[?<opts>]` | Input container file and optional per-track options (`?[track_num:]opt=val`). |
-| `-o` | `<path>` | Output container file path. |
-| `--file-format` | `<format>` | Specify output file format (`mp4`, `mov`, `m4a`, `m4v`, `3gp`, `3g2`). |
-| `--optimize-pd` | *(none)* | Optimize for progressive download (`moov` before `mdat`). |
-| `--interleave` | `<integer>` | Specify maximum interleave chunk interval in milliseconds. |
-| `--fragment` | `<track_num>` | Enable **Fragmented Movie (`moof`/`traf`/`trun`)** output using `<track_num>` as the reference track for fragment boundaries (cannot be combined with `--optimize-pd`). |
-| `--min-frag-duration` | `<float>` | Specify minimum fragment duration in seconds (default: `1.0`). |
-| `--dash` | *(none)* | Enable **MPEG-DASH ISOBMFF Media Segment** output (`sidx` + `dash`/`msdh`/`msix` brands; requires `--fragment`). |
-| `--chapter` | `<path>` | Set chapters from a chapter file. |
-| `--chpl-with-bom` | *(none)* | Add UTF-8 BOM to chapter strings in the `chpl` box. |
-| `--chapter-track` | `<integer>` | Specify reference chapter track number (default: `1`). |
-| `--language` | `<string>` | Specify default ISO-639-2/T language code across tracks. |
+| `--track` | `<integer>` | Target 1-based track number in the first input file for global timeline options (default: `1`). |
+| `--timecode` | `<path>` | Rewrite track timestamps using a **Matroska timecode format v1 or v2** file. |
+| `--media-timescale` | `<integer>` | Convert the target track's media timescale (`mdhd.timescale`) to `<integer>`. |
+| `--media-timebase` | `<integer>` | Convert the target track's timestamp unit step (timebase) to `<integer>`. |
+| `--skip` | `<int>` or `<num>/<den>` | Skip duration at the start of the media presentation via Edit List (`elst` `media_time`). |
+| `--delay` | `<int>` or `<num>/<den>` | Insert an Empty Edit (`elst` `media_time = -1`) delay before the media presentation. |
+| `--dts-compression` | *(none)* | Eliminate initial composition-to-decode delay (`ctts` offset) by compressing initial DTS intervals and compensating via Edit List. |
 
-#### Per-Track Options (`-i input?1:opt=val/2:opt=val`)
-Multiple track specifiers on a single input are separated by `/` (e.g., `-i movie.mp4?1:language=eng/2:remove`):
-- `language=<code3>` — Override track language.
-- `alternate-group=<int>` — Set `tkhd.alternate_group`.
-- `sbr` / `ps` — Explicitly signal HE-AAC SBR / PS.
-- `handler=<string>` — Set media handler name.
-- `remove` — Exclude this track from the output movie.
-- `seek=<int>` — Start remultiplexing from the `<int>`-th Random Access Point (RAP).
-- `safe-seek=<int>` — Same as `seek`, plus prepends an Edit List entry to skip any undecodable leading samples prior to the RAP.
+> [!WARNING]
+> **`--dts-compression` (and `?dts-compression`) can break HRD / VBV conformance.** This option squeezes the DTS spacing of the initial frames and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `--dts-compression`, and keep `--skip` / `--delay` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
 
-#### `remuxer` Practical Examples
+#### iTunes Metadata Options (`lshmuxer`, valid for `mp4`, `m4a`, `m4v`)
+| Option | Argument | Description |
+| :--- | :--- | :--- |
+| `--album-name` | `<string>` | Album title (`©alb`). |
+| `--artist` | `<string>` | Track artist (`©ART`). |
+| `--comment` | `<string>` | User comment (`©cmt`). |
+| `--release-date` | `<YYYY-MM-DD>` | Release date string (`©day`). |
+| `--encoder` | `<string>` | Person or organization that encoded the recording (`©enc`). |
+| `--genre` | `<string>` | Genre name (`©gen`). |
+| `--lyrics` | `<string>` | Song lyrics (`©lyr`). |
+| `--title` | `<string>` | Track or movie title (`©nam`). |
+| `--composer` | `<string>` | Composer (`©wrt`). |
+| `--album-artist` | `<string>` | Artist for the whole album (`aART`). |
+| `--copyright` | `<string>` | iTunes copyright tag (`cprt` in `ilst`). |
+| `--description` | `<string>` | Description string (`desc`). |
+| `--grouping` | `<string>` | Content grouping (`©grp`). |
+| `--tempo` / `--beats-per-minute` | `<integer>` | Tempo in beats per minute (`tmpo`). |
+
+#### Per-Input & Per-Track Options (`-i input?[track_num:]opt1=val1,opt2=val2[?track_num:...]`)
+Per-track options are appended to an input path after `?`.
+- **Single-track inputs (or Track 1 shorthand)**: The `<track_num>:` prefix may be omitted (e.g., `-i video.h264?fps=24000/1001,par=1:1`).
+- **Multi-track container inputs**: Prefix each track's comma-separated option list with its 1-based input track number and a colon, separating multiple tracks with `?` (e.g., `-i movie.mp4?1:safe-seek=3,language=eng?2:remove`).
+
+| Track Option | Value Format | Scope | Description |
+| :--- | :--- | :--- | :--- |
+| `remove` | *(flag)* | Container | Exclude this input track from the output movie. |
+| `disable` | *(flag)* | Raw / Container | Clear `ISOM_TRACK_ENABLED` in `tkhd.flags` so the track is disabled by default. |
+| `language=<arg>` | 3-letter code | Raw / Container | Set ISO-639-2/T media language code (e.g., `language=eng`, `language=jpn`). |
+| `alternate-group=<int>` | `<integer>` | Raw / Container | Set track alternate group ID (`tkhd.alternate_group`). |
+| `handler=<string>` | `<string>` | Raw / Container | Set media handler name (`hdlr.name`). |
+| `copyright=<arg>` | `<str>[/<lang>]` | Raw / Container | Set track-level copyright notice (`trak.udta.cprt`). |
+| `fps=<arg>` | `<int>` or `<num>/<den>` | Raw Video | Specify video frame rate (e.g., `fps=24000/1001`, `fps=60`). |
+| `constant-delay=<int>` | `<integer>` | Raw Video | Add a constant composition delay (`CTS = DTS + delay * timebase`) to every sample. |
+| `par=<w>:<h>` | `<int>:<int>` | Raw Video | Set Pixel Aspect Ratio (`pasp` box and scaled `tkhd.width`, e.g., `par=16:15`). |
+| `dv-profile=<arg>` | `<profile>[.<compat>]` | Raw Video | Signal Dolby Vision configuration (`dvcC`/`dvvC` and `dby1` brand, e.g., `dv-profile=8.1`). |
+| `stereo-mode=<arg>` | `<mode>` | Video | Set Stereoscopic 3D (`st3d`) mode: `monoscopic`, `top-bottom`, `left-right`, `custom`, `right-left`. |
+| `projection=<arg>` | `<type>` | Video | Set Google Spherical Video v2 (`sv3d`) projection: `equirectangular` or `cubemap`. |
+| `ypr=<y>/<p>/<r>` | `<flt>/<flt>/<flt>` | Video | Set Spherical Video v2 pose header (`prhd`) yaw, pitch, and roll in degrees (requires `projection=`). |
+| `encoder-delay=<int>` | `<integer>` | Raw / Container | Represent audio priming delay (in media timescale samples) to skip via Edit List (`elst`) and pre-roll (`'roll'`). |
+| `sbr` | *(flag)* | AAC Audio | Enable explicit backward-compatible HE-AAC Spectral Band Replication (SBR) signaling in `esds`. |
+| `ambisonic-order=<int>` | `<integer>` | Audio | Emit Google Spatial Audio (`SA3D`) box with the specified ambisonic order (`>= 0`, where `(order + 1)^2 == channels`). |
+| `seek=<int>` | `<integer>` | Container | Start remultiplexing from 1-based sample number `<int>`. |
+| `safe-seek=<int>` | `<integer>` | Container | Seek to the Random Access Point (RAP) at or preceding sample `<int>` and prepend an Edit List to skip leading frames prior to `<int>`. |
+| `timecode=<path>` | `<path>` | Raw / Container | Rewrite this track's timeline in 1 pass using a Matroska timecode v1 or v2 file. |
+| `media-timescale=<int>` | `<integer>` | Raw / Container | Convert this track's media timescale (`mdhd.timescale`) to `<int>`. |
+| `media-timebase=<int>` | `<integer>` | Raw / Container | Convert this track's timestamp unit step (timebase) to `<int>`. |
+| `skip=<arg>` | `<int>` or `<num>/<den>` | Raw / Container | Skip duration at the start of this track's presentation via Edit List. |
+| `delay=<arg>` | `<int>` or `<num>/<den>` | Raw / Container | Insert an Empty Edit delay before this track's presentation via Edit List. |
+| `dts-compression` | *(flag)* | Raw / Container | Eliminate initial composition-to-decode delay on this track via DTS compression. |
+
+#### `lshmuxer` Practical Examples
 ```sh
-# Convert a standard MP4 into a Fragmented MP4 with 2.0-second fragments aligned to video track 1
-./cli/remuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
+# 1. Multiplex H.264 Annex-B video + AAC ADTS audio with priming compensation, chapters, and iTunes metadata
+./cli/lshmuxer -i video.h264?fps=30000/1001 -i audio.aac?language=eng,encoder-delay=2112 \
+               --chapter chapters.txt --title "Demo Movie" --optimize-pd -o movie.mp4
 
-# Convert a multi-track MP4 into an MPEG-DASH self-initializing media segment (sidx + moof/mdat)
-./cli/remuxer -i movie.mp4 --fragment 1 --dash --min-frag-duration 4.0 -o segment_dash.mp4
+# 2. Multiplex AV1 (.ivf) + 5.1ch 24-bit 48 kHz WAVE into ISOBMFF MP4 (emits av01/av1C + ipcm/pcmC/chnl)
+./cli/lshmuxer -i stream.ivf?fps=24 -i surround_51ch_24bit.wav?language=eng --optimize-pd -o av1_51ch.mp4
 
-# Remux only track 1 (removing track 2) starting from the 3rd keyframe with safe Edit List trimming
-./cli/remuxer -i movie.mp4?1:safe-seek=3/2:remove --optimize-pd -o trimmed.mp4
+# 3. Multiplex WAVE into QuickTime .mov (emits QTFF lpcm/sowt/in24 Sound Description)
+./cli/lshmuxer -i surround_51ch_24bit.wav -o audio.mov
+
+# 4. Remux only track 1 (removing track 2) starting at sample 30 with RAP-aligned safe Edit List trimming
+./cli/lshmuxer -i movie.mp4?1:safe-seek=30?2:remove --optimize-pd -o trimmed.mp4
+
+# 5. Convert a standard MP4 into a Fragmented MP4 with 2.0-second fragments aligned to track 1
+./cli/lshmuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
+
+# 6. Convert an MP4 into an MPEG-DASH self-initializing media segment (--dash 0) or separate segments (--dash 1)
+./cli/lshmuxer -i movie.mp4 --fragment 1 --dash 0 --min-frag-duration 4.0 -o segment_dash.mp4
+./cli/lshmuxer -i movie.mp4 --fragment 1 --dash 1 --min-frag-duration 4.0 -o seg_init.mp4
+
+# 7. Apply a Matroska timecode v2 file and Edit List delay to track 1 in 1 pass from raw streams
+./cli/lshmuxer -i video.h264?timecode=tc_v2.txt,delay=100/1000 -i audio.aac?language=jpn --optimize-pd -o vfr.mp4
 ```
 
 ---
 
-### 2.3 `boxdumper` — Box Hierarchy, Timestamp & Chapter Inspector
+### 2.2 `boxdumper` — Box Hierarchy, Timestamp & Chapter Inspector
 
-`boxdumper` inspects the internal structure of ISOBMFF and QTFF files.
+`boxdumper` inspects the internal Box/Atom hierarchy, codec configuration records, sample tables, per-sample timestamps, and chapter lists of ISOBMFF and QTFF files.
 
 #### Synopsis
 ```sh
@@ -209,9 +240,9 @@ boxdumper [options] input
 
 | Option | Description |
 | :--- | :--- |
-| `--box` | Dump the complete Box/Atom hierarchy, headers, sample description extensions (`avcC`, `hvcC`, `av1C`, `pcmC`, `chnl`, `srat`, `esds`, etc.), and sample table entries (default mode). |
-| `--chapter` | Extract and print the chapter list (`chpl` or reference chapter track). |
-| `--timestamp [track_ID]` | Dump per-sample Decode Timestamps (`DTS`) and Composition Timestamps (`CTS`) for `track_ID` (default: track `1`). |
+| `--box` | Dump the complete Box/Atom hierarchy, headers, sample description extensions (`avcC`, `hvcC`, `av1C`, `dvc1`, `dfLa`, `pcmC`, `chnl`, `srat`, `esds`, `dac3`, `dec3`, `ddts`, `dOps`, `alac`, etc.), and sample table entries (default mode when no flag is given). |
+| `--chapter` | Extract and print the chapter list (`moov.udta.chpl` or `tref.chap` reference chapter track) in chapter text format. |
+| `--timestamp [track_ID]` | Dump the media timescale (`mdhd.timescale`) and per-sample Decode Timestamps (`DTS`) and Composition Timestamps (`CTS`) for `track_ID` (default: track `1`). |
 
 #### `boxdumper` Practical Examples
 ```sh
@@ -220,61 +251,73 @@ boxdumper [options] input
 
 # Dump DTS/CTS timestamps of track 1
 ./cli/boxdumper --timestamp 1 movie.mp4
+
+# Extract chapter list to stdout
+./cli/boxdumper --chapter movie.mp4
 ```
 
 ---
 
-### 2.4 `timelineeditor` — VFR Timecode & Edit List Editor
+### 2.3 CLI Concepts & Input Text-File Formats (Chapters & Timecodes)
 
-`timelineeditor` modifies the timing and Edit List (`edts`/`elst`) of a single track in a container and writes a progressive-download-optimized output file.
+- **`--optimize-pd` (FastStart / progressive download)**: By default, a single-pass MP4 writes the Movie Box (`moov`) after the Media Data Box (`mdat`), requiring a player to seek to the end of the file before starting playback. `--optimize-pd` relocates `moov` in front of `mdat` and adjusts all chunk offsets (`stco`/`co64`) so web and streaming playback can begin immediately while downloading.
+- **`encoder-delay=<n>`**: Lossy audio encoders (such as AAC, Opus, and MP3) prepend `n` priming samples of silence at stream startup. Specifying `encoder-delay=<n>` writes an Edit List (`elst` `media_time = n`) and an audio pre-roll sample group (`'roll'` with negative `roll_distance`) so the player discards the priming silence and maintains exact A/V synchronization (see [3.6.1](#361-what-an-edit-list-really-is)).
+- **`--shift-timeline`**: When video contains B-frames, a frame's composition timestamp can precede its decoding timestamp. `--shift-timeline` shifts composition offsets using signed negative offsets (`ctts` version 1 in ISOBMFF `iso4`+ or signed `ctts` version 0 in QuickTime, accompanied by a `cslg` Composition-to-Decode Box) or an Edit List so the earliest presentation starts at `0` without delaying decode times (see [3.6.2](#362-dual-timelines-and-cslg)).
+- **Delay precision (`--delay` / `delay=`)**: An Empty Edit delay is expressed in the **Movie Timescale (`mvhd.timescale`)**. See [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap) when sample-accurate audio delay is required.
 
-#### Synopsis
-```sh
-timelineeditor [options] input output
-```
+#### Chapter Text File Formats (`--chapter`)
+L-SMASH accepts two plain-text chapter formats (auto-detected from the first line, with optional leading UTF-8 BOM):
 
-#### Options (`timelineeditor`)
+1. **Ogg / OGM Style (`CHAPTERxx=` / `CHAPTERxxNAME=` pairs)**:
+   ```text
+   CHAPTER01=00:00:00.000
+   CHAPTER01NAME=Opening
+   CHAPTER02=00:03:25.500
+   CHAPTER02NAME=Main Story
+   ```
+2. **Timestamp-Based Minimum Style (`hh:mm:ss.mmm <title>` per line)**:
+   ```text
+   00:00:00.000 Opening
+   00:03:25.500 Main Story
+   ```
 
-| Option | Argument | Description |
+Depending on the target container format, `--chapter chapters.txt` populates:
+- **Reference Chapter Track (`tref.chap`)**: Available in QuickTime (`.mov`) and iTunes/MP4 (`.mp4`, `.m4v`, `.m4a`). Creates a dedicated timed text track (`text` in `.mov`, `tx3g` in `.mp4`/`.m4v`/`.m4a`) linked from `--chapter-track` (default: track `1`) via a `'chap'` Track Reference Box (`tref`).
+- **User Data Chapter List (`moov.udta.chpl`)**: Available in `.mp4`, `.m4v`, and `.m4a` (and 3GPP family). Writes a table-based `chpl` FullBox inside `moov.udta` storing chapter start timestamps in 100 ns units and UTF-8 title strings (pass `--chpl-with-bom` to prefix each title string with a UTF-8 BOM).
+
+#### Matroska Timecode Format v1 / v2 Text Files (`--timecode` / `timecode=`)
+- **Format v2 (Per-Frame Presentation Timestamps in Milliseconds)**:
+  ```text
+  # timecode format v2
+  0
+  41.708
+  83.417
+  125.125
+  166.833
+  ```
+  The first line must be `# timecode format v2`. Each subsequent non-comment line gives the presentation timestamp in milliseconds of one frame in composition order (`N` lines for `N` frames). An optional `(N + 1)`-th timestamp line (strictly greater than the `N`-th line) may be provided to specify the explicit presentation end timestamp of the final frame (so the final frame's composition duration is the difference between the `(N + 1)`-th and `N`-th timestamps); if omitted, the final frame's duration is estimated from the preceding frame interval with a statistical outlier guard against long still frames.
+- **Format v1 (Baseline Frame Rate + Override Frame Ranges)**:
+  ```text
+  # timecode format v1
+  Assume 23.976
+  100,249,29.970
+  ```
+  The first line must be `# timecode format v1`, followed by `Assume <FPS>` (baseline frame rate) and zero or more `start_frame,end_frame,<FPS>` lines overriding the frame rate for inclusive 0-based composition frame ranges (through the final frame `N - 1`).
+
+---
+
+### 2.4 Legacy CLI Tools (`muxer`, `remuxer`, `timelineeditor`) & Migration to `lshmuxer`
+
+The standalone binaries `muxer`, `remuxer`, and `timelineeditor` are **legacy compatibility tools** retained in `cli/` for existing scripts and differential regression testing (`tests/test_cli_equivalence.c`). All of their capabilities are unified in **`lshmuxer`**, which is the recommended replacement for all new and migrated workflows.
+
+#### Quick Migration Reference (`muxer` / `remuxer` / `timelineeditor` → `lshmuxer`)
+
+| Legacy Command | Equivalent `lshmuxer` Command | Migration Notes |
 | :--- | :--- | :--- |
-| `--track` | `<integer>` | Specify target track number to edit (default: `1`). |
-| `--timecode` | `<path>` | Edit timeline using a **Matroska timecode format v1 or v2** file (`# timecode format v1` or `# timecode format v2`). |
-| `--media-timescale` | `<integer>` | Specify new media timescale (`mdhd.timescale`) before applying edits. |
-| `--Media-timescale` | `<integer>` | Specify new media timescale (`mdhd.timescale`) and rescale existing timestamps after applying edits. |
-| `--movie-timescale` | `<integer>` | Specify new movie timescale (`mvhd.timescale`). |
-| `--skip` | `<integer>` | Skip `<integer>` ticks from the start of the media presentation via Edit List. |
-| `--delay` | `<integer>` | Insert `<integer>` ticks of empty delay before the media presentation via Edit List (ticks are in the movie timescale; see [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap)). |
-| `--dts-compression` | *(none)* | Eliminate initial composition-to-decode delay (`ctts` offset) by shifting DTS and compensating via Edit List. |
-
-> [!WARNING]
-> **`--dts-compression` can break HRD / VBV conformance.** This option squeezes the DTS spacing of the first samples (the same trick once used in the CLI muxer layer of x264) and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `--dts-compression`, and keep `--skip` / `--delay` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
-
-### 2.5 CLI Concepts for Non-Experts and Text-File Examples
-
-- **`--optimize-pd` (FastStart / progressive download)**: A normal MP4 stores the index (`moov`) after the media data (`mdat`), so a player must fetch the whole file before it can start. `--optimize-pd` moves `moov` to the front so playback can start while the file is still downloading or streaming.
-- **`encoder-delay=<n>`**: Lossy audio encoders (such as AAC) emit `n` priming samples of silence at the start. This option writes an Edit List that skips them so audio and video stay in sync (see [3.6.1](#361-what-an-edit-list-really-is)).
-- **`--shift-timeline`**: With B-frames the first frame's display time can be earlier than its decode time (negative offset). This option shifts the composition timeline later (negative `ctts` version 1 offsets or an Edit List) so that it never starts below zero (see [3.6.2](#362-dual-timelines-and-cslg)).
-- **Delay precision**: `--delay` creates an Empty Edit whose length is counted in the *movie timescale*. See [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap) before using it on audio.
-
-#### Chapter file for `--chapter` (Ogg / OGM style)
-```text
-CHAPTER01=00:00:00.000
-CHAPTER01NAME=Opening
-CHAPTER02=00:03:25.500
-CHAPTER02NAME=Main Story
-```
-Each chapter is a pair of lines: a start time (`hh:mm:ss.mmm`) and its name. Use it as `muxer --chapter chapters.txt ...`.
-
-#### Timecode file for `timelineeditor --timecode` (Matroska timecode format v1 / v2)
-```text
-# timecode format v2
-0
-41.708
-83.417
-125.125
-166.833
-```
-The first line is the header (`# timecode format v1` or `# timecode format v2`). In format v2, each following line is the presentation timestamp in milliseconds of one frame in composition order (`N` lines for `N` frames). An optional `(N + 1)`-th line (`t_N > t_{N-1}`) may be provided to specify the explicit end timestamp of the last frame (`D_comp = t_N - t_{N-1}`); if omitted, the last frame's duration is estimated from the preceding interval with a statistical outlier guard against still frames. In format v1, `Assume <FPS>` defines the baseline frame rate and `start,end,<FPS>` lines override specific frame ranges, including the duration of the final frame `N - 1`.
+| `muxer [opts] -i raw1?opt=val -i raw2 -o out.mp4` | `lshmuxer [opts] -i raw1?opt=val -i raw2 -o out.mp4` | **100% drop-in compatible.** All `muxer` global options, iTunes metadata flags, and per-input `?opt=val` flags work identically in `lshmuxer`. |
+| `remuxer [opts] -i in.mp4?1:opt=val?2:remove -o out.mp4` | `lshmuxer [opts] -i in.mp4?1:opt=val?2:remove -o out.mp4` | **100% drop-in compatible.** Per-track options for multiple tracks on a single input are separated by `?` (`?1:...?2:...`) in both tools. |
+| `timelineeditor [opts] in.mp4 out.mp4` | `lshmuxer [opts] in.mp4 out.mp4`<br>*(or)* `lshmuxer [opts] -i in.mp4 -o out.mp4` | Supports both positional (`lshmuxer [opts] in.mp4 out.mp4`) and `-i`/`-o` syntax, as well as per-track `?timecode=`, `?skip=`, `?delay=`, `?dts-compression`, `?media-timescale=`, and `?media-timebase=`. Note that `timelineeditor`'s `--Media-timescale` (capital `M`, rescaling timebase) corresponds to `--media-timebase` (or `?media-timebase=`) in `lshmuxer`. |
+| **3-step pipeline**: `muxer` → `timelineeditor` → `remuxer` | **Single 1-pass command**: `lshmuxer -i raw.h264?timecode=tc.txt -i audio.aac -o out.mp4` | Eliminates intermediate temporary MP4 files by applying VFR timecode editing, multiplexing, and optional fragmentation in a single pass. |
 
 ---
 
@@ -591,7 +634,7 @@ lsmash_create_fragment_movie( root );
 /* Append samples belonging to this fragment ... */
 ```
 
-For constant-size, constant-duration audio tracks such as ISO/IEC 23003-5 LPCM, L-SMASH automatically hoists the common sample duration and byte size into `tfhd->default_sample_duration` and `tfhd->default_sample_size`, omitting redundant per-sample `trun` array rows.
+For constant-size, constant-duration audio tracks such as ISO/IEC 23003-5 LPCM, L-SMASH automatically hoists the common sample duration and byte size into the Track Fragment Header Box (`tfhd` `default_sample_duration` and `default_sample_size`), omitting redundant per-sample `trun` array rows.
 
 #### Segmented ISOBMFF (`LSMASH_FILE_MODE_SEGMENT`)
 `lsmash_open_file( path, 0, &param )` (write mode) pre-sets `param.mode` to `LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_BOX | LSMASH_FILE_MODE_INITIALIZATION | LSMASH_FILE_MODE_MEDIA`. Segment output is obtained by adjusting the flags before `lsmash_set_file()`:
@@ -599,11 +642,11 @@ For constant-size, constant-duration audio tracks such as ISO/IEC 23003-5 LPCM, 
 | Output | `param.mode` (starting from the write-mode default) | Resulting layout |
 | :--- | :--- | :--- |
 | Fragmented MP4 (self-contained) | `+ FRAGMENTED` | `ftyp` `moov` (`moof` `mdat`)... `mfra` (the trailing `mfra` is written only when seekable) |
-| Self-Initializing Media Segment (`remuxer --fragment --dash`) | `+ FRAGMENTED + INDEX + SEGMENT` | `ftyp` `moov` `sidx` (`moof` `mdat`)... (no `mfra`) |
+| Self-Initializing Media Segment (`lshmuxer --fragment 1 --dash 0`) | `+ FRAGMENTED + INDEX + SEGMENT` | `ftyp` `moov` `sidx` (`moof` `mdat`)... (no `mfra`) |
 | Initialization Segment (separate file) | `- MEDIA + FRAGMENTED + SEGMENT` | `ftyp` `moov` (no samples can be appended) |
 | Media Segment (separate file) | `- INITIALIZATION + FRAGMENTED + INDEX + SEGMENT` (`MEDIA` kept) | `styp` `sidx` (`moof` `mdat`)... |
 
-The remaining abbreviations drop the `LSMASH_FILE_MODE_` prefix. These are the combinations that `cli/remuxer.c` builds, and they are the ones to use.
+The remaining abbreviations drop the `LSMASH_FILE_MODE_` prefix. These are the combinations that `cli/lshmuxer.c` builds, and they are the ones to use.
 
 **Self-Initializing Media Segment:**
 
@@ -752,7 +795,7 @@ Presentation:        0======== video ========         no delay
 Both behaviours are valid per the specification. To make every player present at the same timing, write an explicit Edit List (`start_time = CT0`, which maps the first sample to Presentation `0`).
 
 #### 3.6.4 Warning: Edit Lists and the Decoder Buffer (HRD / VBV)
-An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `--dts-compression` (see 2.4) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
+An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `--dts-compression` (see [2.1](#21-lshmuxer--unified-multiplexer-remultiplexer-fragmenter--timeline-editor)) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
 
 
 #### 3.6.5 Empty Edit and Movie Timescale Precision: the Sample-Accuracy Trap
@@ -775,13 +818,13 @@ If the Movie Timescale is coarser than the audio Media Timescale (or not an inte
 | `1000` | not divisible (48 samples per tick); always rounded | not divisible |
 | `9000` / `90000` | `90000` is not divisible by 48000; `9000` neither | not divisible |
 
-**Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `muxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `timelineeditor`, set `--movie-timescale` before `--delay`.
+**Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `lshmuxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `lshmuxer`, set `--movie-timescale` alongside `--delay` (or `?delay=`).
 
 **Why the Movie Timescale is not set to the LCM of the track timescales:** with several tracks (for example video `30000` and audio `44100`), the least common multiple (`4,410,000` here) would make every Movie Timescale tick extremely fine. Long durations and large sample durations expressed in such ticks can easily overflow `mvhd` / `tkhd` / `elst` `duration` fields and intermediate calculations, especially in Version 0 boxes where these fields are 32-bit. For multi-track output L-SMASH therefore deliberately keeps a safe, modest fixed value (such as `600` or `1000`) and accepts the coarser Empty Edit granularity as a design trade-off; use the countermeasures above when sample-accurate audio delay matters.
 
 #### Chapters and Container Metadata
 ```c
-/* Nero-style chapter list in moov/udta/chpl, from a Nero/Ogg-style chapter text file (same format as muxer --chapter) */
+/* User Data chapter list in moov.udta.chpl, from a timestamp-based or Ogg-style chapter text file (same format as lshmuxer --chapter) */
 lsmash_set_tyrant_chapter( root, "chapters.txt", 0 /* add_bom */ );
 uint32_t n = lsmash_count_tyrant_chapter( root );
 
@@ -809,7 +852,7 @@ lsmash_summary_t *summary = lsmash_get_summary( root, 1, 1 );
 /* ... inspect summary fields ... */
 lsmash_cleanup_summary( summary );
 
-/* Construct the unified media timeline (seamlessly spans moov->stbl and all moof->traf->trun fragments) */
+/* Construct the unified media timeline (seamlessly spans moov.trak.mdia.minf.stbl and all moof.traf.trun fragments) */
 lsmash_construct_timeline( root, 1 );
 uint32_t sample_count = lsmash_get_sample_count_in_media_timeline( root, 1 );
 
@@ -917,7 +960,7 @@ lsmash_construct_timeline( root, track_ID );
 /* lsmash_get_sample_from_media_timeline() now reads each sample from the file that its chunk references. */
 ```
 
-`lsmash_assign_data_reference()` only affects external entries; calling it for a self-contained entry succeeds and changes nothing. `cli/remuxer.c` follows exactly this procedure when it opens an input movie that has external references.
+`lsmash_assign_data_reference()` only affects external entries; calling it for a self-contained entry succeeds and changes nothing. `cli/lshmuxer.c` follows exactly this procedure when it opens an input movie that has external references.
 
 #### Current Limitations
 
@@ -1129,4 +1172,4 @@ Uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling show the s
 - **Container Metadata & Chapters**:
   1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Container-level key-value metadata tags (title, artist, album, encoder, custom `----` `mean`/`name`/`data` items).
   2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` or `tx3g`) referenced from the media track via a `'chap'` Track Reference Box (`tref`), enabled via `--chapter` + `--chapter-track`.
-  3. **Nero Chapter List (`moov.udta.chpl`)**: A table-based chapter list box stored inside `moov.udta` for `.mp4`/`.m4v`/`.m4a` files, enabled via `--chapter` (and optional `--chpl-with-bom`).
+  3. **User Data Chapter List (`moov.udta.chpl`)**: A table-based chapter list box stored inside `moov.udta` for `.mp4`/`.m4v`/`.m4a` files, enabled via `--chapter` (and optional `--chpl-with-bom`).
