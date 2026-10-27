@@ -156,7 +156,7 @@ int lsm_opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *bo
         lsmash_ifprintf( fp, indent, "StreamCount = %"PRIu8"\n", lsmash_bs_get_byte( bs ) );
         lsmash_ifprintf( fp, indent, "CoupledCount = %"PRIu8"\n", lsmash_bs_get_byte( bs ) );
         lsmash_ifprintf( fp, indent++, "ChannelMapping\n" );
-        for( uint8_t i = 0; i < OutputChannelCount; i++ )
+        for( uint32_t i = 0; i < OutputChannelCount; i++ )
         {
             uint8_t channel = lsmash_bs_get_byte( bs );
             if( channel != 255 )

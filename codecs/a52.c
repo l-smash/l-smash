@@ -524,7 +524,7 @@ void lsm_a52_update_eac3_specific_param( eac3_info_t *info )
     lsmash_eac3_specific_parameters_t *param = &info->dec3_param;
     param->data_rate = 0;
     param->num_ind_sub = info->number_of_independent_substreams - 1;
-    for( uint8_t i = 0; i <= param->num_ind_sub; i++ )
+    for( uint32_t i = 0; i <= param->num_ind_sub; i++ )
         param->independent_info[i] = info->independent_info[i];
     info->dec3_param_initialized = 1;
 }

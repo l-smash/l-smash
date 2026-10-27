@@ -446,21 +446,26 @@ static int mp3_imp_probe( importer_t *importer )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = importer->bs;
     /* Multiple ID3 tags could be present, loop to skip them first. */
-    while( lsmash_bs_show_byte( bs, 0 ) == 'I'
+    int err;
+    while( !bs->eob && !bs->error
+        && lsmash_bs_show_byte( bs, 0 ) == 'I'
         && lsmash_bs_show_byte( bs, 1 ) == 'D'
         && lsmash_bs_show_byte( bs, 2 ) == '3' )
     {
-        lsmash_bs_read_seek( bs, 6, SEEK_CUR );
+        lsmash_bs_skip_bytes( bs, 6 );
         uint32_t size = 0;
-        for( int i = 0 ; i < 4; i++ )
+        for( int i = 0; i < 4; i++ )
         {
             size <<= 7;
             size |= lsmash_bs_get_byte( bs );
         }
-        lsmash_bs_read_seek( bs, size, SEEK_CUR );
+        if( bs->eob || bs->error || lsmash_bs_read_seek( bs, size, SEEK_CUR ) < 0 )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
     }
     /* Parse the header. */
-    int err;
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
     if( lsmash_bs_get_bytes_ex( bs, MP4SYS_MP3_HEADER_LENGTH, buf ) != MP4SYS_MP3_HEADER_LENGTH )
     {

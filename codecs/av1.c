@@ -412,7 +412,7 @@ int lsm_av1_parse_sequence_header
             sh->decoder_model_info_present_flag = 0;
         sh->initial_display_delay_present_flag = (uint8_t)lsmash_bits_get( bits, 1 );
         sh->operating_points_cnt_minus_1       = (uint8_t)lsmash_bits_get( bits, 5 );
-        for( uint8_t i = 0; i <= sh->operating_points_cnt_minus_1; i++ )
+        for( uint32_t i = 0; i <= sh->operating_points_cnt_minus_1; i++ )
         {
             sh->op[i].operating_point_idc = (uint16_t)lsmash_bits_get( bits, 12 );
             sh->op[i].seq_level_idx       = (uint8_t)lsmash_bits_get( bits, 5 );
@@ -1358,7 +1358,7 @@ static int av1_parse_film_grain_params
     uint8_t num_y_points = (uint8_t)lsmash_bits_get( bits, 4 );
     IF_OUT_OF_SPEC( num_y_points > 14 )
         return LSMASH_ERR_INVALID_DATA;
-    for( uint8_t i = 0; i < num_y_points; i++ )
+    for( uint32_t i = 0; i < num_y_points; i++ )
     {
         lsmash_bits_get( bits, 8 ); /* point_y_value[i] */
         lsmash_bits_get( bits, 8 ); /* point_y_scaling[i] */
@@ -1372,7 +1372,7 @@ static int av1_parse_film_grain_params
         num_cb_points = (uint8_t)lsmash_bits_get( bits, 4 );
         IF_OUT_OF_SPEC( num_cb_points > 10 )
             return LSMASH_ERR_INVALID_DATA;
-        for( uint8_t i = 0; i < num_cb_points; i++ )
+        for( uint32_t i = 0; i < num_cb_points; i++ )
         {
             lsmash_bits_get( bits, 8 ); /* point_cb_value[i] */
             lsmash_bits_get( bits, 8 ); /* point_cb_scaling[i] */
@@ -1380,7 +1380,7 @@ static int av1_parse_film_grain_params
         num_cr_points = (uint8_t)lsmash_bits_get( bits, 4 );
         IF_OUT_OF_SPEC( num_cr_points > 10 )
             return LSMASH_ERR_INVALID_DATA;
-        for( uint8_t i = 0; i < num_cr_points; i++ )
+        for( uint32_t i = 0; i < num_cr_points; i++ )
         {
             lsmash_bits_get( bits, 8 ); /* point_cr_value[i] */
             lsmash_bits_get( bits, 8 ); /* point_cr_scaling[i] */
@@ -1579,7 +1579,7 @@ static int av1_uncompressed_header
     {
         frame->buffer_removal_time_present_flag = (uint8_t)lsmash_bits_get( bits, 1 );
         if( frame->buffer_removal_time_present_flag )
-            for( uint8_t opNum = 0; opNum <= sh->operating_points_cnt_minus_1; opNum++ )
+            for( uint32_t opNum = 0; opNum <= sh->operating_points_cnt_minus_1; opNum++ )
             {
                 if( sh->op[opNum].decoder_model_present_for_this_op )
                 {

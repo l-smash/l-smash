@@ -172,6 +172,8 @@ static int wave_imp_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs 
     wfx->nAvgBytesPerSec = lsmash_bs_get_le32( bs );
     wfx->nBlockAlign     = lsmash_bs_get_le16( bs );
     wfx->wBitsPerSample  = lsmash_bs_get_le16( bs );
+    if( wfx->nChannels == 0 || wfx->nSamplesPerSec == 0 || wfx->nBlockAlign == 0 || bs->eob || bs->error )
+        return LSMASH_ERR_INVALID_DATA;
     switch( wfx->wFormatTag )
     {
         case WAVE_FORMAT_TYPE_ID_PCM :
@@ -278,10 +280,12 @@ static int wave_imp_probe( importer_t *importer )
     }
     int fmt_chunk_present  = 0;
     int data_chunk_present = 0;
-    while( !bs->eob && !(fmt_chunk_present && data_chunk_present) )
+    while( !bs->eob && !bs->error && !(fmt_chunk_present && data_chunk_present) )
     {
         uint32_t ckID   = lsmash_bs_get_be32( bs );
         uint32_t ckSize = lsmash_bs_get_le32( bs );
+        if( bs->eob || bs->error )
+            break;
         lsmash_bs_reset_counter( bs );
         switch( ckID )
         {
@@ -316,13 +320,17 @@ static int wave_imp_probe( importer_t *importer )
         {
             /* Skip the rest of this chunk.
              * Note that ckData is word-aligned even if ckSize is an odd number. */
-            uint32_t skip_size = ckSize;
+            uint64_t skip_size = ckSize;
             if( skip_size & 1 )
                 skip_size++;
             if( skip_size > lsmash_bs_count( bs ) )
             {
                 skip_size -= lsmash_bs_count( bs );
-                lsmash_bs_read_seek( bs, skip_size, SEEK_CUR );
+                if( lsmash_bs_read_seek( bs, skip_size, SEEK_CUR ) < 0 )
+                {
+                    err = LSMASH_ERR_INVALID_DATA;
+                    goto fail;
+                }
             }
         }
     }

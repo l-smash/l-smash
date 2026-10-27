@@ -165,7 +165,7 @@ uint64_t lsm_vc1_find_next_start_code_prefix
         if( no_more )
             length = lsmash_bs_get_remaining_buffer_size( bs );
         /* Any EBDU has no consecutive zero bytes at the end. */
-        while( 0x00 == lsmash_bs_show_byte( bs, length - 1 ) )
+        while( length > VC1_START_CODE_LENGTH && !bs->error && !bs->eob && 0x00 == lsmash_bs_show_byte( bs, length - 1 ) )
         {
             --length;
             ++count;
@@ -237,7 +237,7 @@ static void vc1_parse_hrd_param( lsmash_bits_t *bits, vc1_hrd_param_t *hrd_param
     hrd_param->hrd_num_leaky_buckets = lsmash_bits_get( bits, 5 );
     lsmash_bits_get( bits, 4 );     /* bitrate_exponent */
     lsmash_bits_get( bits, 4 );     /* buffer_size_exponent */
-    for( uint8_t i = 0; i < hrd_param->hrd_num_leaky_buckets; i++ )
+    for( uint32_t i = 0; i < hrd_param->hrd_num_leaky_buckets; i++ )
     {
         lsmash_bits_get( bits, 16 );    /* hrd_rate */
         lsmash_bits_get( bits, 16 );    /* hrd_buffer */
@@ -409,7 +409,7 @@ int lsm_vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t 
                                          * overlap      (1)
                                          * quantizer    (2) */
     if( sequence->hrd_param_flag )
-        for( uint8_t i = 0; i < sequence->hrd_param.hrd_num_leaky_buckets; i++ )
+        for( uint32_t i = 0; i < sequence->hrd_param.hrd_num_leaky_buckets; i++ )
             lsmash_bits_get( bits, 8 ); /* hrd_full */
     /* Decide coded size here.
      * The correct formula is defined in Amendment 2:2011 to SMPTE ST 421M:2006.

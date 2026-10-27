@@ -72,7 +72,7 @@ static void write_bs_put_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t 
     lsmash_bs_put_be16( bs, color_table->size );
     isom_qt_color_array_t *array = color_table->array;
     if( array )
-        for( uint16_t i = 0; i <= color_table->size; i++ )
+        for( uint32_t i = 0; i <= color_table->size; i++ )
         {
             lsmash_bs_put_be16( bs, array[i].value );
             lsmash_bs_put_be16( bs, array[i].r );
@@ -716,7 +716,7 @@ static int write_chnl( lsmash_bs_t *bs, isom_box_t *box )
             {
                 lsmash_bits_t bits = { 0 };
                 lsmash_bits_init( &bits, bs );
-                for( uint16_t i = 0; i < channel_count; i++ )
+                for( uint32_t i = 0; i < channel_count; i++ )
                 {
                     uint8_t speaker_position = chnl->positions[i].speaker_position & 0x7f;
                     lsmash_bits_put( &bits, 7, speaker_position );

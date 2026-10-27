@@ -264,7 +264,7 @@ uint64_t lsm_h264_find_next_start_code
         else
             distance = lsmash_bs_get_remaining_buffer_size( bs );
         /* Any NALU has no consecutive zero bytes at the end. */
-        while( 0x00 == lsmash_bs_show_byte( bs, distance - 1 ) )
+        while( distance > *start_code_length + nuh->length && !bs->error && !bs->eob && 0x00 == lsmash_bs_show_byte( bs, distance - 1 ) )
         {
             --distance;
             ++count;
@@ -465,7 +465,7 @@ int lsm_h264_calculate_poc
                 uint64_t picOrderCntCycleCnt       = (absFrameNum - 1) / sps->num_ref_frames_in_pic_order_cnt_cycle;
                 uint8_t frameNumInPicOrderCntCycle = (absFrameNum - 1) % sps->num_ref_frames_in_pic_order_cnt_cycle;
                 expectedPicOrderCnt = picOrderCntCycleCnt * sps->ExpectedDeltaPerPicOrderCntCycle;
-                for( uint8_t i = 0; i <= frameNumInPicOrderCntCycle; i++ )
+                for( uint32_t i = 0; i <= frameNumInPicOrderCntCycle; i++ )
                     expectedPicOrderCnt += sps->offset_for_ref_frame[i];
             }
             else
@@ -985,6 +985,8 @@ int lsm_h264_parse_sei
     int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
+    if( rbsp_size == 0 )
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *rbsp_start = rbsp_buffer;
     uint64_t rbsp_pos = 0;
     do
@@ -1056,9 +1058,9 @@ skip_sei_message:
         }
         lsmash_bits_get_align( bits );
         rbsp_pos += payloadSize;
-        if( rbsp_pos > rbsp_size )
+        if( rbsp_pos >= rbsp_size )
         {
-            rbsp_pos = rbsp_size;
+            rbsp_pos = rbsp_size - 1;
             if( *(rbsp_start + rbsp_pos) != 0x80 )
             {
                 lsmash_log( NULL, LSMASH_LOG_ERROR, "Invalid payloadSize is there within H.264/AVC sei_message().\n" );
@@ -1217,6 +1219,8 @@ static int h264_parse_slice_header
                     do
                     {
                         modification_of_pic_nums_idc = lsm_nalu_get_exp_golomb_ue( bits );
+                        if( modification_of_pic_nums_idc > 3 || bits->bs->eob || bits->bs->error )
+                            return LSMASH_ERR_INVALID_DATA;
 #if 0
                         if( modification_of_pic_nums_idc == 0 || modification_of_pic_nums_idc == 1 )
                             lsm_nalu_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 */
@@ -1238,7 +1242,7 @@ static int h264_parse_slice_header
         lsm_nalu_get_exp_golomb_ue( bits );         /* luma_log2_weight_denom */
         if( sps->ChromaArrayType )
             lsm_nalu_get_exp_golomb_ue( bits );     /* chroma_log2_weight_denom */
-        for( uint8_t i = 0; i <= num_ref_idx_l0_active_minus1; i++ )
+        for( uint32_t i = 0; i <= num_ref_idx_l0_active_minus1; i++ )
         {
             if( lsmash_bits_get( bits, 1 ) )    /* luma_weight_l0_flag */
             {
@@ -1254,7 +1258,7 @@ static int h264_parse_slice_header
                 }
         }
         if( slice_type == H264_SLICE_TYPE_B )
-            for( uint8_t i = 0; i <= num_ref_idx_l1_active_minus1; i++ )
+            for( uint32_t i = 0; i <= num_ref_idx_l1_active_minus1; i++ )
             {
                 if( lsmash_bits_get( bits, 1 ) )    /* luma_weight_l1_flag */
                 {
@@ -1286,6 +1290,8 @@ static int h264_parse_slice_header
                 memory_management_control_operation = lsm_nalu_get_exp_golomb_ue( bits );
                 if( memory_management_control_operation )
                 {
+                    if( memory_management_control_operation > 6 || bits->bs->eob || bits->bs->error )
+                        return LSMASH_ERR_INVALID_DATA;
                     if( memory_management_control_operation == 5 )
                         slice->has_mmco5 = 1;
                     else
@@ -2532,14 +2538,14 @@ int lsm_h264_print_codec_specific
     lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 5) & 0x07 );
     uint8_t numOfSequenceParameterSets = temp8 & 0x1f;
     lsmash_ifprintf( fp, indent, "numOfSequenceParameterSets = %"PRIu8"\n", numOfSequenceParameterSets );
-    for( uint8_t i = 0; i < numOfSequenceParameterSets; i++ )
+    for( uint32_t i = 0; i < numOfSequenceParameterSets; i++ )
     {
         uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
         lsmash_bs_skip_bytes( bs, nalUnitLength );
     }
     uint8_t numOfPictureParameterSets = lsmash_bs_get_byte( bs );
     lsmash_ifprintf( fp, indent, "numOfPictureParameterSets = %"PRIu8"\n", numOfPictureParameterSets );
-    for( uint8_t i = 0; i < numOfPictureParameterSets; i++ )
+    for( uint32_t i = 0; i < numOfPictureParameterSets; i++ )
     {
         uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
         lsmash_bs_skip_bytes( bs, nalUnitLength );

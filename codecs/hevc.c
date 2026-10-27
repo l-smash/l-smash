@@ -272,7 +272,7 @@ uint64_t lsm_hevc_find_next_start_code
         else
             distance = lsmash_bs_get_remaining_buffer_size( bs );
         /* Any NALU has no consecutive zero bytes at the end. */
-        while( 0x00 == lsmash_bs_show_byte( bs, distance - 1 ) )
+        while( distance > *start_code_length + nuh->length && !bs->error && !bs->eob && 0x00 == lsmash_bs_show_byte( bs, distance - 1 ) )
         {
             --distance;
             ++count;
@@ -1272,6 +1272,8 @@ int lsm_hevc_parse_sei
     int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
+    if( rbsp_size == 0 )
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *rbsp_start = rbsp_buffer;
     uint64_t rbsp_pos = 0;
     do
@@ -1367,22 +1369,30 @@ int lsm_hevc_parse_sei
             else if( payloadType == HEVC_SEI_ITU_T_T35 )
             {
                 /* Compare metadata header bytes to expected HDR10+ dynamic metadata header. */
-                if ( payloadSize > 8 )
+                uint32_t remaining_bits = payloadSize * 8;
+                if( payloadSize > 8 )
                 {
                     uint8_t country_code = lsmash_bits_get( bits, 8 );
-                    if ( country_code != 0xb5 )
-                        continue;
-                    uint16_t provider_code = lsmash_bits_get( bits, 16 );
-                    if ( provider_code != 0x003c )
-                        continue;
-                    uint16_t provider_oriented_code = lsmash_bits_get( bits, 16 );
-                    if ( provider_oriented_code != 0x0001 )
-                        continue;
-                    uint16_t application_identifier = lsmash_bits_get( bits, 16 );
-                    if ( application_identifier != 0x0401 )
-                        continue;
-                    sei->hdr10p_present = 1;
+                    remaining_bits -= 8;
+                    if( country_code == 0xb5 )
+                    {
+                        uint16_t provider_code = lsmash_bits_get( bits, 16 );
+                        remaining_bits -= 16;
+                        if( provider_code == 0x003c )
+                        {
+                            uint16_t provider_oriented_code = lsmash_bits_get( bits, 16 );
+                            remaining_bits -= 16;
+                            if( provider_oriented_code == 0x0001 )
+                            {
+                                uint16_t application_identifier = lsmash_bits_get( bits, 16 );
+                                remaining_bits -= 16;
+                                if( application_identifier == 0x0401 )
+                                    sei->hdr10p_present = 1;
+                            }
+                        }
+                    }
                 }
+                lsmash_bits_get( bits, remaining_bits );
             }
             else
                 goto skip_sei_message;
@@ -1405,9 +1415,9 @@ skip_sei_message:
         }
         lsmash_bits_get_align( bits );
         rbsp_pos += payloadSize;
-        if( rbsp_pos > rbsp_size )
+        if( rbsp_pos >= rbsp_size )
         {
-            rbsp_pos = rbsp_size;
+            rbsp_pos = rbsp_size - 1;
             if( *(rbsp_start + rbsp_pos) != 0x80 )
             {
                 lsmash_log( NULL, LSMASH_LOG_ERROR, "Invalid payloadSize is there within H.265/HEVC sei_message().\n" );
@@ -2012,7 +2022,7 @@ uint8_t *lsmash_create_hevc_specific_info
                         + !!ps_count[3]
                         + !!ps_count[4];
     lsmash_bs_put_byte( bs, numOfArrays );
-    for( uint8_t i = 0; i < numOfArrays; i++ )
+    for( uint32_t i = 0; i < numOfArrays; i++ )
     {
         temp8 = (param_arrays[i]->array_completeness << 7) | param_arrays[i]->NAL_unit_type;
         lsmash_bs_put_byte( bs, temp8 );
@@ -2496,7 +2506,7 @@ int lsmash_append_hevc_dcr_nalu
                 if( param->constantFrameRate == 2 )
                 {
                     cfr = 1;
-                    for( uint8_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
+                    for( uint32_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
                         cfr &= sps.vui.hrd.fixed_pic_rate_general_flag[i];
                 }
                 else
@@ -2505,7 +2515,7 @@ int lsmash_append_hevc_dcr_nalu
                     param->constantFrameRate = 2;
                 else
                 {
-                    for( uint8_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
+                    for( uint32_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
                         cfr |= sps.vui.hrd.fixed_pic_rate_general_flag[i];
                     param->constantFrameRate = cfr;
                 }
@@ -2515,7 +2525,7 @@ int lsmash_append_hevc_dcr_nalu
             if( param->constantFrameRate )
             {
                 uint64_t interval = 0;
-                for( uint8_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
+                for( uint32_t i = 0; i <= sps.max_sub_layers_minus1; i++ )
                     interval += sps.vui.num_units_in_tick * sps.vui.hrd.elemental_duration_in_tc_minus1[i];
                 uint64_t frame_rate;
                 if( interval )
@@ -3006,7 +3016,7 @@ int lsm_hevc_construct_specific_parameters
     param->temporalIdNested                    = (temp8 >> 2) & 0x01;
     param->lengthSizeMinusOne                  =  temp8       & 0x03;
     uint8_t numOfArrays                        = lsmash_bs_get_byte( bs );
-    for( uint8_t i = 0; i < numOfArrays; i++ )
+    for( uint32_t i = 0; i < numOfArrays; i++ )
     {
         hevc_parameter_array_t param_array;
         memset( &param_array, 0, sizeof(hevc_parameter_array_t) );
@@ -3025,7 +3035,7 @@ int lsm_hevc_construct_specific_parameters
                 goto fail;
         }
         else
-            for( uint16_t j = 0; j < param_array.list->entry_count; j++ )
+            for( uint32_t j = 0; j < param_array.list->entry_count; j++ )
             {
                 uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
                 lsmash_bs_skip_bytes( bs, nalUnitLength );  /* nalUnit */
@@ -3234,20 +3244,20 @@ int lsm_hevc_print_codec_specific
     lsmash_ifprintf( fp, indent, "lengthSizeMinusOne = %"PRIu8"\n",                        temp8       & 0x03 );
     uint8_t numOfArrays = lsmash_bs_get_byte( bs );
     lsmash_ifprintf( fp, indent, "numOfArrays = %"PRIu8"\n", numOfArrays );
-    for( uint8_t i = 0; i < numOfArrays; i++ )
+    for( uint32_t i = 0; i < numOfArrays; i++ )
     {
         int array_indent = indent + 1;
-        lsmash_ifprintf( fp, array_indent++, "array[%"PRIu8"]\n", i );
+        lsmash_ifprintf( fp, array_indent++, "array[%"PRIu32"]\n", i );
         temp8 = lsmash_bs_get_byte( bs );
         lsmash_ifprintf( fp, array_indent, "array_completeness = %"PRIu8"\n", (temp8 >> 7) & 0x01 );
         lsmash_ifprintf( fp, array_indent, "reserved = %"PRIu8"\n",           (temp8 >> 6) & 0x01 );
         lsmash_ifprintf( fp, array_indent, "NAL_unit_type = %"PRIu8"\n",       temp8       & 0x3F );
         uint16_t numNalus = lsmash_bs_get_be16( bs );
         lsmash_ifprintf( fp, array_indent, "numNalus = %"PRIu16"\n", numNalus );
-        for( uint16_t j = 0; j < numNalus; j++ )
+        for( uint32_t j = 0; j < numNalus; j++ )
         {
             uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
-            lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu16"]\n", j );
+            lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu32"]\n", j );
             lsmash_ifprintf( fp, array_indent + 1, "nalUnitLength = %"PRIu16"\n", nalUnitLength );
 
             if( (temp8 & 0x3F) == HEVC_NALU_TYPE_PREFIX_SEI && nalUnitLength >= 3 )
@@ -3329,9 +3339,9 @@ void lsm_hevc_free_lhevc_arrays( lsmash_lhevc_paramater_arrays_t *array, uint8_t
 {
     if( array )
     {
-        for( uint8_t i = 0; i < numOfArrays; i++ )
+        for( uint32_t i = 0; i < numOfArrays; i++ )
         {
-            for( uint16_t j = 0; j < array[i].numNalus; j++ )
+            for( uint32_t j = 0; j < array[i].numNalus; j++ )
                 lsmash_free( array[i].nalUnit[j].nalUnit );
             lsmash_free( array[i].nalUnit );
         }
@@ -3357,13 +3367,13 @@ int lsm_hevc_copy_lhevc_codec_specific
     dst_data->array = lsmash_malloc( src_data->numOfArrays * sizeof(lsmash_lhevc_paramater_arrays_t) );
     if( !dst_data->array )
         return LSMASH_ERR_MEMORY_ALLOC;
-    for( uint8_t i = 0; i < src_data->numOfArrays; i++ )
+    for( uint32_t i = 0; i < src_data->numOfArrays; i++ )
     {
         dst_data->array[i] = src_data->array[i];
         dst_data->array[i].nalUnit = lsmash_malloc( src_data->array[i].numNalus * sizeof(lsmash_lhevc_nal_t) );
         if( !dst_data->array[i].nalUnit )
             return LSMASH_ERR_MEMORY_ALLOC;
-        for( uint16_t j = 0; j < src_data->array[i].numNalus; j++ )
+        for( uint32_t j = 0; j < src_data->array[i].numNalus; j++ )
         {
             dst_data->array[i].nalUnit[j] = src_data->array[i].nalUnit[j];
             dst_data->array[i].nalUnit[j].nalUnit = lsmash_malloc( src_data->array[i].nalUnit[j].nalUnitLength );
@@ -3411,16 +3421,16 @@ int lsm_hevc_print_lhevc_codec_specific
     lsmash_ifprintf( fp, indent, "numOfArrays = %"PRIu8"\n", lhvC->numOfArrays );
     indent++;
 
-    for( uint8_t i = 0; i < lhvC->numOfArrays; i++ )
+    for( uint32_t i = 0; i < lhvC->numOfArrays; i++ )
     {
-        lsmash_ifprintf( fp, indent, "array[%"PRIu8"]\n", i);
+        lsmash_ifprintf( fp, indent, "array[%"PRIu32"]\n", i);
         indent++;
         lsmash_ifprintf( fp, indent, "array_completeness = %"PRIu8"\n", lhvC->array[i].array_completeness );
         lsmash_ifprintf( fp, indent, "NAL_unit_type = %"PRIu8"\n", lhvC->array[i].NAL_unit_type );
         lsmash_ifprintf( fp, indent, "numNalus = %"PRIu16"\n", lhvC->array[i].numNalus );
-        for( uint16_t j = 0; j < lhvC->array[i].numNalus; j++ )
+        for( uint32_t j = 0; j < lhvC->array[i].numNalus; j++ )
         {
-            lsmash_ifprintf( fp, indent, "nalUnit[%"PRIu16"]\n", i);
+            lsmash_ifprintf( fp, indent, "nalUnit[%"PRIu32"]\n", i);
             indent++;
             lsmash_ifprintf( fp, indent, "nalUnitLength = %"PRIu16"\n", lhvC->array[i].nalUnit[j].nalUnitLength );
             indent--;

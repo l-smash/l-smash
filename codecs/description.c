@@ -933,8 +933,8 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
                     {
                         lsmash_bits_t bits = { 0 };
                         lsmash_bits_init( &bits, bs );
-                        uint16_t count = LSMASH_MIN( chnl->channel_count, 64 );
-                        for( uint16_t i = 0; i < count; i++ )
+                        uint32_t count = LSMASH_MIN( chnl->channel_count, 64 );
+                        for( uint32_t i = 0; i < count; i++ )
                         {
                             uint8_t speaker_position = chnl->positions[i].speaker_position;
                             lsmash_bits_put( &bits, 7, speaker_position );
@@ -1248,7 +1248,7 @@ static int description_setup_visual_description( isom_stsd_t *stsd, lsmash_video
                 if( data->color_table_ID == 0 )
                 {
                     lsmash_qt_color_table_t *src_ct = &data->color_table;
-                    uint16_t element_count = LSMASH_MIN( src_ct->size + 1, 256 );
+                    uint32_t element_count = LSMASH_MIN( (uint32_t)src_ct->size + 1, 256 );
                     isom_qt_color_array_t *dst_array = lsmash_malloc_zero( element_count * sizeof(isom_qt_color_array_t) );
                     if( !dst_array )
                     {
@@ -1256,11 +1256,12 @@ static int description_setup_visual_description( isom_stsd_t *stsd, lsmash_video
                         goto fail;
                     }
                     isom_qt_color_table_t *dst_ct = &visual->color_table;
+                    lsmash_free( dst_ct->array );
                     dst_ct->array = dst_array;
                     dst_ct->seed  = src_ct->seed;
                     dst_ct->flags = src_ct->flags;
-                    dst_ct->size  = src_ct->size;
-                    for( uint16_t i = 0; i < element_count; i++ )
+                    dst_ct->size  = element_count - 1;
+                    for( uint32_t i = 0; i < element_count; i++ )
                     {
                         dst_array[i].value = src_ct->array[i].unused;
                         dst_array[i].r     = src_ct->array[i].r;
@@ -1342,7 +1343,7 @@ static int description_setup_visual_description( isom_stsd_t *stsd, lsmash_video
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                for( uint8_t i = 0; i < data->numOfArrays; i++ )
+                for( uint32_t i = 0; i < data->numOfArrays; i++ )
                 {
                     lhvC->array[i] = data->array[i];
                     lhvC->array[i].nalUnit = lsmash_malloc( data->array[i].numNalus * sizeof(lsmash_lhevc_nal_t) );
@@ -1350,7 +1351,7 @@ static int description_setup_visual_description( isom_stsd_t *stsd, lsmash_video
                         lsmash_destroy_codec_specific_data( cs );
                         goto fail;
                     }
-                    for( uint16_t j = 0; j < data->array[i].numNalus; j++ )
+                    for( uint32_t j = 0; j < data->array[i].numNalus; j++ )
                     {
                         lhvC->array[i].nalUnit[j] = data->array[i].nalUnit[j];
                         lhvC->array[i].nalUnit[j].nalUnit = lsmash_malloc( data->array[i].nalUnit[j].nalUnitLength );
@@ -1759,6 +1760,9 @@ static int description_append_audio_es_descriptor_extension( isom_box_t *box, ls
         return LSMASH_ERR_NAMELESS;
     if( specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED )
     {
+        if( specific->size <= ISOM_FULLBOX_COMMON_SIZE
+         || specific->data.unstructured[ISOM_FULLBOX_COMMON_SIZE] != 0x03 ) /* ES_DescrTag */
+            return LSMASH_ERR_INVALID_DATA;
         esds_size = specific->size;
         esds_data = lsmash_memdup( specific->data.unstructured, specific->size );
         if( !esds_data )
@@ -1777,9 +1781,7 @@ static int description_append_audio_es_descriptor_extension( isom_box_t *box, ls
         return LSMASH_ERR_NAMELESS;
     }
     lsmash_bs_t bs = { 0 };
-    bs.buffer.data  = esds_data + ISOM_FULLBOX_COMMON_SIZE;
-    bs.buffer.alloc = esds_size - ISOM_FULLBOX_COMMON_SIZE;
-    bs.buffer.store = bs.buffer.alloc;
+    lsmash_bs_set_empty_stream( &bs, esds_data + ISOM_FULLBOX_COMMON_SIZE, esds_size - ISOM_FULLBOX_COMMON_SIZE );
     esds->ES = lsm_mp4sys_get_descriptor( &bs, NULL );
     lsmash_free( esds_data );
     if( !esds->ES )
@@ -2930,7 +2932,7 @@ static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_
                         err = LSMASH_ERR_MEMORY_ALLOC;
                         goto fail;
                     }
-                    for( uint16_t i = 0; i < ch_count; i++ )
+                    for( uint32_t i = 0; i < ch_count; i++ )
                     {
                         chnl->positions[i].speaker_position = data->positions[i].speaker_position;
                         chnl->positions[i].azimuth          = data->positions[i].azimuth;
@@ -3273,12 +3275,12 @@ lsmash_summary_t *lsm_description_create_video_summary( isom_sample_entry_t *sam
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
             }
-            uint16_t element_count = LSMASH_MIN( src_ct->size + 1, 256 );
+            uint32_t element_count = LSMASH_MIN( (uint32_t)src_ct->size + 1, 256 );
             lsmash_qt_color_table_t *dst_ct = &data->color_table;
             dst_ct->seed  = src_ct->seed;
             dst_ct->flags = src_ct->flags;
-            dst_ct->size  = src_ct->size;
-            for( uint16_t i = 0; i < element_count; i++ )
+            dst_ct->size  = element_count - 1;
+            for( uint32_t i = 0; i < element_count; i++ )
             {
                 dst_ct->array[i].unused = src_ct->array[i].value;
                 dst_ct->array[i].r      = src_ct->array[i].r;
@@ -3386,7 +3388,7 @@ lsmash_summary_t *lsm_description_create_video_summary( isom_sample_entry_t *sam
                     lsmash_destroy_codec_specific_data( specific );
                     goto fail;
                 }
-                for( uint8_t i = 0; i < lhvC->numOfArrays; i++ )
+                for( uint32_t i = 0; i < lhvC->numOfArrays; i++ )
                 {
                     data->array[i] = lhvC->array[i];
                     data->array[i].nalUnit = lsmash_malloc( lhvC->array[i].numNalus * sizeof(lsmash_lhevc_nal_t) );
@@ -3394,7 +3396,7 @@ lsmash_summary_t *lsm_description_create_video_summary( isom_sample_entry_t *sam
                         lsmash_destroy_codec_specific_data( specific );
                         goto fail;
                     }
-                    for( uint16_t j = 0; j < lhvC->array[i].numNalus; j++ )
+                    for( uint32_t j = 0; j < lhvC->array[i].numNalus; j++ )
                     {
                         data->array[i].nalUnit[j] = lhvC->array[i].nalUnit[j];
                         data->array[i].nalUnit[j].nalUnit = lsmash_malloc( lhvC->array[i].nalUnit[j].nalUnitLength );
@@ -3841,8 +3843,8 @@ lsmash_summary_t *lsm_description_create_audio_summary( isom_sample_entry_t *sam
                 data->channel_count      = chnl->channel_count;
                 if( chnl->positions )
                 {
-                    uint16_t count = LSMASH_MIN( chnl->channel_count, 64 );
-                    for( uint16_t i = 0; i < count; i++ )
+                    uint32_t count = LSMASH_MIN( chnl->channel_count, 64 );
+                    for( uint32_t i = 0; i < count; i++ )
                     {
                         data->positions[i].speaker_position = chnl->positions[i].speaker_position;
                         data->positions[i].azimuth          = chnl->positions[i].azimuth;

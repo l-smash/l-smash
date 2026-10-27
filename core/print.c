@@ -482,9 +482,9 @@ static void print_qt_color_table( FILE *fp, int indent, isom_qt_color_table_t *c
     lsmash_ifprintf( fp, indent, "ctFlags = 0x%04"PRIx16"\n", color_table->flags );
     lsmash_ifprintf( fp, indent, "ctSize = %"PRIu16"\n", color_table->size );
     lsmash_ifprintf( fp, indent++, "ctTable\n" );
-    for( uint16_t i = 0; i <= color_table->size; i++ )
+    for( uint32_t i = 0; i <= color_table->size; i++ )
         lsmash_ifprintf( fp, indent,
-                         "color[%"PRIu16"] = { 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16" }\n",
+                         "color[%"PRIu32"] = { 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16" }\n",
                          i, array[i].value, array[i].r, array[i].g, array[i].b );
 }
 
@@ -1449,9 +1449,9 @@ static int print_chnl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
         lsmash_ifprintf( fp, indent, "definedLayout = %"PRIu8"\n", chnl->definedLayout );
         if( chnl->definedLayout == 0 )
         {
-            for( uint16_t i = 0; i < chnl->channel_count && chnl->positions; i++ )
+            for( uint32_t i = 0; i < chnl->channel_count && chnl->positions; i++ )
             {
-                lsmash_ifprintf( fp, indent, "channel[%"PRIu16"]: speaker_position = %"PRIu8"\n",
+                lsmash_ifprintf( fp, indent, "channel[%"PRIu32"]: speaker_position = %"PRIu8"\n",
                                  i, chnl->positions[i].speaker_position );
                 if( chnl->positions[i].speaker_position == 126 )
                 {

@@ -575,8 +575,13 @@ static int read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
         return read_unknown_box( file, box, parent, level );
     ADD_BOX( iods, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
+    if( read_check_box_remaining_bytes( bs, box->size, 2 ) < 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t od_tag = lsmash_bs_show_byte( bs, 0 );
+    if( od_tag != 0x01 && od_tag != 0x02 && od_tag != 0x10 && od_tag != 0x11 )
+        return LSMASH_ERR_INVALID_DATA;
     iods->OD = lsm_mp4sys_get_descriptor( bs, NULL );
-    if( !iods->OD )
+    if( !iods->OD || (!(box->manager & LSMASH_LAST_BOX) && lsmash_bs_count( bs ) > box->size) )
         return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, iods );
 }
@@ -1529,8 +1534,11 @@ static int read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
         box->type = ISOM_BOX_TYPE_ESDS;
     ADD_BOX( esds, void );
     lsmash_bs_t *bs = file->bs;
+    if( read_check_box_remaining_bytes( bs, box->size, 2 ) < 0
+     || lsmash_bs_show_byte( bs, 0 ) != 0x03 )
+        return LSMASH_ERR_INVALID_DATA;
     esds->ES = lsm_mp4sys_get_descriptor( bs, NULL );
-    if( !esds->ES )
+    if( !esds->ES || (!(box->manager & LSMASH_LAST_BOX) && lsmash_bs_count( bs ) > box->size) )
         return LSMASH_ERR_INVALID_DATA;
     return read_leaf_box_common_last_process( file, box, level, esds );
 }

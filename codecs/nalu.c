@@ -189,7 +189,7 @@ int lsm_nalu_get_dcr_ps
     uint8_t              entry_count
 )
 {
-    for( uint8_t i = 0; i < entry_count; i++ )
+    for( uint32_t i = 0; i < entry_count; i++ )
     {
         isom_dcr_ps_entry_t *data = lsmash_malloc( sizeof(isom_dcr_ps_entry_t) );
         if( !data )

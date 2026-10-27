@@ -166,13 +166,20 @@ static int flac_imp_probe( importer_t *imp )
     {
         while( lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
         {
-            if( bs->eof )
+            if( bs->eof || bs->error )
                 break;
-            if( lsmash_bs_read( bs, 4096 ) < 0 )
+            if( lsmash_bs_read( bs, 4096 ) <= 0 )
             {
+                if( bs->eof && !bs->error )
+                    break;
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
+        }
+        if( bs->error )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
         }
         if( bs->eof && lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
             break;
@@ -199,13 +206,15 @@ static int flac_imp_probe( importer_t *imp )
 
         while( lsmash_bs_get_remaining_buffer_size( bs ) < len )
         {
-            if( bs->eof )
+            if( bs->eof || bs->error )
             {
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
-            if( lsmash_bs_read( bs, LSMASH_MAX( len, 4096U ) ) < 0 )
+            if( lsmash_bs_read( bs, LSMASH_MAX( len, 4096U ) ) <= 0 )
             {
+                if( bs->eof && !bs->error && lsmash_bs_get_remaining_buffer_size( bs ) >= len )
+                    break;
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
@@ -518,6 +527,11 @@ static int flac_imp_get_accessunit
         search_from = (uint32_t)sync_offset + 6;
     }
 
+    if( frame_end <= (uint32_t)sync_offset )
+    {
+        imp->status = IMPORTER_ERROR;
+        return LSMASH_ERR_NAMELESS;
+    }
     uint32_t frame_size = frame_end - (uint32_t)sync_offset;
     if( frame_size < 6 || frame_size > FLAC_MAX_FRAME_SIZE )
     {

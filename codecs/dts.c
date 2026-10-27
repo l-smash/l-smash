@@ -573,9 +573,9 @@ static int dts_parse_asset_descriptor( dts_info_t *info, uint64_t *bits_pos )
         else
             dts_bits_get( bits, 8, bits_pos );                                                      /* nuCustomDRCCode               (8) */
         int bEnblPerChMainAudioScale = dts_bits_get( bits, 1, bits_pos );                           /* bEnblPerChMainAudioScale      (1) */
-        for( uint8_t ns = 0; ns < exss->nuNumMixOutConfigs; ns++ )
+        for( uint32_t ns = 0; ns < exss->nuNumMixOutConfigs; ns++ )
             if( bEnblPerChMainAudioScale )
-                for( uint8_t nCh = 0; nCh < exss->nNumMixOutCh[ns]; nCh++ )
+                for( uint32_t nCh = 0; nCh < exss->nNumMixOutCh[ns]; nCh++ )
                     dts_bits_get( bits, 6, bits_pos );                                              /* nuMainAudioScaleCode[ns][nCh] (6) */
             else
                 dts_bits_get( bits, 6, bits_pos );                                                  /* nuMainAudioScaleCode[ns][0]   (6) */
@@ -591,7 +591,7 @@ static int dts_parse_asset_descriptor( dts_info_t *info, uint64_t *bits_pos )
             nDecCh[nEmDM] = 2;
             ++nEmDM;
         }
-        for( uint8_t ns = 0; ns < exss->nuNumMixOutConfigs; ns++ )
+        for( uint32_t ns = 0; ns < exss->nuNumMixOutConfigs; ns++ )
             for( int nE = 0; nE < nEmDM; nE++ )
                 for( int nCh = 0; nCh < nDecCh[nE]; nCh++ )
                 {
@@ -1218,11 +1218,11 @@ int lsm_dts_parse_extension_substream( dts_info_t *info )
         exss->nuNumAssets      = dts_bits_get( bits, 3, &bits_pos ) + 1;                    /* nuNumAssets                   (3) */
         /* The extension substreams with indexes lower than or equal to the index of the current extension substream can
          * be activated in the audio presentations indicated within the current extension substream. */
-        for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+        for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
             exss->nuActiveExSSMask[nAuPr]
                 = dts_bits_get( bits, nExtSSIndex + 1, &bits_pos );                         /* nuActiveExSSMask[nAuPr]       (nExtSSIndex + 1) */
-        for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
-            for( uint8_t nSS = 0; nSS <= nExtSSIndex; nSS++ )
+        for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+            for( uint32_t nSS = 0; nSS <= nExtSSIndex; nSS++ )
                 exss->nuActiveAssetMask[nAuPr][nSS]
                     = ((exss->nuActiveExSSMask[nAuPr] >> nSS) & 0x1)
                     ? dts_bits_get( bits, 8, &bits_pos )                                    /* nuActiveAssetMask[nAuPr][nSS] (8) */
@@ -1247,22 +1247,22 @@ int lsm_dts_parse_extension_substream( dts_info_t *info )
         exss->bMixMetadataEnbl   = 0;
         exss->nuNumMixOutConfigs = 0;
     }
-    for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+    for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         exss->asset[nAst].size = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;     /* nuAssetFsize[nAst] - 1        (nuBits4ExSSFsize) */
     int err;
-    for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+    for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         if( (err = dts_parse_asset_descriptor( info, &bits_pos )) < 0 )
             goto parse_fail;
-    for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+    for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         exss->bBcCorePresent[nAuPr] = dts_bits_get( bits, 1, &bits_pos );
-    for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+    for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         if( exss->bBcCorePresent[nAuPr] )
         {
             exss->nuBcCoreExtSSIndex[nAuPr] = dts_bits_get( bits, 2, &bits_pos );
             exss->nuBcCoreAssetIndex[nAuPr] = dts_bits_get( bits, 3, &bits_pos );
         }
     dts_bits_get( bits, nuExtSSHeaderSize * 8 - bits_pos, &bits_pos );
-    for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+    for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
     {
         /* Asset Data */
         dts_audio_asset_t *asset = &exss->asset[nAst];
@@ -1376,7 +1376,7 @@ int lsm_dts_get_max_channel_count( dts_info_t *info )
     for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
-        for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+        for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         {
             /* Get the channel layout of an audio presentation from a core component. */
             uint16_t channel_layout = 0;
@@ -1402,7 +1402,7 @@ int lsm_dts_get_max_channel_count( dts_info_t *info )
             uint8_t  xll_lower_channels = 0;
             for( int nSS = 0; nSS <= nExtSSIndex; nSS++ )
                 if( (exss->nuActiveExSSMask[nAuPr] >> nSS) & 0x1 )
-                    for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+                    for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
                         if( (exss->nuActiveAssetMask[nAuPr][nSS] >> nAst) & 0x1 )
                         {
                             dts_audio_asset_t *asset = &exss->asset[nAst];
@@ -1453,7 +1453,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
             param->DTSSamplingFrequency = exss->sampling_frequency;
             info->frame_duration        = exss->frame_duration;
         }
-        for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+        for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         {
             dts_audio_asset_t *asset = &exss->asset[nAst];
             if( param->DTSSamplingFrequency <= asset->core.sampling_frequency )
@@ -1484,7 +1484,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
         if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
             continue;
         param->pcmSampleDepth = LSMASH_MAX( param->pcmSampleDepth, exss->bit_resolution );
-        for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+        for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         {
             dts_audio_asset_t *asset = &exss->asset[nAst];
             param->pcmSampleDepth = LSMASH_MAX( param->pcmSampleDepth, asset->core.pcm_resolution );
@@ -1522,7 +1522,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         param->StereoDownmix |= exss->stereo_downmix;
-        for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+        for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         {
             param->StereoDownmix |= exss->asset[nAst].lbr.stereo_downmix;
             param->StereoDownmix |= exss->asset[nAst].xll.stereo_downmix;
@@ -1535,7 +1535,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
             continue;
-        for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
+        for( uint32_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         {
             int asset_count = 0;
             for( int nSS = 0; nSS <= nExtSSIndex; nSS++ )
@@ -1551,7 +1551,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
             }
             for( int nSS = 0; nSS <= nExtSSIndex; nSS++ )
                 if( (exss->nuActiveExSSMask[nAuPr] >> nSS) & 0x1 )
-                    for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+                    for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
                         if( (exss->nuActiveAssetMask[nAuPr][nSS] >> nAst) & 0x1 )
                         {
                             dts_audio_asset_t *asset = &exss->asset[nAst];
@@ -1577,7 +1577,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
             dts_extension_info_t *exss = &info->exss[nExtSSIndex];
             if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
                 continue;
-            for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+            for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
             {
                 dts_audio_asset_t *asset = &exss->asset[nAst];
                 param->ChannelLayout |= asset->channel_layout;
@@ -1599,7 +1599,7 @@ void lsm_dts_update_specific_param( dts_info_t *info )
     for( int nExtSSIndex = exss_index_start; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
-        for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+        for( uint32_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         {
             dts_audio_asset_t *asset = &exss->asset[nAst];
             if( asset->xll.dtsx_extension_present )

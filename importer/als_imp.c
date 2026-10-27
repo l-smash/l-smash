@@ -78,20 +78,25 @@ static mp4a_als_importer_t *als_imp_create( importer_t *importer )
     return (mp4a_als_importer_t *)lsmash_malloc_zero( sizeof(mp4a_als_importer_t) );
 }
 
-static void als_imp_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs, uint64_t size )
+static int als_imp_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs, uint64_t size )
 {
-    if( alssc->alloc < size )
+    if( lsmash_bs_get_remaining_buffer_size( bs ) < size || bs->error )
+        return LSMASH_ERR_INVALID_DATA;
+    if( alssc->alloc < alssc->size + size )
     {
         size_t alloc = alssc->alloc ? (alssc->alloc << 1) : (1 << 10);
+        while( alloc < alssc->size + size )
+            alloc <<= 1;
         uint8_t *temp = lsmash_realloc( alssc->sc_data, alloc );
         if( !temp )
-            return;
+            return LSMASH_ERR_MEMORY_ALLOC;
         alssc->sc_data = temp;
         alssc->alloc   = alloc;
     }
     memcpy( alssc->sc_data + alssc->size, lsmash_bs_get_buffer_data( bs ), size );
     alssc->size += size;
     lsmash_bs_read_seek( bs, size, SEEK_CUR );
+    return 0;
 }
 
 static int als_imp_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_imp )
@@ -132,12 +137,15 @@ static int als_imp_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *
     temp8 = lsmash_bs_show_byte( bs, 21 );
     int crc_enabled      = !!(temp8 & 0x80);
     int aux_data_enabled = !!(temp8 & 0x1);
-    als_imp_copy_from_buffer( alssc, bs, ALSSC_TWELVE_LENGTH );
+    int err;
+    if( (err = als_imp_copy_from_buffer( alssc, bs, ALSSC_TWELVE_LENGTH )) < 0 )
+        return err;
     if( chan_config )
     {
         /* chan_config_info */
         lsmash_bs_read( bs, 2 );
-        als_imp_copy_from_buffer( alssc, bs, 2 );
+        if( (err = als_imp_copy_from_buffer( alssc, bs, 2 )) < 0 )
+            return err;
     }
     if( chan_sort )
     {
@@ -145,27 +153,32 @@ static int als_imp_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *
         uint32_t chan_pos_length = (alssc->channels + 1) * ChBits;
         chan_pos_length = ((uint64_t)chan_pos_length + 7) / 8;    /* byte_align */
         lsmash_bs_read( bs, chan_pos_length );
-        als_imp_copy_from_buffer( alssc, bs, chan_pos_length );
+        if( (err = als_imp_copy_from_buffer( alssc, bs, chan_pos_length )) < 0 )
+            return err;
     }
     /* orig_header, orig_trailer and crc. */
     {
         uint32_t header_size  = lsmash_bs_show_be32( bs, 0 );
         uint32_t trailer_size = lsmash_bs_show_be32( bs, 4 );
-        als_imp_copy_from_buffer( alssc, bs, 8 );
+        if( (err = als_imp_copy_from_buffer( alssc, bs, 8 )) < 0 )
+            return err;
         if( header_size != 0xffffffff )
         {
             lsmash_bs_read( bs, header_size );
-            als_imp_copy_from_buffer( alssc, bs, header_size );
+            if( (err = als_imp_copy_from_buffer( alssc, bs, header_size )) < 0 )
+                return err;
         }
         if( trailer_size != 0xffffffff )
         {
             lsmash_bs_read( bs, trailer_size );
-            als_imp_copy_from_buffer( alssc, bs, trailer_size );
+            if( (err = als_imp_copy_from_buffer( alssc, bs, trailer_size )) < 0 )
+                return err;
         }
         if( crc_enabled )
         {
             lsmash_bs_read( bs, 4 );
-            als_imp_copy_from_buffer( alssc, bs, 4 );
+            if( (err = als_imp_copy_from_buffer( alssc, bs, 4 )) < 0 )
+                return err;
         }
     }
     /* Random access units */
@@ -198,11 +211,13 @@ static int als_imp_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *
     if( aux_data_enabled )
     {
         uint32_t aux_size = lsmash_bs_show_be32( bs, 0 );
-        als_imp_copy_from_buffer( alssc, bs, 4 );
+        if( (err = als_imp_copy_from_buffer( alssc, bs, 4 )) < 0 )
+            return err;
         if( aux_size && aux_size != 0xffffffff )
         {
             lsmash_bs_read( bs, aux_size );
-            als_imp_copy_from_buffer( alssc, bs, aux_size );
+            if( (err = als_imp_copy_from_buffer( alssc, bs, aux_size )) < 0 )
+                return err;
         }
     }
     /* Set 0 to ra_flag. We will remove ra_unit_size in each access unit. */
@@ -231,11 +246,14 @@ static int als_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
          * The Media Timeline may have moved the stream position and emptied the buffer, so fill it again. */
         while( lsmash_bs_get_remaining_buffer_size( bs ) < alssc->access_unit_size && !bs->eof )
         {
-            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            int read_size = lsmash_bs_read( bs, bs->buffer.max_size );
+            if( read_size < 0 || bs->error )
             {
                 importer->status = IMPORTER_ERROR;
                 return LSMASH_ERR_NAMELESS;
             }
+            if( read_size == 0 )
+                break;
         }
         if( lsmash_bs_get_remaining_buffer_size( bs ) < alssc->access_unit_size )
         {
@@ -306,9 +324,12 @@ static lsmash_audio_summary_t *als_imp_create_summary( lsmash_bs_t *bs, als_spec
         alssc->access_unit_size = lsmash_bs_get_remaining_buffer_size( bs );
         while( !bs->eof )
         {
-            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            int read_size = lsmash_bs_read( bs, bs->buffer.max_size );
+            if( read_size < 0 || bs->error )
                 goto fail;
             alssc->access_unit_size = lsmash_bs_get_remaining_buffer_size( bs );
+            if( read_size == 0 )
+                break;
         }
         summary->max_au_length    = alssc->access_unit_size;
         summary->samples_in_frame = 0;      /* hack for als_imp_get_last_delta() */
