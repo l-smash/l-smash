@@ -951,9 +951,9 @@ static int assert_timelineeditor_3way_equivalent
                   CLI_TIMELINEEDITOR, pos_opts ? pos_opts : "", in_path, te_mp4_path, CLI_DEV_NULL );
         rc_te = system( cmd );
 
-        /* 2. cli/lshmuxer [options] input output (positional mode) */
-        snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
-                  CLI_LSHMUXER, pos_opts ? pos_opts : "", in_path, lshp_mp4_path, CLI_DEV_NULL );
+        /* 2. cli/lshmuxer --optimize-pd -i input?track_opts -o output */
+        snprintf( cmd, sizeof(cmd), "%s --optimize-pd -i %s%s%s -o %s >%s 2>&1",
+                  CLI_LSHMUXER, in_path, track_opts ? "?" : "", track_opts ? track_opts : "", lshp_mp4_path, CLI_DEV_NULL );
         rc_lshp = system( cmd );
 
         /* 3. cli/lshmuxer -i input?track_opts -o output (track-option mode) */
@@ -1022,9 +1022,9 @@ static int assert_timelineeditor_3way_equivalent
                       && memcmp( te_ts, lsht_ts, te_ts_len ) == 0);
 
     if( !box_match_pos && te_box && lshp_box )
-        report_first_diff( "timelineeditor vs lshmuxer(positional) --box", pos_opts ? pos_opts : "", te_box, lshp_box );
+        report_first_diff( "timelineeditor vs lshmuxer(--optimize-pd -i input?opt) --box", track_opts ? track_opts : "", te_box, lshp_box );
     if( !ts_match_pos && te_ts && lshp_ts )
-        report_first_diff( "timelineeditor vs lshmuxer(positional) --timestamp", pos_opts ? pos_opts : "", te_ts, lshp_ts );
+        report_first_diff( "timelineeditor vs lshmuxer(--optimize-pd -i input?opt) --timestamp", track_opts ? track_opts : "", te_ts, lshp_ts );
     if( !box_match_trk && te_box && lsht_box )
         report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --box", track_opts ? track_opts : "", te_box, lsht_box );
     if( !ts_match_trk && te_ts && lsht_ts )
@@ -1038,28 +1038,94 @@ static int assert_timelineeditor_3way_equivalent
     lsmash_free( lsht_ts );
 
     TEST_ASSERT( rc_te == 0, "cli/timelineeditor succeeded" );
-    TEST_ASSERT( rc_lshp == 0, "cli/lshmuxer (positional) succeeded" );
+    TEST_ASSERT( rc_lshp == 0, "cli/lshmuxer (--optimize-pd -i input?opt) succeeded" );
     TEST_ASSERT( rc_lsht == 0, "cli/lshmuxer (track-option) succeeded" );
     TEST_ASSERT( rc_bd1 == 0 && rc_bd2 == 0 && rc_bd3 == 0 && rc_bd4 == 0 && rc_bd5 == 0 && rc_bd6 == 0, "cli/boxdumper succeeded" );
-    TEST_ASSERT( box_match_pos, "boxdumper --box is 100% identical between timelineeditor and lshmuxer (positional)" );
-    TEST_ASSERT( ts_match_pos,  "boxdumper --timestamp is 100% identical between timelineeditor and lshmuxer (positional)" );
+    TEST_ASSERT( box_match_pos, "boxdumper --box is 100% identical between timelineeditor and lshmuxer (--optimize-pd -i input?opt)" );
+    TEST_ASSERT( ts_match_pos,  "boxdumper --timestamp is 100% identical between timelineeditor and lshmuxer (--optimize-pd -i input?opt)" );
     TEST_ASSERT( box_match_trk, "boxdumper --box is 100% identical between timelineeditor and lshmuxer (-i input?opt)" );
     TEST_ASSERT( ts_match_trk,  "boxdumper --timestamp is 100% identical between timelineeditor and lshmuxer (-i input?opt)" );
     return 0;
 }
 
-static int assert_timelineeditor_both_fail( const char *pos_opts, const char *in_path, const char *out_path )
+static int assert_timelineeditor_both_fail( const char *pos_opts, const char *track_opts, const char *in_path, const char *out_path )
 {
     char cmd[1024];
     remove( out_path );
     snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, pos_opts, in_path, out_path, CLI_DEV_NULL );
     int rc_te = system( cmd );
     remove( out_path );
-    snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1", CLI_LSHMUXER, pos_opts, in_path, out_path, CLI_DEV_NULL );
+    snprintf( cmd, sizeof(cmd), "%s -i %s?%s -o %s >%s 2>&1", CLI_LSHMUXER, in_path, track_opts, out_path, CLI_DEV_NULL );
     int rc_lsh = system( cmd );
     remove( out_path );
     TEST_ASSERT( rc_te != 0, "cli/timelineeditor rejected invalid invocation" );
     TEST_ASSERT( rc_lsh != 0, "cli/lshmuxer rejected invalid invocation" );
+    return 0;
+}
+
+static int assert_lshmuxer_strict_track_and_cli_options( const char *in_multi_path, const char *out_path )
+{
+    char cmd[1024];
+
+    /* 1. Verify that track option values containing "remove", "disable", "sbr", or "ps" as substrings
+     * (e.g. ?handler=remove_test, ?handler=disable_test, ?copyright=remove_disable/eng) do not falsely
+     * trigger flag options (remove/disable/sbr/ps) in parse_track_option(). */
+    remove( out_path );
+    snprintf( cmd, sizeof(cmd),
+              "%s -i %s?1:handler=remove_test,copyright=disable_copy/eng?2:handler=disable_test,copyright=remove_sbr_ps/jpn -o %s >%s 2>&1",
+              CLI_LSHMUXER, in_multi_path, out_path, CLI_DEV_NULL );
+    int rc_ok = system( cmd );
+    TEST_ASSERT( rc_ok == 0, "cli/lshmuxer succeeded with handler/copyright values containing remove/disable/sbr/ps substrings" );
+
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "strict_opts: create root" );
+    lsmash_file_parameters_t fp = { 0 };
+    TEST_ASSERT( lsmash_open_file( out_path, 1, &fp ) == 0, "strict_opts: open output file" );
+    lsmash_file_t *file = lsmash_set_file( root, &fp );
+    TEST_ASSERT( file != NULL && lsmash_read_file( file, &fp ) >= 0, "strict_opts: read output file" );
+
+    uint32_t tid1 = lsmash_get_track_ID( root, 1 );
+    uint32_t tid2 = lsmash_get_track_ID( root, 2 );
+    lsmash_track_parameters_t tp1 = { 0 }, tp2 = { 0 };
+    lsmash_media_parameters_t mp1 = { 0 }, mp2 = { 0 };
+    int inspect_ok = (tid1 != 0 && tid2 != 0)
+                  && lsmash_get_track_parameters( root, tid1, &tp1 ) == 0
+                  && lsmash_get_track_parameters( root, tid2, &tp2 ) == 0
+                  && lsmash_get_media_parameters( root, tid1, &mp1 ) == 0
+                  && lsmash_get_media_parameters( root, tid2, &mp2 ) == 0;
+    int tracks_preserved_and_enabled = inspect_ok
+                                    && ((tp1.mode & ISOM_TRACK_ENABLED) != 0)
+                                    && ((tp2.mode & ISOM_TRACK_ENABLED) != 0)
+                                    && mp1.media_handler_name && !strcmp( mp1.media_handler_name, "remove_test" )
+                                    && mp2.media_handler_name && !strcmp( mp2.media_handler_name, "disable_test" );
+    lsmash_close_file( &fp );
+    lsmash_destroy_root( root );
+    remove( out_path );
+    TEST_ASSERT( tracks_preserved_and_enabled,
+                 "strict_opts: neither track was falsely removed or disabled by substring match in handler=/copyright=" );
+
+    /* 2. Verify that removed global timeline-editing options, positional syntax, and bare compact-size-table are rejected */
+    const char *rejected_invocations[] = {
+        "%s %s %s",
+        "%s --track 1 -i %s -o %s",
+        "%s --timecode test_cli_eq_tcv2.txt -i %s -o %s",
+        "%s --media-timescale 24000 -i %s -o %s",
+        "%s --media-timebase 1001 -i %s -o %s",
+        "%s --skip 1001/24000 -i %s -o %s",
+        "%s --delay 1001/24000 -i %s -o %s",
+        "%s --dts-compression -i %s -o %s",
+        "%s compact-size-table -i %s -o %s"
+    };
+    for( size_t i = 0; i < sizeof(rejected_invocations) / sizeof(rejected_invocations[0]); i++ )
+    {
+        remove( out_path );
+        char subcmd[512];
+        snprintf( subcmd, sizeof(subcmd), rejected_invocations[i], CLI_LSHMUXER, in_multi_path, out_path );
+        snprintf( cmd, sizeof(cmd), "%s >%s 2>&1", subcmd, CLI_DEV_NULL );
+        int rc_rej = system( cmd );
+        remove( out_path );
+        TEST_ASSERT( rc_rej != 0, "strict_opts: cli/lshmuxer rejected removed positional/global option or bare compact-size-table" );
+    }
     return 0;
 }
 
@@ -1390,8 +1456,8 @@ static int assert_shift_timeline_vfr_remux_idempotency( const char *raw_v, const
     /* Gen 3: lshmuxer remux pass */
     snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, gen2, gen3, CLI_DEV_NULL );
     int rc3 = system( cmd );
-    /* Gen 4: lshmuxer positional re-edit pass */
-    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_LSHMUXER, gen3, gen4, CLI_DEV_NULL );
+    /* Gen 4: lshmuxer track-option re-edit pass */
+    snprintf( cmd, sizeof(cmd), "%s -i %s?timecode=%s -o %s >%s 2>&1", CLI_LSHMUXER, gen3, tcv2_path, gen4, CLI_DEV_NULL );
     int rc4 = system( cmd );
 
     track_timeline_metrics_t m0, m1, m2, m3, m4;
@@ -1542,7 +1608,7 @@ static int assert_negative_poc_shift_timeline_vfr_reedit( const char *tcv2_path 
     /* Part A: Re-edit and remux without a timecode file (preserving negative-POC CTS < timestamp[0].cts) */
     snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, f_base_shifted, f_te_bare, CLI_DEV_NULL );
     int rc_a1 = system( cmd );
-    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_pos, CLI_DEV_NULL );
+    snprintf( cmd, sizeof(cmd), "%s -i %s?media-timescale=25,media-timebase=1 -o %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_pos, CLI_DEV_NULL );
     int rc_a2 = system( cmd );
     snprintf( cmd, sizeof(cmd), "%s -i %s -o %s >%s 2>&1", CLI_LSHMUXER, f_base_shifted, f_lsh_remux, CLI_DEV_NULL );
     int rc_a3 = system( cmd );
@@ -1619,12 +1685,12 @@ static int assert_negative_poc_shift_timeline_vfr_reedit( const char *tcv2_path 
     }
 
     /* Part B: Re-edit with VFR Timecode v2 (50ms, 90ms, 140ms, 180ms -> 100 Hz timescale)
-     * across timelineeditor, lshmuxer (positional, -i ?timecode=, --shift-timeline), and multi-generation re-edits */
+     * across timelineeditor, lshmuxer (--optimize-pd -i ?1:timecode=, -i ?timecode=, --shift-timeline), and multi-generation re-edits */
     snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
               CLI_TIMELINEEDITOR, tcv2_path, f_base_shifted, f_vfr_te, CLI_DEV_NULL );
     int rc_b1 = system( cmd );
-    snprintf( cmd, sizeof(cmd), "%s --timecode %s %s %s >%s 2>&1",
-              CLI_LSHMUXER, tcv2_path, f_base_shifted, f_vfr_lsh_pos, CLI_DEV_NULL );
+    snprintf( cmd, sizeof(cmd), "%s --optimize-pd -i %s?1:timecode=%s -o %s >%s 2>&1",
+              CLI_LSHMUXER, f_base_shifted, tcv2_path, f_vfr_lsh_pos, CLI_DEV_NULL );
     int rc_b2 = system( cmd );
     snprintf( cmd, sizeof(cmd), "%s -i %s?timecode=%s -o %s >%s 2>&1",
               CLI_LSHMUXER, f_base_shifted, tcv2_path, f_vfr_lsh_opt, CLI_DEV_NULL );
@@ -2043,7 +2109,7 @@ static int assert_fragmented_negative_poc_trun_v1_roundtrip( void )
     snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
               CLI_TIMELINEEDITOR, f_frag_from_unsh, f_defrag_te_bare, CLI_DEV_NULL );
     int rc_d3 = system( cmd );
-    snprintf( cmd, sizeof(cmd), "%s %s %s >%s 2>&1",
+    snprintf( cmd, sizeof(cmd), "%s -i %s?media-timescale=25,media-timebase=1 -o %s >%s 2>&1",
               CLI_LSHMUXER, f_frag_from_unsh, f_defrag_lsh_pos, CLI_DEV_NULL );
     int rc_d4 = system( cmd );
 
@@ -2657,7 +2723,7 @@ int test_muxer_lshmuxer_cli_equivalence( void )
     if( assert_remuxer_both_fail( "-i test_cli_eq_in_v.mp4?9:disable", "test_cli_eq_out.mp4" ) < 0 )
         goto cleanup;
 
-    /* 5. Differential 3-Way Equivalence Assertions (timelineeditor vs lshmuxer positional vs lshmuxer -i input?opt) */
+    /* 5. Differential 3-Way Equivalence Assertions (timelineeditor vs lshmuxer --optimize-pd -i input?opt vs lshmuxer -i input?opt) */
 
     /* Case 22: Timecode v2 (VFR + non-zero initial timestamp offset -> Empty Edit + composition_delay + ring-buffer DTS) */
     if( assert_timelineeditor_3way_equivalent(
@@ -2699,16 +2765,18 @@ int test_muxer_lshmuxer_cli_equivalence( void )
             "test_cli_eq_out.mp4" ) < 0 )
         goto cleanup;
 
-    /* Case 27: Positional no-option invocation (argc == 3: GCD timescale/timebase reduction while copying original elst) */
+    /* Case 27: Track-option timescale= / timebase= aliases matching timelineeditor --media-timescale / --media-timebase */
     if( assert_timelineeditor_3way_equivalent(
-            NULL,
+            "--media-timescale 24000 --media-timebase 1001",
             f_in_v,
-            NULL,
+            "timescale=24000,timebase=1001",
             "test_cli_eq_out.mp4" ) < 0 )
         goto cleanup;
 
-    /* Case 28: Negative test — out-of-range --track number rejected by both timelineeditor and lshmuxer */
-    if( assert_timelineeditor_both_fail( "--track 99", f_in_v, "test_cli_eq_out.mp4" ) < 0 )
+    /* Case 28: Negative test & strict option parsing — out-of-range track number, substring safety (?handler=remove_test), and removed option rejection */
+    if( assert_timelineeditor_both_fail( "--track 99", "99:timecode=test_cli_eq_tcv2.txt", f_in_v, "test_cli_eq_out.mp4" ) < 0 )
+        goto cleanup;
+    if( assert_lshmuxer_strict_track_and_cli_options( f_in_multi, "test_cli_eq_out.mp4" ) < 0 )
         goto cleanup;
 
     /* 6. Legacy Multi-Stage Pipeline (muxer -> timelineeditor [-> remuxer]) vs 1-Pass lshmuxer Equivalence */

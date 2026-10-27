@@ -111,7 +111,6 @@ typedef struct
     uint32_t empty_delay_num;
     uint32_t empty_delay_den;
     int      dts_compression;
-    int      force_tc_edit;
 } track_media_option_t;
 
 typedef struct
@@ -269,18 +268,6 @@ typedef struct
     double                 min_frag_duration;
     double                 last_frag_merge_thresh;
     int                    dry_run;
-    /* Global timeline editing shortcut options */
-    uint32_t               global_edit_track;
-    char                  *global_timecode;
-    uint32_t               global_media_timescale;
-    uint32_t               global_media_timebase;
-    uint32_t               global_skip_num;
-    uint32_t               global_skip_den;
-    uint32_t               global_delay_num;
-    uint32_t               global_delay_den;
-    int                    global_dts_compression;
-    int                    positional_mode;
-    int                    argc;
 } lshmuxer_t;
 
 typedef struct
@@ -473,14 +460,6 @@ static void display_help( void )
              "    --copyright-notice <arg>  Specify copyright notice (<language>/<string>)\n"
              "    --language <string>       Specify the default language for all output tracks\n"
              "    --dry-run                 Perform a trial run without writing output files\n"
-             "  Timeline editing global shortcuts (applied to --track [1] of first input):\n"
-             "    --track <integer>         Specify track number to edit [1]\n"
-             "    --timecode <string>       Specify timecode v1/v2 file to edit timeline\n"
-             "    --media-timescale <int>   Specify media timescale to convert\n"
-             "    --media-timebase <int>    Specify media timebase to convert\n"
-             "    --skip <rational>         Skip start of media presentation in arbitrary units\n"
-             "    --delay <rational>        Insert blank clip before actual media presentation\n"
-             "    --dts-compression         Eliminate composition delay with DTS compression\n"
              "  iTunes metadata options:\n"
              "    --album-name <string>     Album name\n"
              "    --artist <string>         Artist\n"
@@ -990,37 +969,37 @@ static int parse_track_option( lshmuxer_t *muxer )
             {
                 if( strchr( track_option, '=' ) != strrchr( track_option, '=' ) )
                     return ERROR_MSG( "multiple equal signs inside one track option in %s\n", track_option );
-                if( strstr( track_option, "remove" ) )
+                if( !strcmp( track_option, "remove" ) )
                 {
                     current_track_opt->remove = 1;
                     break;
                 }
-                else if( strstr( track_option, "disable" ) )
+                else if( !strcmp( track_option, "disable" ) )
                     current_track_opt->disable = 1;
-                else if( strstr( track_option, "alternate-group=" ) )
+                else if( !strncmp( track_option, "alternate-group=", strlen( "alternate-group=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "alternate-group=" );
                     current_track_opt->alternate_group = atoi( track_parameter );
                 }
-                else if( strstr( track_option, "encoder-delay=" ) )
+                else if( !strncmp( track_option, "encoder-delay=", strlen( "encoder-delay=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "encoder-delay=" );
                     current_track_opt->encoder_delay = atoi( track_parameter );
                 }
-                else if( strstr( track_option, "constant-delay=" ) )
+                else if( !strncmp( track_option, "constant-delay=", strlen( "constant-delay=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "constant-delay=" );
                     current_track_opt->constant_delay = atoi( track_parameter );
                     current_track_opt->has_cd         = 1;
                 }
-                else if( strstr( track_option, "language=" ) )
+                else if( !strncmp( track_option, "language=", strlen( "language=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "language=" );
                     current_track_opt->ISO_language = lsmash_pack_iso_language( track_parameter );
                 }
-                else if( strstr( track_option, "dv-profile=" ) )
+                else if( !strncmp( track_option, "dv-profile=", strlen( "dv-profile=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "dv-profile=" );
                     if( sscanf( track_parameter, "%"SCNu8".%"SCNu8, &current_track_opt->dv_profile, &current_track_opt->dv_bl_signal_compatibility_id ) == 1 )
                     {
                         current_track_opt->dv_profile = atoi( track_parameter );
@@ -1028,33 +1007,33 @@ static int parse_track_option( lshmuxer_t *muxer )
                     }
                     current_track_opt->has_dv = 1;
                 }
-                else if( strstr( track_option, "ambisonic-order=" ) )
+                else if( !strncmp( track_option, "ambisonic-order=", strlen( "ambisonic-order=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "ambisonic-order=" );
                     current_track_opt->ambisonic_order   = atoi( track_parameter );
                     current_track_opt->has_spatial_audio = 1;
                 }
-                else if( strstr( track_option, "stereo-mode=" ) )
+                else if( !strncmp( track_option, "stereo-mode=", strlen( "stereo-mode=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "stereo-mode=" );
                     current_track_opt->stereo_mode     = track_parameter;
                     current_track_opt->has_stereo_mode = 1;
                 }
-                else if( strstr( track_option, "projection=" ) )
+                else if( !strncmp( track_option, "projection=", strlen( "projection=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "projection=" );
                     current_track_opt->projection = track_parameter;
                 }
-                else if( strstr( track_option, "ypr=" ) )
+                else if( !strncmp( track_option, "ypr=", strlen( "ypr=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "ypr=" );
                     if( sscanf( track_parameter, "%lf/%lf/%lf", &current_track_opt->yaw, &current_track_opt->pitch, &current_track_opt->roll ) != 3 )
                         return ERROR_MSG( "incorrect number of elements for %s\n", track_option );
                     current_track_opt->has_ypr = 1;
                 }
-                else if( strstr( track_option, "fps=" ) )
+                else if( !strncmp( track_option, "fps=", strlen( "fps=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "fps=" );
                     if( sscanf( track_parameter, "%"SCNu32"/%"SCNu32, &current_track_opt->fps_num, &current_track_opt->fps_den ) == 1 )
                     {
                         current_track_opt->fps_num = atoi( track_parameter );
@@ -1064,11 +1043,11 @@ static int parse_track_option( lshmuxer_t *muxer )
                         return ERROR_MSG( "invalid framerate %s\n", track_option );
                     current_track_opt->user_fps = 1;
                 }
-                else if( strstr( track_option, "copyright=" ) )
+                else if( !strncmp( track_option, "copyright=", strlen( "copyright=" ) ) )
                 {
                     /* Why: Parse copyright=<notice>[/<language>] where the notice string comes first
                      * and the optional 3-letter ISO 639-2/T language code follows '/'. */
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "copyright=" );
                     current_track_opt->copyright_notice = track_parameter;
                     while( *track_parameter )
                     {
@@ -1081,55 +1060,69 @@ static int parse_track_option( lshmuxer_t *muxer )
                     }
                     current_track_opt->copyright_language = lsmash_pack_iso_language( track_parameter );
                 }
-                else if( strstr( track_option, "handler=" ) )
+                else if( !strncmp( track_option, "handler=", strlen( "handler=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "handler=" );
                     current_track_opt->handler_name = track_parameter;
                 }
                 else if( !strcmp( track_option, "sbr" ) || !strcmp( track_option, "ps" ) )
                     current_track_opt->sbr = 1;
-                else if( strstr( track_option, "par=" ) )
+                else if( !strncmp( track_option, "par=", strlen( "par=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "par=" );
                     if( sscanf( track_parameter, "%"SCNu32":%"SCNu32, &current_track_opt->par_h, &current_track_opt->par_v ) != 2 )
                     {
                         current_track_opt->par_h = 0;
                         current_track_opt->par_v = 0;
                     }
                 }
-                else if( strstr( track_option, "safe-seek=" ) )
+                else if( !strncmp( track_option, "safe-seek=", strlen( "safe-seek=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "safe-seek=" );
                     current_track_opt->seek         = atoi( track_parameter );
                     current_track_opt->consider_rap = 1;
                 }
-                else if( strstr( track_option, "seek=" ) )
+                else if( !strncmp( track_option, "seek=", strlen( "seek=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "seek=" );
                     current_track_opt->seek = atoi( track_parameter );
                 }
-                else if( strstr( track_option, "timecode=" ) )
+                else if( !strncmp( track_option, "timecode=", strlen( "timecode=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "timecode=" );
                     current_track_opt->timecode_name = track_parameter;
                 }
-                else if( strstr( track_option, "media-timescale=" ) || strstr( track_option, "timescale=" ) )
+                else if( !strncmp( track_option, "media-timescale=", strlen( "media-timescale=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "media-timescale=" );
                     current_track_opt->media_timescale = atoi( track_parameter );
                     if( !current_track_opt->media_timescale )
                         return ERROR_MSG( "invalid media timescale in %s\n", track_option );
                 }
-                else if( strstr( track_option, "media-timebase=" ) || strstr( track_option, "timebase=" ) )
+                else if( !strncmp( track_option, "timescale=", strlen( "timescale=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "timescale=" );
+                    current_track_opt->media_timescale = atoi( track_parameter );
+                    if( !current_track_opt->media_timescale )
+                        return ERROR_MSG( "invalid media timescale in %s\n", track_option );
+                }
+                else if( !strncmp( track_option, "media-timebase=", strlen( "media-timebase=" ) ) )
+                {
+                    char *track_parameter = track_option + strlen( "media-timebase=" );
                     current_track_opt->media_timebase = atoi( track_parameter );
                     if( !current_track_opt->media_timebase )
                         return ERROR_MSG( "invalid media timebase in %s\n", track_option );
                 }
-                else if( strstr( track_option, "skip=" ) )
+                else if( !strncmp( track_option, "timebase=", strlen( "timebase=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "timebase=" );
+                    current_track_opt->media_timebase = atoi( track_parameter );
+                    if( !current_track_opt->media_timebase )
+                        return ERROR_MSG( "invalid media timebase in %s\n", track_option );
+                }
+                else if( !strncmp( track_option, "skip=", strlen( "skip=" ) ) )
+                {
+                    char *track_parameter = track_option + strlen( "skip=" );
                     if( sscanf( track_parameter, "%"SCNu32"/%"SCNu32, &current_track_opt->skip_duration_num, &current_track_opt->skip_duration_den ) != 2 )
                     {
                         current_track_opt->skip_duration_num = atoi( track_parameter );
@@ -1138,9 +1131,9 @@ static int parse_track_option( lshmuxer_t *muxer )
                     if( !current_track_opt->skip_duration_num || !current_track_opt->skip_duration_den )
                         return ERROR_MSG( "invalid skip duration in %s\n", track_option );
                 }
-                else if( strstr( track_option, "delay=" ) )
+                else if( !strncmp( track_option, "delay=", strlen( "delay=" ) ) )
                 {
-                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    char *track_parameter = track_option + strlen( "delay=" );
                     if( sscanf( track_parameter, "%"SCNu32"/%"SCNu32, &current_track_opt->empty_delay_num, &current_track_opt->empty_delay_den ) != 2 )
                     {
                         current_track_opt->empty_delay_num = atoi( track_parameter );
@@ -1322,7 +1315,7 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
             muxer->timeline_shift = 1;
-        else if( !strcasecmp( argv[i], "--compact-size-table" ) || !strcasecmp( argv[i], "compact-size-table" ) )
+        else if( !strcasecmp( argv[i], "--compact-size-table" ) )
             muxer->compact_size_table = 1;
         else if( !strcasecmp( argv[i], "--chapter" ) )
         {
@@ -1419,63 +1412,6 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--dry-run" ) )
             muxer->dry_run = 1;
-        /* Global timeline editing shortcut options */
-        else if( !strcasecmp( argv[i], "--track" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--track requires an argument.\n" );
-            muxer->global_edit_track = atoi( argv[i] );
-            if( !muxer->global_edit_track )
-                FAILED_PARSE_CLI_OPTION( "Invalid track number.\n" );
-        }
-        else if( !strcasecmp( argv[i], "--timecode" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--timecode requires an argument.\n" );
-            muxer->global_timecode = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--media-timescale" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--media-timescale requires an argument.\n" );
-            muxer->global_media_timescale = atoi( argv[i] );
-            if( !muxer->global_media_timescale )
-                FAILED_PARSE_CLI_OPTION( "Invalid media timescale.\n" );
-        }
-        else if( !strcasecmp( argv[i], "--media-timebase" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--media-timebase requires an argument.\n" );
-            muxer->global_media_timebase = atoi( argv[i] );
-            if( !muxer->global_media_timebase )
-                FAILED_PARSE_CLI_OPTION( "Invalid media timebase.\n" );
-        }
-        else if( !strcasecmp( argv[i], "--skip" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--skip requires an argument.\n" );
-            if( sscanf( argv[i], "%"SCNu32"/%"SCNu32, &muxer->global_skip_num, &muxer->global_skip_den ) != 2 )
-            {
-                muxer->global_skip_num = atoi( argv[i] );
-                muxer->global_skip_den = 1;
-            }
-            if( muxer->global_skip_num == 0 || muxer->global_skip_den == 0 )
-                FAILED_PARSE_CLI_OPTION( "Invalid skip duration.\n" );
-        }
-        else if( !strcasecmp( argv[i], "--delay" ) )
-        {
-            if( ++i == argc )
-                FAILED_PARSE_CLI_OPTION( "--delay requires an argument.\n" );
-            if( sscanf( argv[i], "%"SCNu32"/%"SCNu32, &muxer->global_delay_num, &muxer->global_delay_den ) != 2 )
-            {
-                muxer->global_delay_num = atoi( argv[i] );
-                muxer->global_delay_den = 1;
-            }
-            if( muxer->global_delay_num == 0 || muxer->global_delay_den == 0 )
-                FAILED_PARSE_CLI_OPTION( "Invalid delay time.\n" );
-        }
-        else if( !strcasecmp( argv[i], "--dts-compression" ) )
-            muxer->global_dts_compression = 1;
 #define CHECK_ITUNES_METADATA_ARG_STRING( argument, value ) \
         else if( !strcasecmp( argv[i], "--"#argument ) ) \
         { \
@@ -1509,35 +1445,9 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
             muxer->itunes_metadata.beats_per_minute = atoi( argv[i] );
             muxer->has_user_itunes_metadata         = 1;
         }
-        else if( i == argc - 2 && input_movie_number == 0 && !muxer->output->root && argv[i][0] != '-' )
-        {
-            /* Support positional 'lshmuxer [options] input output' invocation syntax */
-            input_file_option[0].num_track_delimiter = 0;
-            char *p = argv[i];
-            while( *p )
-                input_file_option[0].num_track_delimiter += (*p++ == '?');
-            if( get_movie( &input[0], strtok( argv[i], "?" ) ) )
-                FAILED_PARSE_CLI_OPTION( "failed to get input movie.\n" );
-            uint32_t num_tracks = input[0].file.movie.num_tracks;
-            track_option[0] = lsmash_malloc_zero( num_tracks * sizeof(track_media_option_t) );
-            if( !track_option[0] )
-                FAILED_PARSE_CLI_OPTION( "couldn't allocate memory.\n" );
-            input_file_option[0].whole_track_option = strtok( NULL, "" );
-            input[0].file.movie.movie_ID = 1;
-            ++input_movie_number;
-            ++i;
-            output_t *output = muxer->output;
-            output->root = lsmash_create_root();
-            if( !output->root )
-                FAILED_PARSE_CLI_OPTION( "failed to create a ROOT.\n" );
-            output->file.name      = argv[i];
-            muxer->optimize_pd     = 1;
-            muxer->positional_mode = 1;
-        }
         else
             FAILED_PARSE_CLI_OPTION( "unknown option found: %s\n", argv[i] );
     }
-    muxer->argc = argc;
     if( !muxer->output->root )
         FAILED_PARSE_CLI_OPTION( "output file name is not specified.\n" );
     /* Initialize track options from input track/media parameters */
@@ -1577,35 +1487,6 @@ static int parse_cli_option( int argc, char **argv, lshmuxer_t *muxer )
     }
     if( parse_track_option( muxer ) )
         FAILED_PARSE_CLI_OPTION( "failed to parse track options.\n" );
-    /* Apply global timeline editing shortcut options to the target track of the first input */
-    if( muxer->positional_mode || muxer->global_edit_track
-     || muxer->global_timecode || muxer->global_media_timescale || muxer->global_media_timebase
-     || muxer->global_skip_num || muxer->global_delay_num || muxer->global_dts_compression )
-    {
-        uint32_t target_track = muxer->global_edit_track ? muxer->global_edit_track : 1;
-        if( target_track > input[0].file.movie.num_tracks )
-            FAILED_PARSE_CLI_OPTION( "Invalid track number %"PRIu32".\n", target_track );
-        track_media_option_t *topt = &track_option[0][target_track - 1];
-        topt->force_tc_edit = 1;
-        if( muxer->global_timecode )
-            topt->timecode_name = muxer->global_timecode;
-        if( muxer->global_media_timescale )
-            topt->media_timescale = muxer->global_media_timescale;
-        if( muxer->global_media_timebase )
-            topt->media_timebase = muxer->global_media_timebase;
-        if( muxer->global_skip_num )
-        {
-            topt->skip_duration_num = muxer->global_skip_num;
-            topt->skip_duration_den = muxer->global_skip_den;
-        }
-        if( muxer->global_delay_num )
-        {
-            topt->empty_delay_num = muxer->global_delay_num;
-            topt->empty_delay_den = muxer->global_delay_den;
-        }
-        if( muxer->global_dts_compression )
-            topt->dts_compression = 1;
-    }
     lsmash_free( input_file_option );
     return 0;
 #undef FAILED_PARSE_CLI_OPTION
@@ -2038,8 +1919,7 @@ static int edit_track_timeline
                     || track_opt->media_timebase != 0
                     || track_opt->dts_compression != 0
                     || track_opt->skip_duration_num != 0
-                    || track_opt->empty_delay_num != 0
-                    || track_opt->force_tc_edit != 0);
+                    || track_opt->empty_delay_num != 0);
     /* Why: For raw elementary streams, normalize the Fake Track's timescale and timestamps using
      * bitstream timing (well_known_fps[] / !summary->vfr) or user ?fps= override BEFORE running
      * any timecode/timeline editing pass. This ensures 1-pass raw stream timeline editing operates
@@ -3163,7 +3043,7 @@ static int apply_summary_track_options
             if( track_opt->sbr )
             {
                 if( lsmash_mp4sys_get_object_type_indication( base_summary ) != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
-                    return ERROR_MSG( "--sbr is only valid with MPEG-4 Audio.\n" );
+                    return ERROR_MSG( "?sbr (or ?ps) is only valid with MPEG-4 Audio.\n" );
                 summary->sbr_mode = MP4A_AAC_SBR_BACKWARD_COMPATIBLE;
                 if( lsmash_setup_AudioSpecificConfig( summary ) )
                     return ERROR_MSG( "failed to set SBR mode.\n" );
@@ -3886,11 +3766,8 @@ static int construct_timeline_maps( lshmuxer_t *muxer )
                     return ERROR_MSG( "failed to create an explicit timeline map.\n" );
             }
             /* Why: Reconstruct the explicit timeline map ('elst') from the edited media timeline
-             * whenever timeline editing or skip/delay parameters are active, except in bare positional
-             * invocation mode (argc == 3, '<prog> input output' with no options), which performs only
-             * GCD media timescale/timebase reduction while copying the input Edit List verbatim. */
-            else if( (in_track->timeline_edited || topt->skip_duration_num || topt->empty_delay_num)
-                  && !(muxer->positional_mode && muxer->argc == 3) )
+             * whenever timeline editing or skip/delay parameters are active. */
+            else if( in_track->timeline_edited || topt->skip_duration_num || topt->empty_delay_num )
             {
                 if( lsmash_delete_explicit_timeline_map( output->root, out_track->track_ID ) )
                     return ERROR_MSG( "failed to delete explicit timeline maps.\n" );
@@ -4033,11 +3910,17 @@ int main( int argc, char *argv[] )
     };
     lsmash_get_mainargs( &argc, &argv );
     for( int i = 1; i < argc; i++ )
+    {
         if( !strcasecmp( argv[i], "-i" ) || !strcasecmp( argv[i], "--input" ) )
             ++muxer.num_input;
-    /* Support positional 'lshmuxer [options] input output' invocation syntax */
-    if( muxer.num_input == 0 && argc >= 3 )
-        muxer.num_input = 1;
+        else if( !strcasecmp( argv[i], "--brands" ) && i + 1 < argc && !strcasecmp( argv[i + 1], "help" ) )
+        {
+            display_brands();
+            return 0;
+        }
+    }
+    if( !muxer.num_input )
+        return ERROR_MSG( "no input file specified.\n" );
 
     input_t *input = lsmash_malloc_zero( muxer.num_input * sizeof(input_t) );
     if( !input )
