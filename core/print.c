@@ -1968,8 +1968,7 @@ static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     uint32_t timescale;
     if( !chpl->version )
     {
-        if( LSMASH_IS_NON_EXISTING_BOX( file->moov )
-         || LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
+        if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
          || file->moov->mvhd->timescale == 0 )
             return LSMASH_ERR_INVALID_DATA;
         timescale = file->moov->mvhd->timescale;
