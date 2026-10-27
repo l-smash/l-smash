@@ -1520,6 +1520,209 @@ int test_malformed_boxes_and_sample_tables( void )
         remove( bad_mp4 );
     }
 
+    /* 13y. Truncated esds / iods Descriptor streams with forged excessive header->size,
+     *      child descriptor overrun (end_pos < pos), and overlong VLQ length headers */
+    for( int case_idx = 0; case_idx < 4; case_idx++ )
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        if( case_idx == 0 )
+        {
+            /* iods with forged box->size and MP4_IOD_Tag (0x10) with forged VLQ size truncated inside ES_ID_Inc */
+            uint32_t iods_sz = 0x00010000;
+            uint32_t moov_sz = 8 + iods_sz;
+            lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+            lsmash_bs_put_be32( bs, iods_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'o', 'd', 's' ) );
+            lsmash_bs_put_be32( bs, 0 );    /* version + flags */
+            lsmash_bs_put_byte( bs, 0x10 ); /* MP4_IOD_Tag */
+            lsmash_bs_put_byte( bs, 0x80 );
+            lsmash_bs_put_byte( bs, 0x80 );
+            lsmash_bs_put_byte( bs, 0x80 );
+            lsmash_bs_put_byte( bs, 0x7F ); /* forged descriptor size */
+            lsmash_bs_put_be16( bs, 0x004F ); /* ObjectDescriptorID = 1, includeInlineProfileLevelFlag = 0 */
+            lsmash_bs_put_byte( bs, 0xFF ); /* ODProfileLevelIndication */
+            lsmash_bs_put_byte( bs, 0xFF ); /* sceneProfileLevelIndication */
+            lsmash_bs_put_byte( bs, 0xFF ); /* audioProfileLevelIndication */
+            lsmash_bs_put_byte( bs, 0xFF ); /* visualProfileLevelIndication */
+            lsmash_bs_put_byte( bs, 0xFF ); /* graphicsProfileLevelIndication */
+            lsmash_bs_put_byte( bs, 0x0E ); /* ES_ID_IncTag */
+            lsmash_bs_put_byte( bs, 0x04 ); /* size = 4 */
+            lsmash_bs_put_be16( bs, 0x0001 ); /* truncated ES_ID before EOF */
+        }
+        else
+        {
+            /* esds inside moov.trak.mdia.minf.stbl.stsd.mp4a.esds */
+            uint32_t hdlr_sz = 33;
+            uint32_t esds_sz = case_idx == 1 ? 0x00010000 : 48;
+            uint32_t mp4a_sz = 36 + esds_sz;
+            uint32_t stsd_sz = 16 + mp4a_sz;
+            uint32_t stbl_sz = 8 + stsd_sz;
+            uint32_t minf_sz = 8 + stbl_sz;
+            uint32_t mdia_sz = 8 + hdlr_sz + minf_sz;
+            uint32_t trak_sz = 8 + mdia_sz;
+            uint32_t moov_sz = 8 + trak_sz;
+            lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+            lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+            lsmash_bs_put_be32( bs, mdia_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 'i', 'a' ) );
+            lsmash_bs_put_be32( bs, hdlr_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'h', 'd', 'l', 'r' ) );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_byte( bs, 0 );
+            lsmash_bs_put_be32( bs, minf_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'i', 'n', 'f' ) );
+            lsmash_bs_put_be32( bs, stbl_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 't', 'b', 'l' ) );
+            lsmash_bs_put_be32( bs, stsd_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 't', 's', 'd' ) );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, 1 );
+            lsmash_bs_put_be32( bs, mp4a_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'p', '4', 'a' ) );
+            for( int i = 0; i < 6; i++ )
+                lsmash_bs_put_byte( bs, 0 );
+            lsmash_bs_put_be16( bs, 1 );
+            lsmash_bs_put_be64( bs, 0 );
+            lsmash_bs_put_be16( bs, 2 );
+            lsmash_bs_put_be16( bs, 16 );
+            lsmash_bs_put_be32( bs, 0 );
+            lsmash_bs_put_be32( bs, 48000u << 16 );
+            lsmash_bs_put_be32( bs, esds_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 's', 'd', 's' ) );
+            lsmash_bs_put_be32( bs, 0 ); /* version + flags */
+            if( case_idx == 1 )
+            {
+                /* ES_DescrTag (0x03) + DecoderConfigDescrTag (0x04) + DecSpecificInfoTag (0x05) with forged VLQ sizes */
+                lsmash_bs_put_byte( bs, 0x03 ); /* ES_DescrTag */
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x7F );
+                lsmash_bs_put_be16( bs, 1 );    /* ES_ID */
+                lsmash_bs_put_byte( bs, 0 );    /* flags */
+                lsmash_bs_put_byte( bs, 0x04 ); /* DecoderConfigDescrTag */
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x40 );
+                lsmash_bs_put_byte( bs, 0x00 );
+                lsmash_bs_put_byte( bs, 0x40 ); /* objectTypeIndication = Audio ISO/IEC 14496-3 */
+                lsmash_bs_put_byte( bs, 0x15 ); /* streamType = AudioStream */
+                for( int i = 0; i < 11; i++ )
+                    lsmash_bs_put_byte( bs, 0 );
+                lsmash_bs_put_byte( bs, 0x05 ); /* DecSpecificInfoTag */
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x80 );
+                lsmash_bs_put_byte( bs, 0x20 );
+                lsmash_bs_put_byte( bs, 0x00 );
+                lsmash_bs_put_be16( bs, 0x1190 ); /* truncated AudioSpecificConfig before EOF */
+            }
+            else if( case_idx == 2 )
+            {
+                /* ES_DescrTag (0x03) with small size = 5 containing DecoderConfigDescrTag (0x04) with larger size = 20 */
+                lsmash_bs_put_byte( bs, 0x03 ); /* ES_DescrTag */
+                lsmash_bs_put_byte( bs, 0x05 ); /* size = 5 (too small for child DecoderConfigDescriptor) */
+                lsmash_bs_put_be16( bs, 1 );    /* ES_ID */
+                lsmash_bs_put_byte( bs, 0 );    /* flags */
+                lsmash_bs_put_byte( bs, 0x04 ); /* DecoderConfigDescrTag */
+                lsmash_bs_put_byte( bs, 0x14 ); /* size = 20 (overruns parent end_pos) */
+                for( int i = 0; i < 29; i++ )
+                    lsmash_bs_put_byte( bs, 0 );
+            }
+            else
+            {
+                /* ES_DescrTag (0x03) with overlong 5-byte VLQ length header */
+                lsmash_bs_put_byte( bs, 0x03 ); /* ES_DescrTag */
+                for( int i = 0; i < 5; i++ )
+                    lsmash_bs_put_byte( bs, 0x81 );
+                for( int i = 0; i < 30; i++ )
+                    lsmash_bs_put_byte( bs, 0 );
+            }
+        }
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( bad_mp4, raw, raw_len ) == 0, "13y: write bad_mp4 (malformed esds/iods)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13y: open bad_mp4 (malformed esds/iods)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13y: lsmash_read_file rejects malformed/truncated esds/iods descriptor" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13y: 100% rollback after malformed/truncated esds/iods descriptor" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13z. Verify color_table->size == 0xFFFF boundary across read_ctab, write_ctab, print_ctab,
+     *      and visual sample entry color_table clamping */
+    {
+        const char *ctab_mp4  = "tests/tmp_test_ctab_max.mov";
+        const char *ctab_dump = "tests/tmp_test_ctab_max_dump.txt";
+        lsmash_bs_t *bs = lsmash_bs_create();
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_QT );
+        lsmash_bs_put_be32( bs, 0 );
+        uint32_t ctab_sz = 16 + 65536 * 8;
+        uint32_t moov_sz = 8 + ctab_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, ctab_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 't', 'a', 'b' ) );
+        lsmash_bs_put_be32( bs, 0 );      /* seed */
+        lsmash_bs_put_be16( bs, 0x8000 ); /* flags */
+        lsmash_bs_put_be16( bs, 0xFFFF ); /* size = 65535 (65536 entries) */
+        for( uint32_t i = 0; i <= 0xFFFF; i++ )
+        {
+            lsmash_bs_put_be16( bs, (uint16_t)i );
+            lsmash_bs_put_be16( bs, (uint16_t)(i ^ 0x1111) );
+            lsmash_bs_put_be16( bs, (uint16_t)(i ^ 0x2222) );
+            lsmash_bs_put_be16( bs, (uint16_t)(i ^ 0x3333) );
+        }
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( ctab_mp4, raw, raw_len ) == 0, "13z: write ctab_mp4 (size == 0xFFFF)" );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( ctab_mp4, 1, &param ) == 0, "13z: open ctab_mp4" );
+        param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        (void)lsmash_read_file( file, &param );
+        file->root->file  = file;
+        file->initializer = file;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( file->moov->ctab )
+                  && file->moov->ctab->color_table.size == 0xFFFF
+                  && file->moov->ctab->color_table.array != NULL
+                  && file->moov->ctab->color_table.array[0xFFFF].value == 0xFFFF,
+                     "13z: moov.ctab with size == 0xFFFF parsed accurately" );
+        /* Verify print_qt_color_table does not wrap around 16-bit counter at size == 0xFFFF */
+        TEST_ASSERT( lsmash_print_movie( root, ctab_dump ) == 0, "13z: lsmash_print_movie dumps 65536-entry ctab without hang" );
+        remove( ctab_dump );
+        /* Verify write_ctab -> write_bs_put_qt_color_table does not wrap around 16-bit counter at size == 0xFFFF */
+        lsmash_bs_t *wbs = lsmash_bs_create();
+        TEST_ASSERT( file->moov->ctab->write != NULL
+                  && file->moov->ctab->write( wbs, (isom_box_t *)file->moov->ctab ) == 0
+                  && wbs->buffer.store == ctab_sz,
+                     "13z: write_ctab serializes all 65536 entries without 16-bit wraparound" );
+        lsmash_bs_cleanup( wbs );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+        remove( ctab_mp4 );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13z: 0 bytes leaked after 65536-entry ctab read/print/write" );
+#endif
+    }
+
     printf( "[PASS] test_malformed_boxes_and_sample_tables\n" );
     return 0;
 }
