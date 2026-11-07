@@ -627,6 +627,10 @@ static int fragment_make_segment_index_entry
         isom_trak_t       *trak           = lsm_track_get_trak( file->initializer, tfhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd ) )
             return LSMASH_ERR_NAMELESS;
+        if( LSMASH_IS_NON_EXISTING_BOX( file->initializer->moov->mvhd )
+         || file->initializer->moov->mvhd->timescale == 0
+         || trak->mdia->mdhd->timescale == 0 )
+            return LSMASH_ERR_INVALID_DATA;
         assert( LSMASH_IS_EXISTING_BOX( traf->tfdt ) );
         if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
         {
@@ -641,6 +645,8 @@ static int fragment_make_segment_index_entry
             if( ret < 0 )
                 return ret;
         }
+        else if( sidx->timescale == 0 )
+            return LSMASH_ERR_INVALID_DATA;
         /* One pair of a Movie Fragment Box with an associated Media Box per subsegment. */
         isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)lsm_list_append( sidx->list );
         if( !data )
@@ -677,39 +683,46 @@ static int fragment_make_segment_index_entry
                 if( !edit )
                     continue;
                 uint64_t edit_end_pts;
-                uint64_t edit_end_cts;
-                if( edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
-                 || (elst->version == 0 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN32)
-                 || (elst->version == 1 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN64) )
-                {
-                    edit_end_cts = UINT64_MAX;
+                double   segment_duration  = 0.0;
+                int      implicit_duration = (edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
+                                           || (elst->version == 0 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN32)
+                                           || (elst->version == 1 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN64));
+                if( implicit_duration )
                     edit_end_pts = UINT64_MAX;
-                }
                 else
                 {
-                    double segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
-                    edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
-                    edit_end_pts = pts + (uint64_t)segment_duration;
+                    segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
+                    edit_end_pts     = pts + (uint64_t)segment_duration;
                 }
                 if( edit->media_time == ISOM_EDIT_MODE_EMPTY )
                 {
                     pts = edit_end_pts;
                     continue;
                 }
+                if( edit->media_time < 0 )
+                    return LSMASH_ERR_INVALID_DATA;
+                uint64_t media_time = (uint64_t)edit->media_time;
+                uint64_t edit_end_cts;
+                if( implicit_duration )
+                    edit_end_cts = UINT64_MAX;
+                else if( edit->media_rate > 0 )
+                    edit_end_cts = media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
+                else
+                    edit_end_cts = media_time;
                 if( subsegment->smallest_cts != LSMASH_TIMESTAMP_UNDEFINED
                  && subsegment->largest_cts  != LSMASH_TIMESTAMP_UNDEFINED
-                 && ((subsegment->smallest_cts >= edit->media_time && subsegment->smallest_cts < edit_end_cts)
-                  || (subsegment->largest_cts  >= edit->media_time && subsegment->largest_cts  < edit_end_cts)) )
+                 && ((subsegment->smallest_cts >= media_time && subsegment->smallest_cts < edit_end_cts)
+                  || (subsegment->largest_cts  >= media_time && subsegment->largest_cts  < edit_end_cts)) )
                 {
                     /* This subsegment is present in this edit. */
                     double rate = (double)edit->media_rate / (1 << 16);
-                    uint64_t start_time = LSMASH_MAX( subsegment->smallest_cts, edit->media_time );
+                    uint64_t start_time = LSMASH_MAX( subsegment->smallest_cts, media_time );
                     if( sidx->reference_count == 1 )
                         sidx->earliest_presentation_time = pts;
                     if( subsegment_in_presentation == 0 )
                     {
                         subsegment_in_presentation = 1;
-                        if( subsegment->smallest_cts >= edit->media_time && rate > 0.0 )
+                        if( subsegment->smallest_cts >= media_time && rate > 0.0 )
                             TEPT = pts + (uint64_t)((subsegment->smallest_cts - start_time) / rate);
                         else
                             TEPT = pts;
@@ -717,12 +730,12 @@ static int fragment_make_segment_index_entry
                     if( first_rp_in_presentation == 0
                      && subsegment->first_ed_cts != LSMASH_TIMESTAMP_UNDEFINED
                      && subsegment->first_rp_cts != LSMASH_TIMESTAMP_UNDEFINED
-                     && ((subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts)
-                      || (subsegment->first_rp_cts >= edit->media_time && subsegment->first_rp_cts < edit_end_cts)) )
+                     && ((subsegment->first_ed_cts >= media_time && subsegment->first_ed_cts < edit_end_cts)
+                      || (subsegment->first_rp_cts >= media_time && subsegment->first_rp_cts < edit_end_cts)) )
                     {
                         /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
                         first_rp_in_presentation = 1;
-                        if( subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts && rate > 0.0 )
+                        if( subsegment->first_ed_cts >= media_time && subsegment->first_ed_cts < edit_end_cts && rate > 0.0 )
                             TSAP = pts + (uint64_t)((subsegment->first_ed_cts - start_time) / rate);
                         else
                             TSAP = pts;
@@ -730,7 +743,7 @@ static int fragment_make_segment_index_entry
                     }
                     if( first_sample_in_presentation == 0
                      && subsegment->first_sample_cts != LSMASH_TIMESTAMP_UNDEFINED
-                     && subsegment->first_sample_cts >= edit->media_time && subsegment->first_sample_cts < edit_end_cts )
+                     && subsegment->first_sample_cts >= media_time && subsegment->first_sample_cts < edit_end_cts )
                     {
                         first_sample_in_presentation = 1;
                         if( rate > 0.0 )
@@ -746,7 +759,7 @@ static int fragment_make_segment_index_entry
                     else
                         pts = edit_end_pts;
                     /* Update subsegment_duration. */
-                    data->subsegment_duration = pts - subsegment->segment_duration;
+                    data->subsegment_duration = pts > subsegment->segment_duration ? pts - subsegment->segment_duration : 0;
                 }
                 else
                     /* This subsegment is not present in this edit. */

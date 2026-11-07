@@ -1371,10 +1371,12 @@ static isom_roll_entry_t *stbl_get_roll_description
     if( !assignment )
         return NULL;
     uint32_t group_description_index = assignment->group_description_index;
-    if( group_description_index && group->is_fragment )
+    if( group->is_fragment )
     {
-        assert( group_description_index > 0x10000 );
-        group_description_index -= 0x10000;
+        if( group_description_index >= 0x10000 )
+            group_description_index -= 0x10000;
+        else if( group_description_index )
+            return NULL;
     }
     return (isom_roll_entry_t *)lsm_list_get( group->sgpd->list, group_description_index );
 }
@@ -1535,15 +1537,19 @@ int lsm_stbl_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmas
                 if( sample->cts   != LSMASH_TIMESTAMP_UNDEFINED
                  && group->rp_cts != LSMASH_TIMESTAMP_UNDEFINED
                  && group->rp_cts > sample->cts )
+                {
                     /* Updated roll_distance for composition reordering. */
-                    post_roll->roll_distance = sample_count - group->first_sample;
+                    uint32_t raw_distance = sample_count > group->first_sample ? sample_count - group->first_sample : 0;
+                    post_roll->roll_distance = (int16_t)LSMASH_MIN( raw_distance, (uint32_t)INT16_MAX );
+                }
                 if( ++ group->wait_and_see_count >= MAX_ROLL_WAIT_AND_SEE_COUNT )
                     group->described = ROLL_DISTANCE_DETERMINED;
             }
         }
         else if( prop->post_roll.identifier == group->recovery_point )
         {
-            int16_t distance = sample_count - group->first_sample;
+            uint32_t raw_distance = sample_count > group->first_sample ? sample_count - group->first_sample : 0;
+            int16_t  distance     = (int16_t)LSMASH_MIN( raw_distance, (uint32_t)INT16_MAX );
             group->rp_cts        = sample->cts;
             group->roll_distance = distance;
             /* Add a roll recovery entry only when roll_distance isn't zero since roll_distance = 0 must not be used. */

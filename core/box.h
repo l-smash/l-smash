@@ -483,7 +483,7 @@ typedef struct
 
 /** Sample Description **/
 /* ES Descriptor Box */
-struct mp4sys_ES_Descriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
+struct mp4sys_ES_Descriptor_t;
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
@@ -1479,7 +1479,7 @@ typedef struct
 
 /* Object Descriptor Box
  * Note that this box is mandatory under 14496-1:2001 (mp41) while not mandatory under 14496-14:2003 (mp42). */
-struct mp4sys_ObjectDescriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
+struct mp4sys_ObjectDescriptor_t;
 typedef struct
 {
     ISOM_FULLBOX_COMMON;

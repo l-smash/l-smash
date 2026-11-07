@@ -371,15 +371,17 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                 {
                     /* Anyway, add composition to decode timeline shift for calculating maximum and minimum CTS correctly. */
                     int64_t sample_offset = (int32_t)ctts_data->sample_offset;
-                    cts = dts + sample_offset + ctd_shift;
+                    int64_t shifted_cts   = (int64_t)dts + sample_offset + ctd_shift;
+                    cts        = shifted_cts > 0 ? (uint64_t)shifted_cts : 0;
                     max_offset = LSMASH_MAX( max_offset, sample_offset );
                     min_offset = LSMASH_MIN( min_offset, sample_offset );
                 }
                 else
                 {
-                    cts = dts + ctts_data->sample_offset;
-                    max_offset = LSMASH_MAX( max_offset, ctts_data->sample_offset );
-                    min_offset = LSMASH_MIN( min_offset, ctts_data->sample_offset );
+                    int64_t sample_offset = (int64_t)ctts_data->sample_offset;
+                    cts        = dts + ctts_data->sample_offset;
+                    max_offset = LSMASH_MAX( max_offset, sample_offset );
+                    min_offset = LSMASH_MIN( min_offset, sample_offset );
                 }
                 min_cts = LSMASH_MIN( min_cts, cts );
                 if( max_cts < cts )
@@ -404,7 +406,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
             }
         }
         dts -= last_stts_data->sample_delta;
-        uint32_t composition_last_delta = last_sample_delta ? last_sample_delta : (uint32_t)(max_cts - max2_cts);
+        uint32_t composition_last_delta = last_sample_delta ? last_sample_delta : (uint32_t)LSMASH_MIN( max_cts - max2_cts, UINT32_MAX );
         if( file->fragment )
             /* Overall presentation is extended exceeding this initial movie.
              * So, any players shall display the movie exceeding the durations
@@ -418,7 +420,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
             {
                 /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's,
                  * or fall back to the median composition interval if the last-1 sample is a still-frame outlier. */
-                last_sample_delta = max_cts - max2_cts;
+                last_sample_delta = (uint32_t)LSMASH_MIN( max_cts - max2_cts, UINT32_MAX );
                 if( sample_count >= 3 )
                 {
                     uint64_t *cts_list = lsmash_malloc( sample_count * sizeof(uint64_t) );
@@ -438,9 +440,13 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                                 break;
                             if( ctts_data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
                             {
-                                cts_list[output_count++] = ctd_shift
-                                                         ? (cur_dts + (int64_t)(int32_t)ctts_data->sample_offset + ctd_shift)
-                                                         : (cur_dts + ctts_data->sample_offset);
+                                if( ctd_shift )
+                                {
+                                    int64_t shifted_cts = (int64_t)cur_dts + (int64_t)(int32_t)ctts_data->sample_offset + ctd_shift;
+                                    cts_list[output_count++] = shifted_cts > 0 ? (uint64_t)shifted_cts : 0;
+                                }
+                                else
+                                    cts_list[output_count++] = cur_dts + ctts_data->sample_offset;
                             }
                             cur_dts += stts_data->sample_delta;
                             if( ++c_j == ctts_data->sample_count )
@@ -489,7 +495,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                 mdhd->duration = max_cts - min_cts + last_sample_delta;
             /* To match dts and media duration, update stts and mdhd relatively. */
             if( mdhd->duration > dts + last_sample_delta )
-                last_sample_delta = mdhd->duration - dts;
+                last_sample_delta = (uint32_t)LSMASH_MIN( mdhd->duration - dts, UINT32_MAX );
             else
                 mdhd->duration = dts + last_sample_delta;   /* media duration must not less than last dts. */
         }
@@ -645,9 +651,9 @@ int lsm_track_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type )
     char *subtype_name = NULL;
     uint8_t type_name_length    = 0;
     uint8_t subtype_name_length = 0;
-    if( mdia )
+    if( LSMASH_IS_EXISTING_BOX( mdia ) )
         type_name = "Media ";
-    else if( meta )
+    else if( LSMASH_IS_EXISTING_BOX( meta ) )
         type_name = "Metadata ";
     else    /* if( minf ) */
         type_name = "Data ";
@@ -1107,7 +1113,8 @@ static int track_set_media_handler_name( lsmash_file_t *file, uint32_t track_ID,
         return LSMASH_ERR_MEMORY_ALLOC;
     if( file->qt_compatible )
         name[0] = name_length & 0xff;
-    memcpy( name + file->qt_compatible, handler_name, strlen( handler_name ) );
+    uint32_t copy_length = name_length - file->qt_compatible - file->isom_compatible;
+    memcpy( name + file->qt_compatible, handler_name, copy_length );
     if( file->isom_compatible )
         name[name_length - 1] = 0;
     hdlr->componentName        = name;
@@ -1135,7 +1142,8 @@ static int track_set_data_handler_name( lsmash_file_t *file, uint32_t track_ID, 
         return LSMASH_ERR_MEMORY_ALLOC;
     if( file->qt_compatible )
         name[0] = name_length & 0xff;
-    memcpy( name + file->qt_compatible, handler_name, strlen( handler_name ) );
+    uint32_t copy_length = name_length - file->qt_compatible - file->isom_compatible;
+    memcpy( name + file->qt_compatible, handler_name, copy_length );
     if( file->isom_compatible )
         name[name_length - 1] = 0;
     hdlr->componentName        = name;
@@ -1208,8 +1216,6 @@ uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t t
         return 0;   /* This movie shall not have composition to decode timeline shift. */
     uint32_t stts_idx  = 0;
     uint32_t ctts_idx  = 0;
-    uint64_t dts       = 0;
-    uint64_t cts       = 0;
     uint32_t ctd_shift = 0;
     uint32_t i         = 0;
     uint32_t j         = 0;
@@ -1221,11 +1227,14 @@ uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t t
             return 0;
         if( ctts_data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
         {
-            cts = dts + (int32_t)ctts_data->sample_offset;
-            if( dts > cts + ctd_shift )
-                ctd_shift = dts - cts;
+            int32_t signed_offset = (int32_t)ctts_data->sample_offset;
+            if( signed_offset < 0 )
+            {
+                uint32_t neg_offset = (uint32_t)(-(int64_t)signed_offset);
+                if( neg_offset > ctd_shift )
+                    ctd_shift = neg_offset;
+            }
         }
-        dts += stts_data->sample_delta;
         if( ++i == stts_data->sample_count )
         {
             ++stts_idx;
@@ -1514,8 +1523,9 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     }
     else
     {
+        int32_t media_time32 = (int32_t)LSMASH_MAX( LSMASH_MIN( data->media_time, (int64_t)INT32_MAX ), (int64_t)INT32_MIN );
         lsmash_bs_put_be32( bs, (uint32_t)LSMASH_MIN( data->segment_duration, UINT32_MAX ) );
-        lsmash_bs_put_be32( bs, (uint32_t)data->media_time );
+        lsmash_bs_put_be32( bs, (uint32_t)media_time32 );
     }
     lsmash_bs_put_be32( bs, data->media_rate );
     int ret = lsmash_bs_flush_buffer( bs );

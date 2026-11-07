@@ -339,6 +339,8 @@ int lsm_sample_append_by_type
     if( lsm_box_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        if( frame_size == 0 || sample->length % frame_size != 0 )
+            return LSMASH_ERR_INVALID_DATA;
         if( sample->length == frame_size )
             return func_append_sample( track, sample, sample_entry );
         else if( sample->length < frame_size || sample->cts == LSMASH_TIMESTAMP_UNDEFINED )
@@ -371,24 +373,39 @@ int lsm_sample_append_by_type
     {
         /* calculate PDU statistics for hmhd box.
          * It requires accessing sample data to get the number of packets per sample. */
-        isom_trak_t *trak = (isom_trak_t*)track;
+        isom_box_t  *box  = (isom_box_t *)track;
+        isom_trak_t *trak = lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_TRAK )
+                          ? (isom_trak_t *)box
+                          : lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_TRAF )
+                          ? lsm_track_get_trak( box->file->initializer, ((isom_traf_t *)box)->tfhd->track_ID )
+                          : lsm_box_default_non_existing_trak();
         isom_hmhd_t *hmhd = trak->mdia->minf->hmhd;
+        if( LSMASH_IS_NON_EXISTING_BOX( hmhd ) )
+            return LSMASH_ERR_NAMELESS;
+        if( sample->length < RTP_SAMPLE_HEADER_SIZE )
+            return LSMASH_ERR_INVALID_DATA;
         uint16_t packetcount = LSMASH_GET_BE16( sample->data );
-        uint8_t *data = sample->data + RTP_SAMPLE_HEADER_SIZE + RTP_PACKET_SIZE;
+        uint64_t min_size    = (uint64_t)RTP_SAMPLE_HEADER_SIZE
+                             + (uint64_t)packetcount * (RTP_PACKET_SIZE + RTP_CONSTRUCTOR_SIZE);
+        if( sample->length < min_size )
+            return LSMASH_ERR_INVALID_DATA;
+        uint8_t *data = sample->data + RTP_SAMPLE_HEADER_SIZE;
         /* Calculate only packet headers and packet payloads sizes int PDU size. Later use these two to get avgPDUsize. */
-        hmhd->combinedPDUsize += sample->length - (packetcount * RTP_CONSTRUCTOR_SIZE) - RTP_SAMPLE_HEADER_SIZE;
+        hmhd->combinedPDUsize += sample->length - (uint64_t)packetcount * RTP_CONSTRUCTOR_SIZE - RTP_SAMPLE_HEADER_SIZE;
         hmhd->PDUcount        += packetcount;
         for( unsigned int i = 0; i < packetcount; i++ )
         {
+            data += RTP_PACKET_SIZE;
             /* constructor type */
             if( *data == 2 )
             {
-                /* payload size*/
-                uint16_t length = *(data + 2);
+                /* payload size */
+                uint16_t length   = LSMASH_GET_BE16( data + 2 );
+                uint32_t pdu_size = LSMASH_MIN( (uint32_t)length + RTP_HEADER_SIZE, UINT16_MAX );
                 /* Check if this packet is larger than any of the previous ones. */
-                hmhd->maxPDUsize = hmhd->maxPDUsize > length + RTP_HEADER_SIZE ? hmhd->maxPDUsize : length + RTP_HEADER_SIZE;
-                data += RTP_CONSTRUCTOR_SIZE + RTP_PACKET_SIZE;
+                hmhd->maxPDUsize = hmhd->maxPDUsize > pdu_size ? hmhd->maxPDUsize : (uint16_t)pdu_size;
             } /* TODO: other constructor types */
+            data += RTP_CONSTRUCTOR_SIZE;
         }
     } /* TODO: add other hint tracks that have a hmhd box */
     return func_append_sample( track, sample, sample_entry );
@@ -541,6 +558,8 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
                 return LSMASH_ERR_INVALID_DATA;
             for( uint32_t k = exclude_last_sample; k < stts_data->sample_count && j > 1; k++ )
             {
+                if( sample_delta < stts_data->sample_delta )
+                    return LSMASH_ERR_INVALID_DATA;
                 sample_delta -= stts_data->sample_delta;
                 --j;
             }
