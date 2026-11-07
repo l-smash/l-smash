@@ -76,7 +76,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 - **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment tables (`trun` per-sample rows, `tfra`, `sidx`, and fragment sample pools), and Media Timelines (per-sample info and chunk tables) store value elements contiguously in `2^8 = 256`-element pages, providing `O(1)` bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
-- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 23 synthetic test suites (152,230 assertions, `v2.23.7`) requiring zero external media files.
+- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and zero-leak verification across 23 synthetic test suites (152,377 assertions, `v2.23.8`) requiring zero external media files.
 
 ---
 
@@ -140,7 +140,7 @@ The L-SMASH command-line workflow is centered on two primary utilities in `cli/`
 
 | Tool | Role | Purpose |
 | :--- | :--- | :--- |
-| **`lshmuxer`** | **Primary Multiplexer / Remuxer / Timeline Editor** | Unified 1-pass CLI utility that multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1, ALS) and existing ISOBMFF/QTFF containers into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`, with built-in support for **Fragmented MP4** (`--fragment`), **MPEG-DASH segments** (`--dash`), track filtering/RAP seeking (`?1:safe-seek=`, `?2:remove`), iTunes metadata, chapters (`tref.chap` and `moov.udta.chpl`), and **Matroska timecode v1/v2 / Edit List timeline editing** (`--timecode` or `?timecode=`). |
+| **`lshmuxer`** | **Primary Multiplexer / Remuxer / Timeline Editor** | Unified 1-pass CLI utility that multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1, ALS) and existing ISOBMFF/QTFF containers into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`, with built-in support for **Fragmented MP4** (`--fragment`), **MPEG-DASH segments** (`--dash`), track filtering/RAP seeking (`?1:safe-seek=`, `?2:remove`), iTunes metadata, chapters (`tref.chap` and `moov.udta.chpl`), and **Matroska timecode v1/v2 / Edit List timeline editing** (`?timecode=`). |
 | **`boxdumper`** | **Primary Container & Timestamp Inspector** | Inspects and dumps the complete hierarchical Box/Atom tree (`--box`), per-sample Decode/Composition timestamps (`--timestamp`), or chapter lists (`--chapter`). |
 | **`muxer`**, **`remuxer`**, **`timelineeditor`** | *Legacy Compatibility Utilities* | Legacy standalone tools for raw stream multiplexing (`muxer`), container remultiplexing/fragmentation (`remuxer`), and single-track timecode/Edit List editing (`timelineeditor`). All features of these three tools are unified in **`lshmuxer`** (see [Legacy CLI Migration in `USAGE.md`](USAGE.md#24-legacy-cli-tools-muxer-remuxer-timelineeditor--migration-to-lshmuxer)). |
 
@@ -160,7 +160,7 @@ The L-SMASH command-line workflow is centered on two primary utilities in `cli/`
 ./cli/boxdumper --box movie_frag.mp4
 
 # 5. Apply a Matroska v2 VFR timecode file to track 1 (or pass -i video.h264?timecode=timecodes_v2.txt in 1 pass)
-./cli/lshmuxer --track 1 --timecode timecodes_v2.txt -i movie.mp4 -o movie_vfr.mp4
+./cli/lshmuxer -i movie.mp4?1:timecode=timecodes_v2.txt -o movie_vfr.mp4
 ```
 
 For the complete CLI option reference and the `liblsmash` C API programming manual, see **[`USAGE.md`](USAGE.md)**: start with its [Quick Start & Tool Overview](USAGE.md#1-quick-start--tool-overview), and see the [C API Mental Model](USAGE.md#mental-model-workflow-and-object-hierarchy) if you program against `liblsmash`.

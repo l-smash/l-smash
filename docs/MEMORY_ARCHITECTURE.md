@@ -42,13 +42,13 @@ All high-volume homogeneous value tables use the **C11 Paged Block Array (`lsm_l
 | | `isom_sgpd_t` (`rap `, `roll`, `prol`) | `list` | `isom_rap_entry_t` / `isom_roll_entry_t` (`roll_distance` for `roll`/`prol`) | 2 bytes |
 | | `isom_sbgp_t` | `list` | `isom_group_assignment_entry_t` | 8 bytes |
 | **Edit List & Cache** | `isom_elst_t` | `list` | `isom_elst_entry_t` | 20 bytes |
-| | `isom_cache_t` (`roll.pool`) | `pool` | `isom_roll_pool_entry_t` | 20 bytes |
-| | `isom_sample_pool_t` | `pool` | `lsmash_sample_t *` | 8 bytes |
+| | `isom_cache_t` (`roll.pool`) | `pool` | `isom_roll_group_t` | 48 bytes |
+| | `isom_fragment_manager_t` (`fragment->pool`) | `pool` | `lsmash_sample_t *` | 8 bytes |
 | **Movie Fragments (`moof`/`sidx`/`mfra`)** | `isom_trun_t` | `optional` | `isom_trun_optional_row_t` | 16 bytes |
 | | `isom_tfra_t` | `list` | `isom_tfra_location_time_entry_t` | 28 bytes |
 | | `isom_sidx_t` | `list` | `isom_sidx_referenced_item_t` | 16 bytes |
 | **Media Timeline (`timeline`)** | `isom_timeline_t` | `info_list` | `isom_sample_info_t` | 32 bytes |
-| | `isom_timeline_t` | `bunch_list` | `isom_portable_chunk_bunch_t` | 24 bytes |
+| | `isom_timeline_t` | `bunch_list` | `isom_lpcm_bunch_t` | 56 bytes |
 | | `isom_timeline_t` | `chunk_list` | `isom_portable_chunk_t` | 16 bytes |
 
 ### 2.3 Small Codec and Importer Lists (`lsmash_entry_list_t`)
@@ -92,7 +92,7 @@ typedef struct
    - `void *lsm_list_append( lsm_list_t *list )` allocates the next slot in the current page (allocating a new 256-element page on page boundaries), zeroes the `elem_size` bytes with `memset`, increments `entry_count`, and returns a direct pointer to the slot—requiring **zero per-element `malloc` calls**.
 5. **Cross-Page Mid-List Removal (`lsm_list_remove_at` / `lsm_list_remove`)**:
    - When an element at `index < entry_count - 1` is removed (such as in `stbl_deduplicate_roll_group()` in `core/stbl.c`), `lsm_list_remove_at()` invokes `list->eliminator` (if non-`NULL`) on the target slot, shifts subsequent slots within each page via `memmove`, and copies the first element of `pages[p + 1]` into the last slot (`255`) of `pages[p]` across `[start_page .. end_page]`.
-   - Because mid-list removal shifts elements after `index`, `isom_roll_pool_entry_t` in `core/box.h` stores 1-based group numbers (`roll_group_number`, `prev_group_number`, `first_sample_defined`) rather than raw `isom_group_assignment_entry_t *` pointers into `sbgp->list`.
+   - Because mid-list removal shifts elements after `index`, `isom_roll_group_t` in `core/stbl.h` stores the 1-based group index (`assignment_number`) rather than raw `isom_group_assignment_entry_t *` pointers into `sbgp->list`.
 
 ### 3.3 Unified Accessor, Cursor & Iteration API (`common/list.h`)
 - **0-Based & 1-Based Accessors**:

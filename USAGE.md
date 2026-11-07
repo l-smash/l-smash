@@ -125,7 +125,7 @@ lshmuxer [global_options] -i input1[?track_options] [-i input2[?track_options] .
 | `--chapter` | `<path>` | Set chapters from a timestamp-based or Ogg-style chapter text file (writes a `moov.udta.chpl` User Data chapter list in `.mp4`/`.m4v`/`.m4a` and/or a `tref.chap` reference chapter track in `.mov`/`.mp4`/`.m4v`/`.m4a`). |
 | `--chpl-with-bom` | *(none)* | Prepend a 3-byte UTF-8 BOM (`0xEF 0xBB 0xBF`) to chapter title strings in the `moov.udta.chpl` chapter list box (`mp4`/`m4v`/`m4a`). |
 | `--chapter-track` | `<integer>` | Specify which 1-based output track number references the `tref.chap` chapter track (default: `1`). |
-| `--copyright-notice` | `<arg>` | Set movie-level copyright notice (`cprt` in `moov.udta`) as `<language>/<string>` or `<string>` (`mp4`/`m4v`/`m4a`/`3gp`/`3g2`). |
+| `--copyright-notice` | `<arg>` | Set movie-level copyright notice (`cprt` in `moov.udta`) as `<string>[/<language>]` (`mp4`/`m4v`/`m4a`/`3gp`/`3g2`). |
 | `--language` | `<string>` | Specify the default 3-letter ISO-639-2/T language code for all output tracks. |
 | `--dry-run` | *(none)* | Perform full input probing, option validation, and timeline calculation without writing output files. |
 
@@ -168,7 +168,7 @@ Per-track options are appended to an input path after `?`.
 | `projection=<arg>` | `<type>` | Video | Set Google Spherical Video v2 (`sv3d`) projection: `equirectangular` or `cubemap`. |
 | `ypr=<y>/<p>/<r>` | `<flt>/<flt>/<flt>` | Video | Set Spherical Video v2 pose header (`prhd`) yaw, pitch, and roll in degrees (requires `projection=`). |
 | `encoder-delay=<int>` | `<integer>` | Raw / Container | Represent audio priming delay (in media timescale samples) to skip via Edit List (`elst`) and pre-roll (`'roll'`). |
-| `sbr` | *(flag)* | AAC Audio | Enable explicit backward-compatible HE-AAC Spectral Band Replication (SBR) signaling in `esds`. |
+| `sbr` / `ps` | *(flag)* | AAC Audio | Enable explicit backward-compatible HE-AAC Spectral Band Replication (SBR) signaling in `esds` (`ps` is an alias for `sbr`). |
 | `ambisonic-order=<int>` | `<integer>` | Audio | Emit Google Spatial Audio (`SA3D`) box with the specified ambisonic order (`>= 0`, where `(order + 1)^2 == channels`). |
 | `seek=<int>` | `<integer>` | Container | Start remultiplexing from 1-based sample number `<int>`. |
 | `safe-seek=<int>` | `<integer>` | Container | Seek to the Random Access Point (RAP) at or preceding sample `<int>` and prepend an Edit List to skip leading frames prior to `<int>`. |

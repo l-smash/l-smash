@@ -358,7 +358,7 @@ L-SMASH enforces strict isolation between QuickTime (`.mov`) and ISOBMFF (`.mp4`
 ### 9.1 3GPP AMR-NB & AMR-WB (`importer/amr_imp.c`)
 - **Magic Identifiers**: Identifies raw files via `#!AMR\n` (AMR-NB) and `#!AMR-WB\n` (AMR-WB).
 - **Frame Header Decoding**: Decodes frame type index to determine octet-aligned speech payload sizes (AMR-NB modes 0–7: 4.75 kbps to 12.2 kbps; AMR-WB modes 0–8: 6.60 kbps to 23.85 kbps).
-- **Configuration Boxes**: Generates `damr` (`AMRSpecificBox`) or `dawb` (`AMRWBSpecificBox`) with `vendor`, `decoder_version`, `mode_set`, `mode_change_period`, and `frames_per_sample`.
+- **Configuration Boxes**: Generates `damr` (`AMRSpecificBox`) for both AMR-NB (`samr`) and AMR-WB (`sawb`) with `vendor`, `decoder_version`, `mode_set`, `mode_change_period`, and `frames_per_sample`.
 - **Fake Box & Media Timeline**: `samr` / `sawb` + `damr` fake entry (media timescale 8000 Hz for AMR-NB and 16000 Hz for AMR-WB) and the sequential walk. A sample is a speech frame including its 1-byte frame header, which is how the file format stores it, and the duration of each is 160 (AMR-NB) or 320 (AMR-WB) samples.
 
 ### 9.2 Waveform Audio in QuickTime (`codecs/qt_wfex.c`, `codecs/wma.c`)

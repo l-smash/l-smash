@@ -66,7 +66,7 @@ All Box and Codec dispatch tables across `core/` and `codecs/` are defined as **
 - `core/write.c`: `box_writer_table[]` in `lsm_write_set_box_writer()`
 - `core/print.c`: `box_printer_table[]` in `lsm_print_set_box_printer()`
 - `core/summary.c`: `codec_support_table[]` in `lsmash_check_codec_support()`
-- `codecs/description.c`: `codec_Construct_table[]`, `codec_Copy_table[]`, `codec_Print_table[]`, and `codec_pecific_conversion_table[]`
+- `codecs/description.c`: `codec_Construct_table[]`, `codec_Copy_table[]`, `codec_Print_table[]`, and `codec_specific_conversion_table[]`
 - `codecs/dts.c`: `dts_extension_Substream_lbr_table[]`, `dts_channel_layout_table[]`, and `dts_audio_asset_descriptor_channel_table[]`
 
 This guarantees thread safety across concurrent `lsmash_root_t` instances, places dispatch tables in read-only memory (`.rodata`), and eliminates fixed-size array bounds hazards.
@@ -106,12 +106,12 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
 
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
-| [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.7`) |
-| [`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
-| [`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.7`) |
-| [`docs/TESTING.md`](docs/TESTING.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.7`) |
-| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, `mdhd.duration` & 3-stage hybrid VFR final frame duration, HE-AAC filterbank delays, Negative POC & `cslg` / `ctts` v1 timeline shift) | Synchronized (`v2.23.7`) |
+| [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.8`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.8`) |
+| [`docs/MEMORY_ARCHITECTURE.md`](docs/MEMORY_ARCHITECTURE.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.8`) |
+| [`docs/CODEC_BINDINGS.md`](docs/CODEC_BINDINGS.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.8`) |
+| [`docs/TESTING.md`](docs/TESTING.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.8`) |
+| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | Deep-dive technical notes on container and codec specification boundaries (Open-GOP vs. Edit List, `stsd` vs. `trak` hierarchy, `mdhd.duration` & 3-stage hybrid VFR final frame duration, HE-AAC filterbank delays, Negative POC & `cslg` / `ctts` v1 timeline shift) | Synchronized (`v2.23.8`) |
 
 ---
 
@@ -126,7 +126,7 @@ Detailed specifications for each major subsystem reside in `docs/` and are index
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_*.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 22 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 23 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -231,15 +231,15 @@ All remaining `core/` compilation units likewise follow the `lsmash_*` (Public A
 | :--- | :--- | :--- |
 | `core/box.{c,h}` | `lsm_box_init_common`, `lsm_box_is_fullbox`, `lsm_box_add_*`, `lsm_box_remove_by_itself`, `lsm_box_remove_extension_box`, `lsm_box_remove_all_extension_boxes`, `lsm_box_remove_sample_description`, `lsm_box_remove_unknown_box`, `lsm_box_update_size`, `lsm_box_add_extension_binary`, `lsm_box_get_extension_box`, `lsm_box_get_extension_box_format`, `lsm_box_bs_put_*`, `lsm_box_4cc2str`, `lsm_box_make_cts`, `lsm_box_check_media_hdlr_from_stsd`, `lsm_box_get_media_type_from_stsd` | `box_reorder_tail`, `box_add_to_extension_list`, `box_get_entry`, `box_remove_predefined`, `box_remove_in_predefined_list`, `box_remove_*`, `box_add_sample_description_entry`, `box_fake_file_read`, `box_fake_file_seek` |
 | `core/box_default.{c,h}` | `lsm_box_default_allocate`, `lsm_box_default_non_existing_*` | — |
-| `core/file.{c,h}` | `lsm_file_check_compat_flags`, `lsm_file_check_brand_version`, `lsm_file_set_brands` | `file_clear_compat_flags`, `file_check_mandatory_boxes`, `file_close`, `file_set_brands` |
-| `core/fragment.{c,h}` | `lsm_fragment_create_empty_duration`, `lsm_fragment_update_track_duration`, `lsm_fragment_flush_pooled_samples`, `lsm_fragment_append_sample`, `lsm_fragment_finish_movie`, `lsm_fragment_set_last_sample_delta` | `fragment_write_mfra`, `fragment_update_sidx`, `fragment_flush`, `fragment_prepare_chunk_run`, `fragment_output_sample_flags`, `fragment_input_sample_flags`, `fragment_create_track_run`, `fragment_append_track_run`, `fragment_update_cache`, etc. |
-| `core/timeline.{c,h}` | `lsm_timeline_remove_all`, `lsm_timeline_destroy_track`, `lsm_timeline_get_dts`, `lsm_timeline_get_cts`, `lsm_timeline_get_sample_duration`, `lsm_timeline_check_sample_existence`, `lsm_timeline_get_sample`, `lsm_timeline_get_sample_info`, `lsm_timeline_get_sample_property`, `lsm_timeline_get_explicit_timeline_map`, `lsm_timeline_count_explicit_timeline_map`, `lsm_timeline_setup_raw`, `lsm_timeline_add_sample_info_entry`, `lsm_timeline_add_raw_chunk`, `lsm_timeline_set_sample_filter`, `lsm_timeline_finish_raw`, `lsm_timeline_register` | `timeline_get_track`, `timeline_add_dref_entry`, `timeline_add_sample_description`, `timeline_get_portable_chunk`, `timeline_add_sample_info`, `timeline_construct`, etc. |
-| `core/read.{c,h}` | `lsm_read_box`, `lsm_read_unknown_box`, `lsm_read_children`, `lsm_read_leaf_box_common_last_process`, `lsm_read_check_box_size`, `lsm_read_visual_description`, `lsm_read_audio_description` | `read_file`, `read_unknown_box`, `read_children`, `read_ftyp`, `read_moov`, `read_trak`, `read_stbl`, `read_pcmC`, `read_chnl`, `read_srat`, `read_emsg`, etc. |
-| `core/write.{c,h}` | `lsm_write_box`, `lsm_write_extension_boxes`, `lsm_write_set_box_writer`, `lsm_write_moov`, `lsm_write_mdat_header`, `lsm_write_mdat_size`, `lsm_write_ftyp`, `lsm_write_meta`, `lsm_write_free` | `write_children`, `write_unknown_box`, `write_ftyp`, `write_moov`, `write_trak`, `write_stbl`, `write_pcmC`, `write_chnl`, `write_srat`, `write_emsg`, etc. |
-| `core/print.{c,h}` | `lsm_print_indent`, `lsm_print_box_common`, `lsm_print_unknown`, `lsm_print_destroy_list`, `lsm_print_set_box_printer` | `print_iprintf`, `print_ifprintf`, `print_basebox_common`, `print_fullbox_common`, `print_box_common`, `print_children`, `print_ftyp`, `print_moov`, `print_trak`, `print_pcmC`, `print_chnl`, `print_srat`, `print_qt_color_table`, `print_sample_description_extension`, etc. |
-| `core/summary.{c,h}` | *(Public `lsmash_*` APIs only)* | `summary_allocate_opaque`, `summary_deallocate_opaque` |
-| `core/meta.{c,h}` | *(Public `lsmash_*` APIs only)* | `meta_add_metadata`, `meta_set_itunes_metadata_string`, `meta_set_itunes_metadata_integer`, `meta_set_itunes_metadata_boolean`, `meta_set_itunes_metadata_binary`, `meta_get_itunes_metadata_type` |
-| `core/chapter.{c,h}` | *(Public `lsmash_*` APIs only)* | `chapter_get_start_time`, `chapter_lumber_line`, `chapter_read_simple_chapter`, `chapter_read_minimum_chapter`, `chapter_check_chap_line`, `chapter_add_chpl_entry` |
+| `core/file.{c,h}` | `lsm_file_check_compatibility`, `lsm_file_check_mandatory_boxes`, `lsm_file_rearrange_data` | `file_clear_compat_flags`, `file_check_mandatory_boxes`, `file_close`, `file_set_brands` |
+| `core/fragment.{c,h}` | `lsm_fragment_finish_final_movie`, `lsm_fragment_set_last_duration`, `lsm_fragment_append_track_run`, `lsm_fragment_flush_pooled_samples`, `lsm_fragment_append_sample` | `fragment_write_mfra`, `fragment_update_sidx`, `fragment_flush`, `fragment_prepare_chunk_run`, `fragment_output_sample_flags`, `fragment_input_sample_flags`, `fragment_create_track_run`, `fragment_append_track_run`, `fragment_update_cache`, `fragment_make_segment_index_entry`, etc. |
+| `core/timeline.{c,h}` | `lsm_timeline_create`, `lsm_timeline_destroy`, `lsm_timeline_set_*`, `lsm_timeline_setup_raw`, `lsm_timeline_add_sample_info_entry`, `lsm_timeline_add_raw_chunk`, `lsm_timeline_set_sample_filter`, `lsm_timeline_finish_raw`, `lsm_timeline_register`, `lsm_timeline_set_lpcm_sample_getter_funcs`, `lsm_timeline_get`, `lsm_timeline_remove_all`, `lsm_timeline_construct`, `lsm_timeline_add_lpcm_bunch_entry`, `lsm_timeline_get_explicit_timeline_map`, `lsm_timeline_count_explicit_timeline_map` | `timeline_get_track`, `timeline_add_dref_entry`, `timeline_add_sample_description`, `timeline_get_portable_chunk`, `timeline_add_sample_info`, etc. |
+| `core/read.{c,h}` | `lsm_read_file`, `lsm_read_box` | `read_unknown_box`, `read_children`, `read_check_box_remaining_bytes`, `read_check_entry_table`, `read_counted_bytes`, `read_box_rest_bytes`, `read_counted_string`, `read_ftyp`, `read_moov`, `read_trak`, `read_stbl`, `read_pcmC`, `read_chnl`, `read_srat`, `read_emsg`, etc. |
+| `core/write.{c,h}` | `lsm_write_box`, `lsm_write_set_box_writer` | `write_children`, `write_unknown_box`, `write_ftyp`, `write_moov`, `write_trak`, `write_stbl`, `write_pcmC`, `write_chnl`, `write_srat`, `write_emsg`, etc. |
+| `core/print.{c,h}` | `lsm_print_add_func`, `lsm_print_destroy_list`, `lsm_print_create_list` | `print_iprintf`, `print_ifprintf`, `print_basebox_common`, `print_fullbox_common`, `print_box_common`, `print_children`, `print_ftyp`, `print_moov`, `print_trak`, `print_pcmC`, `print_chnl`, `print_srat`, `print_qt_color_table`, `print_sample_description_extension`, etc. |
+| `core/summary.c` | *(Public `lsmash_*` APIs only)* | `summary_allocate_opaque`, `summary_deallocate_opaque` |
+| `core/meta.c` | *(Public `lsmash_*` APIs only)* | `meta_add_metadata`, `meta_set_itunes_metadata_string`, `meta_set_itunes_metadata_integer`, `meta_set_itunes_metadata_boolean`, `meta_set_itunes_metadata_binary`, `meta_get_itunes_metadata_type` |
+| `core/chapter.c` | *(Public `lsmash_*` APIs only)* | `chapter_get_start_time`, `chapter_lumber_line`, `chapter_read_simple_chapter`, `chapter_read_minimum_chapter`, `chapter_check_chap_line`, `chapter_add_chpl_entry` |
 
 ### 6.4 Codecs & Importer Modules Symbol Mapping (`codecs/` & `importer/`)
 All modules in `codecs/` and `importer/` enforce the identical symbol naming hierarchy:
