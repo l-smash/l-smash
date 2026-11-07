@@ -2768,6 +2768,234 @@ int test_container_metadata_and_edit_list_roundtrip( void )
         lsmash_destroy_root( root );
     }
 
+    /*-----------------------------------------------------------------------
+     * 23e. Regression tests for QT >255-byte handler names, handler type setup,
+     *      LPCM fractional/zero frame_size rejection, GDR pre-roll without
+     *      preceding RAP, and lsmash_set_media_timestamps atomic validation
+     *-----------------------------------------------------------------------*/
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "23e: create root" );
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( qt_path, 0, &param ) == 0, "23e: open qt_path for write" );
+        param.major_brand   = ISOM_BRAND_TYPE_QT;
+        param.minor_version = 0x00000000;
+        lsmash_brand_type qt_brands[1] = { ISOM_BRAND_TYPE_QT };
+        param.brands      = qt_brands;
+        param.brand_count = 1;
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "23e: set qt file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_param ) == 0, "23e: set movie params" );
+
+        uint32_t a_track = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+        TEST_ASSERT( a_track != 0, "23e: create QT audio track" );
+
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+        TEST_ASSERT( lsmash_set_track_parameters( root, a_track, &track_param ) == 0, "23e: set QT audio track params" );
+
+        /* Verify default handler reference names distinguish Media vs Data handler */
+        lsmash_media_parameters_t init_media_param;
+        lsmash_initialize_media_parameters( &init_media_param );
+        TEST_ASSERT( lsmash_get_media_parameters( root, a_track, &init_media_param ) == 0, "23e: get initial media params" );
+        TEST_ASSERT( init_media_param.media_handler_name != NULL
+                  && strcmp( init_media_param.media_handler_name, "L-SMASH Sound Media Handler" ) == 0,
+                     "23e: default media handler name is 'L-SMASH Sound Media Handler'" );
+        TEST_ASSERT( init_media_param.data_handler_name != NULL
+                  && strcmp( init_media_param.data_handler_name, "L-SMASH URL Data Handler" ) == 0,
+                     "23e: default data handler name is 'L-SMASH URL Data Handler'" );
+
+        /* Set >255-byte media_handler_name and data_handler_name in QTFF mode (255-byte buffer: 1 length + 254 chars) */
+        char long_handler[301];
+        memset( long_handler, 'Q', 300 );
+        long_handler[300] = '\0';
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale          = 48000;
+        media_param.media_handler_name = long_handler;
+        media_param.data_handler_name  = long_handler;
+        TEST_ASSERT( lsmash_set_media_parameters( root, a_track, &media_param ) == 0,
+                     "23e: set >255-byte QT handler names safely without heap overflow" );
+
+        lsmash_media_parameters_t read_media_param;
+        lsmash_initialize_media_parameters( &read_media_param );
+        TEST_ASSERT( lsmash_get_media_parameters( root, a_track, &read_media_param ) == 0,
+                     "23e: get truncated QT handler names" );
+        TEST_ASSERT( read_media_param.media_handler_name != NULL
+                  && strlen( read_media_param.media_handler_name ) == 254,
+                     "23e: QT media_handler_name safely clamped to 254 payload bytes" );
+        TEST_ASSERT( read_media_param.data_handler_name != NULL
+                  && strlen( read_media_param.data_handler_name ) == 254,
+                     "23e: QT data_handler_name safely clamped to 254 payload bytes" );
+
+        /* Add 16-bit 2ch stereo LPCM sample entry (4 bytes per frame) */
+        lsmash_audio_summary_t *a_sum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+        TEST_ASSERT( a_sum != NULL, "23e: create audio summary" );
+        a_sum->sample_type      = QT_CODEC_TYPE_LPCM_AUDIO;
+        a_sum->frequency        = 48000;
+        a_sum->channels         = 2;
+        a_sum->sample_size      = 16;
+        a_sum->samples_in_frame = 1;
+        a_sum->bytes_per_frame  = 4;
+        lsmash_codec_specific_t *spec = lsmash_create_codec_specific_data(
+            LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS,
+            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        TEST_ASSERT( spec != NULL, "23e: create qt audio format flags" );
+        lsmash_qt_audio_format_specific_flags_t *flags = (lsmash_qt_audio_format_specific_flags_t *)spec->data.structured;
+        flags->format_flags = QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER | QT_AUDIO_FORMAT_FLAG_PACKED;
+        TEST_ASSERT( lsmash_add_codec_specific_data( (lsmash_summary_t *)a_sum, spec ) == 0, "23e: add qt audio flags" );
+        lsmash_destroy_codec_specific_data( spec );
+        uint32_t a_idx = lsmash_add_sample_entry( root, a_track, a_sum );
+        lsmash_cleanup_summary( (lsmash_summary_t *)a_sum );
+        TEST_ASSERT( a_idx == 1, "23e: add QT LPCM sample entry" );
+
+        /* Fractional LPCM sample length (6 bytes, not divisible by frame_size=4) must be rejected */
+        lsmash_sample_t *bad_pcm = lsmash_create_sample( 6 );
+        TEST_ASSERT( bad_pcm != NULL, "23e: create fractional LPCM sample" );
+        memset( bad_pcm->data, 0, 6 );
+        bad_pcm->index = a_idx;
+        bad_pcm->dts   = 0;
+        bad_pcm->cts   = 0;
+        TEST_ASSERT( lsmash_append_sample( root, a_track, bad_pcm ) == LSMASH_ERR_INVALID_DATA,
+                     "23e: reject LPCM sample whose length is not a multiple of frame_size" );
+
+        /* Zero frame_size in corrupted audio entry must also be rejected without infinite loop */
+        isom_trak_t *trak_box = (isom_trak_t *)file->moov->trak_list.head->data;
+        isom_audio_entry_t *aud_entry = (isom_audio_entry_t *)trak_box->mdia->minf->stbl->stsd->list.head->data;
+        uint32_t saved_cbp = aud_entry->constBytesPerAudioPacket;
+        aud_entry->constBytesPerAudioPacket = 0;
+        bad_pcm->length                     = 4;
+        TEST_ASSERT( lsmash_append_sample( root, a_track, bad_pcm ) == LSMASH_ERR_INVALID_DATA,
+                     "23e: reject LPCM sample when frame_size == 0" );
+        aud_entry->constBytesPerAudioPacket = saved_cbp;
+        lsmash_delete_sample( bad_pcm );
+
+        /* Append 2 valid LPCM samples (8 bytes = 2 frames) */
+        lsmash_sample_t *valid_pcm = lsmash_create_sample( 8 );
+        TEST_ASSERT( valid_pcm != NULL, "23e: create valid LPCM packet" );
+        memset( valid_pcm->data, 0, 8 );
+        valid_pcm->index = a_idx;
+        valid_pcm->dts   = 0;
+        valid_pcm->cts   = 0;
+        TEST_ASSERT( lsmash_append_sample( root, a_track, valid_pcm ) == 0, "23e: append valid LPCM packet" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, a_track, 1 ) == 0, "23e: flush pooled LPCM samples" );
+        /* Verify lsmash_set_last_sample_delta rejects sample_delta < stts_data->sample_delta on QT v1 fixed-compression audio */
+        int16_t  saved_ver = aud_entry->version;
+        int16_t  saved_cid = aud_entry->compression_ID;
+        uint32_t saved_spp = aud_entry->samplesPerPacket;
+        aud_entry->version          = 1;
+        aud_entry->compression_ID   = QT_AUDIO_COMPRESSION_ID_NOT_COMPRESSED;
+        aud_entry->samplesPerPacket = 2;
+        TEST_ASSERT( lsmash_set_last_sample_delta( root, a_track, 0 ) == LSMASH_ERR_INVALID_DATA,
+                     "23e: reject last_sample_delta smaller than preceding stts delta on QT v1 fixed-compression audio" );
+        aud_entry->version          = saved_ver;
+        aud_entry->compression_ID   = saved_cid;
+        aud_entry->samplesPerPacket = saved_spp;
+        TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "23e: finish QT movie" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+
+        /* Create ISOBMFF movie with Video track (roll_grouping) to test GDR pre-roll without preceding RAP */
+        root = lsmash_create_root();
+        memset( &param, 0, sizeof(param) );
+        TEST_ASSERT( lsmash_open_file( mp4_path, 0, &param ) == 0, "23e: open mp4_path for write" );
+        lsmash_brand_type iso_brands[4] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_AVC1, ISOM_BRAND_TYPE_AV01 };
+        param.major_brand   = ISOM_BRAND_TYPE_ISOM;
+        param.brands        = iso_brands;
+        param.brand_count   = 4;
+        file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "23e: set mp4 file" );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_param ) == 0, "23e: set mp4 movie params" );
+
+        uint32_t v_track = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( v_track != 0, "23e: create video track" );
+        TEST_ASSERT( lsmash_set_track_parameters( root, v_track, &track_param ) == 0, "23e: set video track params" );
+        lsmash_media_parameters_t v_media_param;
+        lsmash_initialize_media_parameters( &v_media_param );
+        v_media_param.timescale     = 1000;
+        v_media_param.roll_grouping = 1;
+        TEST_ASSERT( lsmash_set_media_parameters( root, v_track, &v_media_param ) == 0, "23e: set video media params" );
+        lsmash_video_summary_t *v_sum = create_synth_av01_summary( 64, 64 );
+        uint32_t v_idx = lsmash_add_sample_entry( root, v_track, v_sum );
+        lsmash_cleanup_summary( (lsmash_summary_t *)v_sum );
+        TEST_ASSERT( v_idx == 1, "23e: add video sample entry" );
+
+        for( int i = 0; i < 4; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 8 );
+            TEST_ASSERT( s != NULL, "23e: create video sample" );
+            memset( s->data, i, 8 );
+            s->index = v_idx;
+            s->dts   = (uint64_t)i * 10;
+            s->cts   = (uint64_t)i * 10;
+            if( i == 2 )
+            {
+                s->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
+                s->prop.pre_roll.distance = 2;
+            }
+            else if( i == 3 )
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            else
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( root, v_track, s ) == 0, "23e: append video sample" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, v_track, 10 ) == 0, "23e: flush pooled video samples" );
+        TEST_ASSERT( lsmash_finish_movie( root, NULL ) == 0, "23e: finish mp4 movie" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+
+        /* Re-open mp4 file, construct timeline, and test GDR pre-roll & lsmash_set_media_timestamps */
+        root = lsmash_create_root();
+        memset( &param, 0, sizeof(param) );
+        TEST_ASSERT( lsmash_open_file( mp4_path, 1, &param ) == 0, "23e: reopen mp4_path for read" );
+        file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "23e: read mp4_path" );
+        TEST_ASSERT( lsmash_construct_timeline( root, v_track ) == 0, "23e: construct video timeline" );
+
+        uint32_t rap_number = 0;
+        lsmash_random_access_flag ra_flags = 0;
+        uint32_t leading  = 0;
+        uint32_t distance = 0;
+        TEST_ASSERT( lsmash_get_closest_random_accessible_point_detail_from_media_timeline(
+                         root, v_track, 3, &rap_number, &ra_flags, &leading, &distance ) == 0,
+                     "23e: GDR pre-roll lookup without preceding RAP returns cleanly without infinite loop" );
+        TEST_ASSERT( rap_number == 3 && distance == 2 && (ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR),
+                     "23e: GDR pre-roll rap_number == 3 and distance == 2" );
+
+        /* Verify lsmash_set_media_timestamps NULL check and atomic pre-validation */
+        lsmash_media_ts_list_t null_ts_list = { .sample_count = 4, .timestamp = NULL };
+        TEST_ASSERT( lsmash_set_media_timestamps( root, v_track, &null_ts_list ) == LSMASH_ERR_FUNCTION_PARAM,
+                     "23e: lsmash_set_media_timestamps rejects NULL ts" );
+        lsmash_media_ts_list_t ts_list = { 0 };
+        TEST_ASSERT( lsmash_get_media_timestamps( root, v_track, &ts_list ) == 0 && ts_list.sample_count == 4,
+                     "23e: get media timestamps" );
+        /* Mutate sample 0 valid, sample 2 invalid (cts - dts > INT32_MAX) */
+        ts_list.timestamp[0].dts = 0;
+        ts_list.timestamp[0].cts = 100;
+        ts_list.timestamp[1].dts = 50;
+        ts_list.timestamp[1].cts = 50;
+        ts_list.timestamp[2].dts = 100;
+        ts_list.timestamp[2].cts = 100ULL + (uint64_t)INT32_MAX + 10ULL;
+        ts_list.timestamp[3].dts = 150;
+        ts_list.timestamp[3].cts = 150;
+        TEST_ASSERT( lsmash_set_media_timestamps( root, v_track, &ts_list ) == LSMASH_ERR_INVALID_DATA,
+                     "23e: lsmash_set_media_timestamps rejects cts - dts > INT32_MAX" );
+        uint64_t check_dts = 999, check_cts = 999;
+        TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, v_track, 2, &check_dts ) == 0
+                  && lsmash_get_cts_from_media_timeline( root, v_track, 1, &check_cts ) == 0
+                  && check_dts == 10 && check_cts == 0,
+                     "23e: failed lsmash_set_media_timestamps preserves original timeline state" );
+        lsmash_delete_media_timestamps( &ts_list );
+
+        lsmash_destruct_timeline( root, v_track );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+
     remove( mp4_path );
     remove( bom_path );
     remove( qt_path );

@@ -667,6 +667,7 @@ static void report_first_diff( const char *label, const char *args, const char *
 
 static int assert_cli_equivalent( const char *args_without_output, const char *out_path )
 {
+    const char *mux_out_path = "test_cli_eq_mux_out.mp4";
     const char *mux_box_path = "test_cli_eq_mux_box.txt";
     const char *lsh_box_path = "test_cli_eq_lsh_box.txt";
     const char *mux_ts_path  = "test_cli_eq_mux_ts.txt";
@@ -682,32 +683,43 @@ static int assert_cli_equivalent( const char *args_without_output, const char *o
 
     /* Run both CLIs against the identical out_path within the same wall-clock second so that
      * even mvhd/tkhd/mdhd creation_time and modification_time and [File] headers match 100%. */
-    for( int attempt = 0; attempt < 3; attempt++ )
+    for( int attempt = 0; attempt < 5; attempt++ )
     {
         lsmash_freep( &mux_box );
         lsmash_freep( &lsh_box );
         lsmash_freep( &mux_ts );
         lsmash_freep( &lsh_ts );
 
+        remove( out_path );
+        remove( mux_out_path );
+        if( attempt > 0 )
+        {
+            time_t prev_sec = time( NULL );
+            while( time( NULL ) == prev_sec )
+                ;
+        }
         time_t t0 = time( NULL );
 
-        remove( out_path );
         snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_MUXER, args_without_output, out_path, CLI_DEV_NULL );
         rc_mux = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, mux_box_path, CLI_DEV_NULL );
-        rc_bd1 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, mux_ts_path, CLI_DEV_NULL );
-        rc_bd2 = system( cmd );
+        rename( out_path, mux_out_path );
 
-        remove( out_path );
         snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, args_without_output, out_path, CLI_DEV_NULL );
         rc_lsh = system( cmd );
+
+        time_t t1 = time( NULL );
+        if( t0 != t1 && attempt < 4 )
+            continue;
+
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, mux_out_path, mux_box_path, CLI_DEV_NULL );
+        rc_bd1 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, mux_out_path, mux_ts_path, CLI_DEV_NULL );
+        rc_bd2 = system( cmd );
+
         snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_box_path, CLI_DEV_NULL );
         rc_bd3 = system( cmd );
         snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_ts_path, CLI_DEV_NULL );
         rc_bd4 = system( cmd );
-
-        time_t t1 = time( NULL );
 
         mux_box = read_text_file( mux_box_path, &mux_box_len );
         lsh_box = read_text_file( lsh_box_path, &lsh_box_len );
@@ -719,6 +731,7 @@ static int assert_cli_equivalent( const char *args_without_output, const char *o
     }
 
     remove( out_path );
+    remove( mux_out_path );
     remove( mux_box_path );
     remove( lsh_box_path );
     remove( mux_ts_path );
@@ -766,6 +779,8 @@ static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_a
 {
     if( !lsh_args )
         lsh_args = rem_args;
+    const char *rem_out_path = "test_cli_eq_rem_out.mp4";
+    const char *rem_seg_out  = "test_cli_eq_rem_seg_out.mp4";
     const char *rem_box_path = "test_cli_eq_rem_box.txt";
     const char *lsh_box_path = "test_cli_eq_lsh_box.txt";
     const char *rem_ts_path  = "test_cli_eq_rem_ts.txt";
@@ -780,7 +795,7 @@ static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_a
     size_t rem_box_len = 0, lsh_box_len = 0, rem_ts_len = 0, lsh_ts_len = 0, rem_seg_len = 0, lsh_seg_len = 0;
     int rc_rem = -1, rc_lsh = -1, rc_bd1 = -1, rc_bd2 = 0, rc_bd3 = -1, rc_bd4 = 0, rc_bd5 = 0, rc_bd6 = 0;
 
-    for( int attempt = 0; attempt < 3; attempt++ )
+    for( int attempt = 0; attempt < 5; attempt++ )
     {
         lsmash_freep( &rem_box );
         lsmash_freep( &lsh_box );
@@ -789,31 +804,47 @@ static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_a
         lsmash_freep( &rem_seg );
         lsmash_freep( &lsh_seg );
 
+        remove( out_path );
+        remove( rem_out_path );
+        if( seg_path )
+        {
+            remove( seg_path );
+            remove( rem_seg_out );
+        }
+        if( attempt > 0 )
+        {
+            time_t prev_sec = time( NULL );
+            while( time( NULL ) == prev_sec )
+                ;
+        }
         time_t t0 = time( NULL );
 
-        remove( out_path );
-        if( seg_path )
-            remove( seg_path );
         snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_REMUXER, rem_args, out_path, CLI_DEV_NULL );
         rc_rem = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, rem_box_path, CLI_DEV_NULL );
+        rename( out_path, rem_out_path );
+        if( seg_path )
+            rename( seg_path, rem_seg_out );
+
+        snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, lsh_args, out_path, CLI_DEV_NULL );
+        rc_lsh = system( cmd );
+
+        time_t t1 = time( NULL );
+        if( t0 != t1 && attempt < 4 )
+            continue;
+
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, rem_out_path, rem_box_path, CLI_DEV_NULL );
         rc_bd1 = system( cmd );
         if( !seg_path )
         {
-            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, rem_ts_path, CLI_DEV_NULL );
+            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, rem_out_path, rem_ts_path, CLI_DEV_NULL );
             rc_bd2 = system( cmd );
         }
         else
         {
-            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, seg_path, rem_seg_path, CLI_DEV_NULL );
+            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, rem_seg_out, rem_seg_path, CLI_DEV_NULL );
             rc_bd5 = system( cmd );
         }
 
-        remove( out_path );
-        if( seg_path )
-            remove( seg_path );
-        snprintf( cmd, sizeof(cmd), "%s %s -o %s >%s 2>&1", CLI_LSHMUXER, lsh_args, out_path, CLI_DEV_NULL );
-        rc_lsh = system( cmd );
         snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsh_box_path, CLI_DEV_NULL );
         rc_bd3 = system( cmd );
         if( !seg_path )
@@ -826,8 +857,6 @@ static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_a
             snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, seg_path, lsh_seg_path, CLI_DEV_NULL );
             rc_bd6 = system( cmd );
         }
-
-        time_t t1 = time( NULL );
 
         rem_box = read_text_file( rem_box_path, &rem_box_len );
         lsh_box = read_text_file( lsh_box_path, &lsh_box_len );
@@ -847,8 +876,12 @@ static int assert_remuxer_equivalent_ex( const char *rem_args, const char *lsh_a
     }
 
     remove( out_path );
+    remove( rem_out_path );
     if( seg_path )
+    {
         remove( seg_path );
+        remove( rem_seg_out );
+    }
     remove( rem_box_path );
     remove( lsh_box_path );
     remove( rem_ts_path );
@@ -924,27 +957,27 @@ static int assert_timelineeditor_3way_equivalent
     const char *lsht_ts_path  = "test_cli_eq_lsht_ts.txt";
 
     char cmd[1024];
-    char *te_box = NULL, *lshp_box = NULL, *lsht_box = NULL;
-    char *te_ts  = NULL, *lshp_ts  = NULL, *lsht_ts  = NULL;
-    size_t te_box_len = 0, lshp_box_len = 0, lsht_box_len = 0;
-    size_t te_ts_len  = 0, lshp_ts_len  = 0, lsht_ts_len  = 0;
+    char *te_box = NULL, *lshp_box = NULL, *te_trk_box = NULL, *lsht_box = NULL;
+    char *te_ts  = NULL, *lshp_ts  = NULL, *lsht_ts    = NULL;
+    size_t te_box_len = 0, lshp_box_len = 0, te_trk_box_len = 0, lsht_box_len = 0;
+    size_t te_ts_len  = 0, lshp_ts_len  = 0, lsht_ts_len    = 0;
     int rc_te = -1, rc_lshp = -1, rc_lsht = 0;
     int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1, rc_bd5 = 0, rc_bd6 = 0;
+    time_t t0 = 0, t_mid = 0, t1 = 0;
 
     for( int attempt = 0; attempt < 5; attempt++ )
     {
-        lsmash_freep( &te_box );
-        lsmash_freep( &lshp_box );
-        lsmash_freep( &lsht_box );
-        lsmash_freep( &te_ts );
-        lsmash_freep( &lshp_ts );
-        lsmash_freep( &lsht_ts );
-
         remove( te_mp4_path );
         remove( lshp_mp4_path );
         remove( out_path );
 
-        time_t t0 = time( NULL );
+        if( attempt > 0 )
+        {
+            time_t ts = time( NULL );
+            while( time( NULL ) == ts )
+            {}
+        }
+        t0 = time( NULL );
 
         /* 1. cli/timelineeditor [options] input output */
         snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
@@ -956,6 +989,10 @@ static int assert_timelineeditor_3way_equivalent
                   CLI_LSHMUXER, in_path, track_opts ? "?" : "", track_opts ? track_opts : "", lshp_mp4_path, CLI_DEV_NULL );
         rc_lshp = system( cmd );
 
+        t_mid = time( NULL );
+        if( t0 != t_mid && attempt < 4 )
+            continue;
+
         /* 3. cli/lshmuxer -i input?track_opts -o output (track-option mode) */
         if( track_opts )
         {
@@ -963,43 +1000,57 @@ static int assert_timelineeditor_3way_equivalent
                       CLI_LSHMUXER, in_path, track_opts, out_path, CLI_DEV_NULL );
             rc_lsht = system( cmd );
         }
+        t1 = time( NULL );
+        break;
+    }
 
-        time_t t1 = time( NULL );
-        if( t0 != t1 && attempt < 4 )
-            continue;
+    snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_box_path, CLI_DEV_NULL );
+    rc_bd1 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_ts_path, CLI_DEV_NULL );
+    rc_bd2 = system( cmd );
 
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_box_path, CLI_DEV_NULL );
-        rc_bd1 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_ts_path, CLI_DEV_NULL );
-        rc_bd2 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_box_path, CLI_DEV_NULL );
+    rc_bd3 = system( cmd );
+    snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_ts_path, CLI_DEV_NULL );
+    rc_bd4 = system( cmd );
 
-        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_box_path, CLI_DEV_NULL );
-        rc_bd3 = system( cmd );
-        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, lshp_mp4_path, lshp_ts_path, CLI_DEV_NULL );
-        rc_bd4 = system( cmd );
+    te_box   = read_text_file( te_box_path,   &te_box_len );
+    lshp_box = read_text_file( lshp_box_path, &lshp_box_len );
+    te_ts    = read_text_file( te_ts_path,    &te_ts_len );
+    lshp_ts  = read_text_file( lshp_ts_path,  &lshp_ts_len );
 
-        if( track_opts )
+    if( track_opts )
+    {
+        if( t0 != t1 )
         {
-            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_box_path, CLI_DEV_NULL );
-            rc_bd5 = system( cmd );
-            snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_ts_path, CLI_DEV_NULL );
-            rc_bd6 = system( cmd );
+            for( int attempt = 0; attempt < 5; attempt++ )
+            {
+                remove( te_mp4_path );
+                remove( out_path );
+                time_t ts = time( NULL );
+                while( time( NULL ) == ts )
+                {}
+                time_t ta = time( NULL );
+                snprintf( cmd, sizeof(cmd), "%s %s %s %s >%s 2>&1",
+                          CLI_TIMELINEEDITOR, pos_opts ? pos_opts : "", in_path, te_mp4_path, CLI_DEV_NULL );
+                rc_te = system( cmd );
+                snprintf( cmd, sizeof(cmd), "%s -i %s?%s -o %s >%s 2>&1",
+                          CLI_LSHMUXER, in_path, track_opts, out_path, CLI_DEV_NULL );
+                rc_lsht = system( cmd );
+                time_t tb = time( NULL );
+                if( ta == tb )
+                    break;
+            }
+            snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, te_mp4_path, te_box_path, CLI_DEV_NULL );
+            rc_bd1 = system( cmd );
+            te_trk_box = read_text_file( te_box_path, &te_trk_box_len );
         }
-
-        te_box   = read_text_file( te_box_path,   &te_box_len );
-        lshp_box = read_text_file( lshp_box_path, &lshp_box_len );
-        te_ts    = read_text_file( te_ts_path,    &te_ts_len );
-        lshp_ts  = read_text_file( lshp_ts_path,  &lshp_ts_len );
-        if( track_opts )
-        {
-            lsht_box = read_text_file( lsht_box_path, &lsht_box_len );
-            lsht_ts  = read_text_file( lsht_ts_path,  &lsht_ts_len );
-        }
-
-        if( t0 == t1
-         || (te_box && lshp_box && te_box_len == lshp_box_len && memcmp( te_box, lshp_box, te_box_len ) == 0
-          && (!track_opts || (lsht_box && te_box_len == lsht_box_len && memcmp( te_box, lsht_box, te_box_len ) == 0))) )
-            break;
+        snprintf( cmd, sizeof(cmd), "%s --box %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_box_path, CLI_DEV_NULL );
+        rc_bd5 = system( cmd );
+        snprintf( cmd, sizeof(cmd), "%s --timestamp %s > %s 2>%s", CLI_BOXDUMPER, out_path, lsht_ts_path, CLI_DEV_NULL );
+        rc_bd6 = system( cmd );
+        lsht_box = read_text_file( lsht_box_path, &lsht_box_len );
+        lsht_ts  = read_text_file( lsht_ts_path,  &lsht_ts_len );
     }
 
     remove( te_mp4_path );
@@ -1012,12 +1063,15 @@ static int assert_timelineeditor_3way_equivalent
     remove( lshp_ts_path );
     remove( lsht_ts_path );
 
+    const char *ref_trk_box   = te_trk_box ? te_trk_box : te_box;
+    size_t      ref_trk_b_len = te_trk_box ? te_trk_box_len : te_box_len;
+
     int box_match_pos = (te_box && lshp_box && te_box_len > 0 && te_box_len == lshp_box_len
                       && memcmp( te_box, lshp_box, te_box_len ) == 0);
     int ts_match_pos  = (te_ts && lshp_ts && te_ts_len > 0 && te_ts_len == lshp_ts_len
                       && memcmp( te_ts, lshp_ts, te_ts_len ) == 0);
-    int box_match_trk = !track_opts ? 1 : (te_box && lsht_box && te_box_len > 0 && te_box_len == lsht_box_len
-                      && memcmp( te_box, lsht_box, te_box_len ) == 0);
+    int box_match_trk = !track_opts ? 1 : (ref_trk_box && lsht_box && ref_trk_b_len > 0 && ref_trk_b_len == lsht_box_len
+                      && memcmp( ref_trk_box, lsht_box, ref_trk_b_len ) == 0);
     int ts_match_trk  = !track_opts ? 1 : (te_ts && lsht_ts && te_ts_len > 0 && te_ts_len == lsht_ts_len
                       && memcmp( te_ts, lsht_ts, te_ts_len ) == 0);
 
@@ -1025,12 +1079,13 @@ static int assert_timelineeditor_3way_equivalent
         report_first_diff( "timelineeditor vs lshmuxer(--optimize-pd -i input?opt) --box", track_opts ? track_opts : "", te_box, lshp_box );
     if( !ts_match_pos && te_ts && lshp_ts )
         report_first_diff( "timelineeditor vs lshmuxer(--optimize-pd -i input?opt) --timestamp", track_opts ? track_opts : "", te_ts, lshp_ts );
-    if( !box_match_trk && te_box && lsht_box )
-        report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --box", track_opts ? track_opts : "", te_box, lsht_box );
+    if( !box_match_trk && ref_trk_box && lsht_box )
+        report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --box", track_opts ? track_opts : "", ref_trk_box, lsht_box );
     if( !ts_match_trk && te_ts && lsht_ts )
         report_first_diff( "timelineeditor vs lshmuxer(?track_opts) --timestamp", track_opts ? track_opts : "", te_ts, lsht_ts );
 
     lsmash_free( te_box );
+    lsmash_free( te_trk_box );
     lsmash_free( lshp_box );
     lsmash_free( lsht_box );
     lsmash_free( te_ts );
@@ -1154,6 +1209,16 @@ static int assert_pipeline_vs_1pass_equivalent
     int rc_m1 = -1, rc_te = -1, rc_rem = 0, rc_lsh = -1;
     int rc_bd1 = -1, rc_bd2 = -1, rc_bd3 = -1, rc_bd4 = -1;
 
+    remove( s1_mp4 );
+    remove( s2_mp4 );
+    snprintf( cmd, sizeof(cmd), "%s -i %s -i %s -o %s >%s 2>&1", CLI_MUXER, raw_v, raw_a, s1_mp4, CLI_DEV_NULL );
+    rc_m1 = system( cmd );
+    if( remux_opts )
+    {
+        snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, s2_mp4, CLI_DEV_NULL );
+        rc_te = system( cmd );
+    }
+
     for( int attempt = 0; attempt < 5; attempt++ )
     {
         lsmash_freep( &pipe_box );
@@ -1161,19 +1226,19 @@ static int assert_pipeline_vs_1pass_equivalent
         lsmash_freep( &pipe_ts );
         lsmash_freep( &lsh_ts );
 
-        remove( s1_mp4 );
-        remove( s2_mp4 );
         remove( pipe_mp4 );
         remove( out_path );
 
+        if( attempt > 0 )
+        {
+            time_t ts = time( NULL );
+            while( time( NULL ) == ts )
+            {}
+        }
         time_t t0 = time( NULL );
 
-        snprintf( cmd, sizeof(cmd), "%s -i %s -i %s -o %s >%s 2>&1", CLI_MUXER, raw_v, raw_a, s1_mp4, CLI_DEV_NULL );
-        rc_m1 = system( cmd );
         if( remux_opts )
         {
-            snprintf( cmd, sizeof(cmd), "%s --track 1 %s %s %s >%s 2>&1", CLI_TIMELINEEDITOR, te_opts, s1_mp4, s2_mp4, CLI_DEV_NULL );
-            rc_te = system( cmd );
             snprintf( cmd, sizeof(cmd), "%s %s -i %s -o %s >%s 2>&1",
                       CLI_REMUXER, remux_opts, s2_mp4, pipe_mp4, CLI_DEV_NULL );
             rc_rem = system( cmd );
