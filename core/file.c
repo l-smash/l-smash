@@ -327,12 +327,18 @@ static int file_set_brands
         {
             /* The absence of the Segment Type Box is allowed.
              * We set brands from the initialization segment after switching to this segment. */
-            for( lsmash_entry_t *entry = file->styp_list.head; entry; entry = entry->next )
+            for( lsmash_entry_t *entry = file->styp_list.head; entry; )
+            {
+                lsmash_entry_t *next = entry->next;
                 lsm_box_remove_by_itself( entry->data );
+                entry = next;
+            }
             if( LSMASH_IS_EXISTING_BOX( file->initializer ) )
             {
                 /* Copy flags for compatibility. */
-                memcpy( (int8_t *)file + COMPAT_FLAGS_OFFSET, file->initializer, sizeof(lsmash_file_t) - COMPAT_FLAGS_OFFSET );
+                memcpy( (int8_t *)file + COMPAT_FLAGS_OFFSET,
+                        (const int8_t *)file->initializer + COMPAT_FLAGS_OFFSET,
+                        sizeof(lsmash_file_t) - COMPAT_FLAGS_OFFSET );
                 file->isom_compatible  = 1;
                 file->allow_moof_base  = 1;
                 file->media_segment    = 1;

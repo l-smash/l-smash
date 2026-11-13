@@ -535,6 +535,9 @@ int lsmash_set_sdp( lsmash_root_t *root, uint32_t track_ID, char *sdptext )
 {
     if( lsm_movie_check_initializer_present( root ) < 0 || sdptext == NULL )
         return LSMASH_ERR_FUNCTION_PARAM;
+    size_t sdp_len = strlen( sdptext );
+    if( sdp_len >= UINT32_MAX )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov ) || !file->isom_compatible )
         return LSMASH_ERR_NAMELESS;
@@ -565,24 +568,32 @@ int lsmash_set_sdp( lsmash_root_t *root, uint32_t track_ID, char *sdptext )
      * otherwise it is meant for movie 'hnti' box. */
     if( track_ID )
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_sdp( hnti ) ) )
+        if( LSMASH_IS_EXISTING_BOX( hnti->sdp )
+         || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_sdp( hnti ) ) )
             return LSMASH_ERR_NAMELESS;
         isom_sdp_t *sdp = hnti->sdp;
-        sdp->sdp_length = strlen( sdptext );    /* leaves \0 out*/
+        sdp->sdp_length = (uint32_t)sdp_len;    /* leaves \0 out */
         sdp->sdptext    = lsmash_memdup( sdptext, sdp->sdp_length );
         if( !sdp->sdptext )
+        {
+            lsm_box_remove_by_itself( sdp );
             return LSMASH_ERR_MEMORY_ALLOC;
+        }
     }
     else
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_rtp( hnti ) ) )
+        if( LSMASH_IS_EXISTING_BOX( hnti->rtp )
+         || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_rtp( hnti ) ) )
             return LSMASH_ERR_NAMELESS;
         isom_rtp_t *rtp = hnti->rtp;
         rtp->descriptionformat = LSMASH_4CC( 's', 'd', 'p', ' ' );
-        rtp->sdp_length        = strlen( sdptext );     /* leaves \0 out */
+        rtp->sdp_length        = (uint32_t)sdp_len;     /* leaves \0 out */
         rtp->sdptext           = lsmash_memdup( sdptext, rtp->sdp_length );
         if( !rtp->sdptext )
+        {
+            lsm_box_remove_by_itself( rtp );
             return LSMASH_ERR_MEMORY_ALLOC;
+        }
     }
     return 0;
 }
@@ -593,13 +604,18 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
      || (ISO_language && ISO_language < 0x800)
      || !notice )
         return LSMASH_ERR_FUNCTION_PARAM;
+    size_t notice_len = strlen( notice );
+    if( notice_len >= UINT32_MAX )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
-    if( !file->isom_compatible )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov ) || !file->isom_compatible )
         return LSMASH_ERR_NAMELESS;
     isom_udta_t *udta;
     if( track_ID )
     {
         isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
+        if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
+            return LSMASH_ERR_NAMELESS;
         if( LSMASH_IS_NON_EXISTING_BOX( trak->udta ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( trak ) ) )
             return LSMASH_ERR_NAMELESS;
         udta = trak->udta;
@@ -621,7 +637,12 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
         return LSMASH_ERR_NAMELESS;
     isom_cprt_t *cprt = (isom_cprt_t *)udta->cprt_list.tail->data;
     cprt->language      = ISO_language;
-    cprt->notice_length = strlen( notice ) + 1;
+    cprt->notice_length = (uint32_t)(notice_len + 1);
     cprt->notice        = lsmash_memdup( notice, cprt->notice_length );
+    if( !cprt->notice )
+    {
+        lsm_box_remove_by_itself( cprt );
+        return LSMASH_ERR_MEMORY_ALLOC;
+    }
     return 0;
 }

@@ -196,11 +196,11 @@ static int read_counted_string
     uint64_t pos = lsmash_bs_count( bs );
     if( len > 0 )
     {
-        int ret = lsmash_bs_get_bytes_ex( bs, len, (uint8_t *)str );
+        int64_t ret = lsmash_bs_get_bytes_ex( bs, len, (uint8_t *)str );
         if( ret < 0 || bs->eob || bs->error || lsmash_bs_count( bs ) < pos + len )
         {
             lsmash_free( str );
-            return ret < 0 ? ret : LSMASH_ERR_INVALID_DATA;
+            return ret < 0 ? (int)ret : LSMASH_ERR_INVALID_DATA;
         }
     }
     str[len] = '\0';
@@ -571,7 +571,8 @@ static int read_mvhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
 
 static int read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+     || LSMASH_IS_EXISTING_BOX( ((isom_moov_t *)parent)->iods ) )
         return read_unknown_box( file, box, parent, level );
     ADD_BOX( iods, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
@@ -614,7 +615,15 @@ static int read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_ta
 
 static int read_ctab( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    ADD_BOX( ctab, isom_moov_t );
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
+      && !(parent->manager & LSMASH_VIDEO_DESCRIPTION))
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+      && LSMASH_IS_EXISTING_BOX( ((isom_moov_t *)parent)->ctab ))
+     || (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+      && LSMASH_IS_EXISTING_BOX( (isom_box_t *)lsm_box_get_extension_box_format( &parent->extensions, QT_BOX_TYPE_CTAB ) )) )
+        return read_unknown_box( file, box, parent, level );
+    ADD_BOX( ctab, void );
     lsmash_bs_t *bs = file->bs;
     int ret = read_qt_color_table( bs, &ctab->color_table, box->size );
     if( ret < 0 )
@@ -1379,9 +1388,16 @@ static int read_codec_specific( lsmash_file_t *file, isom_box_t *box, isom_box_t
     uint8_t *exdata = lsmash_malloc( box->size );
     if( !exdata )
         return LSMASH_ERR_MEMORY_ALLOC;
-    int ret = lsmash_bs_get_bytes_ex( bs, exdata_length, exdata + (uintptr_t)opaque_pos );
-    if( ret < 0 )
-        goto fail;
+    int ret = 0;
+    if( exdata_length > 0 )
+    {
+        int64_t read_ret = lsmash_bs_get_bytes_ex( bs, (uint32_t)exdata_length, exdata + (uintptr_t)opaque_pos );
+        if( read_ret < 0 )
+        {
+            ret = (int)read_ret;
+            goto fail;
+        }
+    }
     if( bs->eob || lsmash_bs_count( bs ) < box->size )
     {
         ret = LSMASH_ERR_INVALID_DATA;
@@ -3004,7 +3020,8 @@ static int read_metaitem( lsmash_file_t *file, isom_box_t *box, isom_box_t *pare
 
 static int read_mean( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM
+    if( parent->offset_in_parent != offsetof( isom_ilst_t, metaitem_list )
+     || parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM
      || LSMASH_IS_EXISTING_BOX( ((isom_metaitem_t *)parent)->mean ) )
         return read_unknown_box( file, box, parent, level );
     ADD_BOX( mean, isom_metaitem_t );
@@ -3017,7 +3034,8 @@ static int read_mean( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
 
 static int read_name( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM
+    if( parent->offset_in_parent != offsetof( isom_ilst_t, metaitem_list )
+     || parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM
      || LSMASH_IS_EXISTING_BOX( ((isom_metaitem_t *)parent)->name ) )
         return read_unknown_box( file, box, parent, level );
     ADD_BOX( name, isom_metaitem_t );
@@ -3030,7 +3048,8 @@ static int read_name( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
 
 static int read_data( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( LSMASH_IS_EXISTING_BOX( ((isom_metaitem_t *)parent)->data ) )
+    if( parent->offset_in_parent != offsetof( isom_ilst_t, metaitem_list )
+     || LSMASH_IS_EXISTING_BOX( ((isom_metaitem_t *)parent)->data ) )
         return read_unknown_box( file, box, parent, level );
     ADD_BOX( data, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
