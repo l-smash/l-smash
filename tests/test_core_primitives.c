@@ -133,6 +133,93 @@ int test_bitstream_primitives( void )
         TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 truncated rejected" );
     }
 
+    /* 1d. Verify 64-bit aligned & unaligned lsmash_bits_put / lsmash_bits_get roundtrip and width > 64 guards */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        TEST_ASSERT( bs != NULL, "1d: create bs" );
+        lsmash_bits_t bits = { 0 };
+        lsmash_bits_init( &bits, bs );
+
+        /* width == 0 and width > 64 must be safe no-ops */
+        lsmash_bits_put( &bits, 0,  0xFFULL );
+        lsmash_bits_put( &bits, 65, 0xFFFFFFFFFFFFFFFFULL );
+        TEST_ASSERT( bits.store == 0 && bs->buffer.store == 0, "1d: width 0 and 65 puts are no-ops" );
+
+        /* Consecutive byte-aligned 64-bit writes and 8-bit + 64-bit write (previously hit value >> 64 UB) */
+        lsmash_bits_put( &bits, 64, 0x0123456789ABCDEFULL );
+        TEST_ASSERT( bits.store == 0, "1d: bits.store == 0 after first 64-bit put" );
+        lsmash_bits_put( &bits, 64, 0xFEDCBA9876543210ULL );
+        TEST_ASSERT( bits.store == 0, "1d: bits.store == 0 after second consecutive 64-bit put" );
+        lsmash_bits_put( &bits, 8,  0xA5U );
+        TEST_ASSERT( bits.store == 0, "1d: bits.store == 0 after 8-bit put" );
+        lsmash_bits_put( &bits, 64, 0xCAFEBABEDEADBEEFULL );
+        TEST_ASSERT( bits.store == 0, "1d: bits.store == 0 after 8-bit + 64-bit put" );
+
+        /* Unaligned 64-bit writes across 3-bit bit-offset */
+        lsmash_bits_put( &bits, 3,   0x5U );
+        TEST_ASSERT( bits.store == 3, "1d: bits.store == 3 after 3-bit put" );
+        lsmash_bits_put( &bits, 128, 0x77ULL );
+        TEST_ASSERT( bits.store == 3, "1d: width > 64 put preserves unaligned bits.store" );
+        lsmash_bits_put( &bits, 64,  0x1122334455667788ULL );
+        TEST_ASSERT( bits.store == 3, "1d: bits.store == 3 after first unaligned 64-bit put" );
+        lsmash_bits_put( &bits, 64,  0x99AABBCCDDEEFF01ULL );
+        TEST_ASSERT( bits.store == 3, "1d: bits.store == 3 after second unaligned 64-bit put" );
+        lsmash_bits_put( &bits, 5,   0x13U );
+        TEST_ASSERT( bits.store == 0, "1d: bits.store == 0 on exact byte completion" );
+
+        uint32_t buf_len = 0;
+        uint8_t *buf = lsmash_bits_export_data( &bits, &buf_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( buf != NULL && buf_len == 42, "1d: exported 42 bytes" );
+
+        lsmash_bs_t rbs = { 0 };
+        lsmash_bs_set_empty_stream( &rbs, buf, buf_len );
+        lsmash_bits_t rbits = { 0 };
+        lsmash_bits_init( &rbits, &rbs );
+
+        TEST_ASSERT( lsmash_bits_get( &rbits, 0 )  == 0 && rbits.store == 0, "1d: width 0 get returns 0" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 65 ) == 0 && rbits.store == 0, "1d: width 65 get returns 0" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 64 ) == 0x0123456789ABCDEFULL, "1d: read first aligned 64-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 64 ) == 0xFEDCBA9876543210ULL, "1d: read second aligned 64-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 8 )  == 0xA5ULL,               "1d: read 8-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 64 ) == 0xCAFEBABEDEADBEEFULL, "1d: read post-8bit 64-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 3 )  == 0x5ULL,                "1d: read 3-bit prefix" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 96 ) == 0 && rbits.store == 5, "1d: width 96 get preserves store" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 64 ) == 0x1122334455667788ULL, "1d: read first unaligned 64-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 64 ) == 0x99AABBCCDDEEFF01ULL, "1d: read second unaligned 64-bit" );
+        TEST_ASSERT( lsmash_bits_get( &rbits, 5 )  == 0x13ULL && rbits.store == 0, "1d: read 5-bit suffix" );
+        lsmash_free( buf );
+    }
+
+    /* 1e. Verify 64-bit lsmash_reduce_fraction_su (INT64_MIN & > INT32_MAX) and lsmash_fixed2double shift bounds */
+    {
+        int64_t  num = INT64_MIN;
+        uint64_t den = 1;
+        lsmash_reduce_fraction_su( &num, &den );
+        TEST_ASSERT( num == INT64_MIN && den == 1, "1e: reduce_fraction_su(INT64_MIN, 1) without UB" );
+
+        num = INT64_MIN;
+        den = 2;
+        lsmash_reduce_fraction_su( &num, &den );
+        TEST_ASSERT( num == -((int64_t)1 << 62) && den == 1, "1e: reduce_fraction_su(INT64_MIN, 2) == -2^62 / 1" );
+
+        num = -((int64_t)1 << 40) * 3;
+        den = 3;
+        lsmash_reduce_fraction_su( &num, &den );
+        TEST_ASSERT( num == -((int64_t)1 << 40) && den == 1,
+                     "1e: negative > INT32_MAX numerator preserved in 64-bit without 32-bit truncation" );
+
+        num = ((int64_t)1 << 40) * 3;
+        den = 3;
+        lsmash_reduce_fraction_su( &num, &den );
+        TEST_ASSERT( num == ((int64_t)1 << 40) && den == 1,
+                     "1e: positive > INT32_MAX numerator preserved in 64-bit without 32-bit truncation" );
+
+        TEST_ASSERT( lsmash_fixed2double( 0x10000, -1 ) == 0.0, "1e: fixed2double rejects negative frac_width" );
+        TEST_ASSERT( lsmash_fixed2double( 0x10000, 64 ) == 0.0, "1e: fixed2double rejects frac_width >= 64" );
+        TEST_ASSERT( lsmash_fixed2double( 0x18000, 16 ) == 1.5, "1e: fixed2double 16.16 normal conversion" );
+    }
+
     printf( "[PASS] test_bitstream_primitives\n" );
     return 0;
 }
@@ -174,6 +261,18 @@ int test_memory_audit_allocator( void )
     TEST_ASSERT( lsm_alloc_get_active_count() == 3, "active block count == 3 after realloc" );
     TEST_ASSERT( lsm_alloc_get_active_bytes() == 384, "active byte count == 384 after realloc" );
 
+    /* Near-SIZE_MAX allocations must return NULL without wrapping header/redzone math
+     * and failed realloc must leave the existing block intact. */
+    memset( buf1, 0x5A, 256 );
+    TEST_ASSERT( lsmash_malloc( SIZE_MAX ) == NULL, "lsmash_malloc(SIZE_MAX) returns NULL" );
+    TEST_ASSERT( lsmash_malloc( SIZE_MAX - 16 ) == NULL, "lsmash_malloc(SIZE_MAX - 16) returns NULL" );
+    TEST_ASSERT( lsmash_malloc_zero( SIZE_MAX ) == NULL, "lsmash_malloc_zero(SIZE_MAX) returns NULL" );
+    TEST_ASSERT( lsmash_memdup( "a", SIZE_MAX ) == NULL, "lsmash_memdup(SIZE_MAX) returns NULL" );
+    TEST_ASSERT( lsmash_realloc( buf1, SIZE_MAX ) == NULL, "lsmash_realloc(buf1, SIZE_MAX) returns NULL" );
+    TEST_ASSERT( buf1[0] == 0x5A && buf1[255] == 0x5A, "failed lsmash_realloc preserves existing block payload" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 3 && lsm_alloc_get_active_bytes() == 384,
+                 "failed near-SIZE_MAX allocations do not alter active block accounting" );
+
     lsmash_free( buf1 );
     TEST_ASSERT( lsm_alloc_get_active_count() == 2, "active block count == 2 after lsmash_free" );
     TEST_ASSERT( lsm_alloc_get_active_bytes() == 128, "active byte count == 128 after lsmash_free" );
@@ -189,6 +288,23 @@ int test_memory_audit_allocator( void )
     TEST_ASSERT( lsm_alloc_get_active_bytes() == 0, "active byte count == 0 after all frees" );
     TEST_ASSERT( lsm_alloc_verify_no_leaks() == 0, "lsm_alloc_verify_no_leaks() == 0" );
 #endif
+    /* Zero-size allocation contracts (both debug and release builds) */
+    {
+        void *z_malloc = lsmash_malloc( 0 );
+        TEST_ASSERT( z_malloc != NULL, "lsmash_malloc(0) returns non-NULL" );
+        void *z_zero = lsmash_malloc_zero( 0 );
+        TEST_ASSERT( z_zero != NULL, "lsmash_malloc_zero(0) returns non-NULL" );
+        lsmash_free( z_zero );
+        void *z_realloc = lsmash_realloc( z_malloc, 0 );
+        TEST_ASSERT( z_realloc != NULL, "lsmash_realloc(ptr, 0) returns non-NULL" );
+        lsmash_free( z_realloc );
+        void *z_dup = lsmash_memdup( "a", 0 );
+        TEST_ASSERT( z_dup != NULL, "lsmash_memdup(\"a\", 0) returns non-NULL" );
+        lsmash_free( z_dup );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_verify_no_leaks() == 0, "zero-size allocations freed with 0 leaks" );
+#endif
+    }
     printf( "[PASS] test_memory_audit_allocator\n" );
     return 0;
 }
@@ -847,6 +963,40 @@ int test_multibuf_resize_and_codec_regressions( void )
                 uint8_t expected = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
                 TEST_ASSERT( buf[k] == expected,
                              "14a: shrunk buffer preserves exact prefix [0..19] across all 4 buffers" );
+            }
+        }
+
+        /* Overflow resize requests must return NULL and leave existing buffers intact */
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 0x40000000U ) == NULL,
+                     "14a: reject resize overflowing uint32 total capacity (4 * 0x40000000)" );
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, UINT32_MAX ) == NULL,
+                     "14a: reject resize overflowing uint32/size_t capacity (4 * UINT32_MAX)" );
+        TEST_ASSERT( bank->number_of_buffers == 4 && bank->buffer_size == 20,
+                     "14a: failed overflow resize leaves metadata unchanged" );
+        for( uint32_t b = 1; b <= 4; b++ )
+        {
+            uint8_t *buf = (uint8_t *)lsmash_withdraw_buffer( bank, b );
+            TEST_ASSERT( buf != NULL, "14a: withdraw buffer after rejected overflow resize" );
+            for( uint32_t k = 0; k < 20; k++ )
+            {
+                uint8_t expected = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
+                TEST_ASSERT( buf[k] == expected,
+                             "14a: rejected overflow resize preserves existing buffer contents" );
+            }
+        }
+
+        /* Shrink again to unaligned size (20 -> 7 bytes) and verify prefix preservation */
+        TEST_ASSERT( lsmash_resize_multiple_buffers( bank, 7 ) == bank && bank->buffer_size == 7,
+                     "14a: shrink multiple buffers from 20 to 7 bytes" );
+        for( uint32_t b = 1; b <= 4; b++ )
+        {
+            uint8_t *buf = (uint8_t *)lsmash_withdraw_buffer( bank, b );
+            TEST_ASSERT( buf != NULL, "14a: withdraw 7-byte shrunk buffer" );
+            for( uint32_t k = 0; k < 7; k++ )
+            {
+                uint8_t expected = (uint8_t)((b * 53U + k * 7U + 0x11U) & 0xFFU);
+                TEST_ASSERT( buf[k] == expected,
+                             "14a: 7-byte shrunk buffer preserves exact prefix [0..6]" );
             }
         }
 
