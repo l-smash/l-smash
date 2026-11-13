@@ -22,16 +22,20 @@
 
 #include "internal.h" /* must be placed first */
 
+#include <stdint.h>
 #include <string.h>
 
 lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size )
 {
-    if( !number_of_buffers || !buffer_size || (uint64_t)number_of_buffers * buffer_size > UINT32_MAX )
+    if( !number_of_buffers || !buffer_size
+     || (size_t)number_of_buffers > SIZE_MAX / buffer_size
+     || (uint64_t)number_of_buffers * buffer_size > UINT32_MAX )
         return NULL;
+    size_t total_alloc = (size_t)number_of_buffers * buffer_size;
     lsmash_multiple_buffers_t *multiple_buffer = lsmash_malloc( sizeof(lsmash_multiple_buffers_t) );
     if( !multiple_buffer )
         return NULL;
-    multiple_buffer->buffers = lsmash_malloc( (size_t)number_of_buffers * buffer_size );
+    multiple_buffer->buffers = lsmash_malloc( total_alloc );
     if( !multiple_buffer->buffers )
     {
         lsmash_free( multiple_buffer );
@@ -51,36 +55,39 @@ void *lsmash_withdraw_buffer( lsmash_multiple_buffers_t *multiple_buffer, uint32
 
 lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_size )
 {
-    if( !multiple_buffer || !multiple_buffer->number_of_buffers || !buffer_size )
+    if( !multiple_buffer || !multiple_buffer->buffers || !multiple_buffer->number_of_buffers || !buffer_size )
         return NULL;
     if( buffer_size == multiple_buffer->buffer_size )
         return multiple_buffer;
-    if( (uint64_t)multiple_buffer->number_of_buffers * buffer_size > UINT32_MAX )
+    if( (size_t)multiple_buffer->number_of_buffers > SIZE_MAX / buffer_size
+     || (uint64_t)multiple_buffer->number_of_buffers * buffer_size > UINT32_MAX )
         return NULL;
-    uint32_t old_size  = multiple_buffer->buffer_size;
-    uint32_t copy_size = LSMASH_MIN( buffer_size, old_size );
+    size_t   total_alloc = (size_t)multiple_buffer->number_of_buffers * buffer_size;
+    uint32_t old_size    = multiple_buffer->buffer_size;
     uint8_t *temp;
     if( buffer_size > old_size )
     {
-        temp = lsmash_realloc( multiple_buffer->buffers, (size_t)multiple_buffer->number_of_buffers * buffer_size );
+        temp = lsmash_realloc( multiple_buffer->buffers, total_alloc );
         if( !temp )
             return NULL;
         for( uint32_t i = multiple_buffer->number_of_buffers - 1; i > 0; i-- )
         {
-            memmove( temp + (size_t)i * buffer_size, temp + (size_t)i * old_size, copy_size );
-            memset( temp + (size_t)i * buffer_size + copy_size, 0, buffer_size - copy_size );
+            memmove( temp + (size_t)i * buffer_size, temp + (size_t)i * old_size, old_size );
+            memset( temp + (size_t)i * buffer_size + old_size, 0, buffer_size - old_size );
         }
-        memset( temp + copy_size, 0, buffer_size - copy_size );
+        memset( temp + old_size, 0, buffer_size - old_size );
     }
     else
     {
-        for( uint32_t i = 1; i < multiple_buffer->number_of_buffers; i++ )
-            memmove( (uint8_t *)multiple_buffer->buffers + (size_t)i * buffer_size,
-                     (uint8_t *)multiple_buffer->buffers + (size_t)i * old_size,
-                     copy_size );
-        temp = lsmash_realloc( multiple_buffer->buffers, (size_t)multiple_buffer->number_of_buffers * buffer_size );
+        /* Transactional shrink: allocate a fresh buffer before copying so OOM leaves
+         * the existing buffer layout and contents completely intact. */
+        temp = lsmash_malloc( total_alloc );
         if( !temp )
             return NULL;
+        const uint8_t *src = (const uint8_t *)multiple_buffer->buffers;
+        for( uint32_t i = 0; i < multiple_buffer->number_of_buffers; i++ )
+            memcpy( temp + (size_t)i * buffer_size, src + (size_t)i * old_size, buffer_size );
+        lsmash_free( multiple_buffer->buffers );
     }
     multiple_buffer->buffers     = temp;
     multiple_buffer->buffer_size = buffer_size;

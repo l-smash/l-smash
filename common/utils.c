@@ -23,6 +23,8 @@
 #include "internal.h" /* must be placed first */
 
 #include <stdlib.h>
+#include <stdint.h>
+#include <limits.h>
 #include <string.h>
 #include <stdarg.h>
 #ifdef _WIN32
@@ -33,6 +35,8 @@
 /*---- type ----*/
 double lsmash_fixed2double( int64_t value, int frac_width )
 {
+    if( frac_width < 0 || frac_width >= 64 )
+        return 0.0;
     return value / (double)(1ULL << frac_width);
 }
 
@@ -207,32 +211,40 @@ void lsmash_reduce_fraction_su
 {
     if( !a || !b )
         return;
-    uint64_t c = *a > 0 ? *a : -(*a);
+    int neg = (*a < 0);
+    uint64_t c = neg ? (uint64_t)(-(*a + 1)) + 1ULL : (uint64_t)*a;
     uint64_t gcd = lsmash_get_gcd( c, *b );
     if( gcd )
     {
         c /= gcd;
         *b /= gcd;
-        *a = *a > 0 ? (signed)c : -(signed)c;
+        if( neg )
+            *a = (c > (uint64_t)INT64_MAX) ? INT64_MIN : -(int64_t)c;
+        else
+            *a = (int64_t)c;
     }
 }
 
 #ifdef _WIN32
 int lsmash_convert_ansi_to_utf8( const char *ansi, char *utf8, int length )
 {
-    int len0 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, 0, 0 );
-    wchar_t *buff = lsmash_malloc( len0 * sizeof(wchar_t) );
+    if( !ansi || !utf8 || length <= 0 )
+        return 0;
+    int len0 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, NULL, 0 );
+    if( len0 <= 0 || (size_t)len0 > SIZE_MAX / sizeof(wchar_t) )
+        return 0;
+    wchar_t *buff = lsmash_malloc( (size_t)len0 * sizeof(wchar_t) );
     if( !buff )
         return 0;
     int len1 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, buff, len0 );
-    if( len0 != len1 )
+    if( len1 <= 0 || len0 != len1 )
         goto convert_fail;
-    len0 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, 0, 0, 0, 0 );
-    if( len0 > length - 1 )
+    len0 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, NULL, 0, NULL, NULL );
+    if( len0 <= 0 || len0 > length - 1 )
         goto convert_fail;
-    len1 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, utf8, length, 0, 0 );
+    len1 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, utf8, length, NULL, NULL );
     lsmash_free( buff );
-    if( len0 != len1 )
+    if( len1 <= 0 || len0 != len1 )
         return 0;
     return len1;
 convert_fail:

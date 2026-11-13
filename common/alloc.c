@@ -34,8 +34,9 @@
 #define LSM_ALLOC_CANARY_FRONT 0xC0DEC0DEC0DEC0DEULL
 #define LSM_ALLOC_CANARY_BYTE  0xA5U
 #define LSM_ALLOC_POISON_ALLOC 0xCDU
-#define LSM_ALLOC_POISON_FREE  0xDDU
-#define LSM_ALLOC_REDZONE_SIZE 16U
+#define LSM_ALLOC_POISON_FREE      0xDDU
+#define LSM_ALLOC_REDZONE_SIZE     16U
+#define LSM_ALLOC_MAX_DEBUG_SIZE   (SIZE_MAX - sizeof(lsm_alloc_header_t) - LSM_ALLOC_REDZONE_SIZE)
 
 typedef struct lsm_alloc_header_tag
 {
@@ -141,7 +142,7 @@ static void alloc_verify_block
 
 void *lsmash_malloc_debug( size_t size, const char *file, int line, const char *arg )
 {
-    if( size > SIZE_MAX - sizeof(lsm_alloc_header_t) - LSM_ALLOC_REDZONE_SIZE )
+    if( size > LSM_ALLOC_MAX_DEBUG_SIZE )
         return NULL;
     size_t total_size = sizeof(lsm_alloc_header_t) + size + LSM_ALLOC_REDZONE_SIZE;
     lsm_alloc_header_t *hdr = (lsm_alloc_header_t *)malloc( total_size );
@@ -166,6 +167,8 @@ void *lsmash_malloc_debug( size_t size, const char *file, int line, const char *
 
 void *lsmash_malloc_zero_debug( size_t size, const char *file, int line, const char *arg )
 {
+    if( size > LSM_ALLOC_MAX_DEBUG_SIZE )
+        return NULL;
     void *ptr = lsmash_malloc_debug( size, file, line, arg );
     if( ptr && size > 0 )
         memset( ptr, 0, size );
@@ -178,6 +181,8 @@ void *lsmash_realloc_debug( void *ptr, size_t size, const char *file, int line, 
         return lsmash_malloc_debug( size, file, line, arg );
     lsm_alloc_header_t *old_hdr = (lsm_alloc_header_t *)((uint8_t *)ptr - sizeof(lsm_alloc_header_t));
     alloc_verify_block( old_hdr, ptr, "lsmash_realloc", file, line, arg );
+    if( size > LSM_ALLOC_MAX_DEBUG_SIZE )
+        return NULL;
     void *new_ptr = lsmash_malloc_debug( size, file, line, arg );
     if( !new_ptr )
         return NULL;
@@ -190,7 +195,7 @@ void *lsmash_realloc_debug( void *ptr, size_t size, const char *file, int line, 
 
 void *lsmash_memdup_debug( const void *ptr, size_t size, const char *file, int line, const char *arg )
 {
-    if( !ptr )
+    if( !ptr || size > LSM_ALLOC_MAX_DEBUG_SIZE )
         return NULL;
     void *dst = lsmash_malloc_debug( size, file, line, arg );
     if( !dst )
@@ -302,27 +307,28 @@ void lsmash_freep( void *ptrptr )
 
 void *lsmash_malloc( size_t size )
 {
-    return malloc( size );
+    return malloc( size ? size : 1 );
 }
 
 void *lsmash_malloc_zero( size_t size )
 {
-    return calloc( 1, size );
+    return calloc( 1, size ? size : 1 );
 }
 
 void *lsmash_realloc( void *ptr, size_t size )
 {
-    return realloc( ptr, size );
+    return realloc( ptr, size ? size : 1 );
 }
 
 void *lsmash_memdup( const void *ptr, size_t size )
 {
     if( !ptr )
         return NULL;
-    void *dst = malloc( size );
+    void *dst = malloc( size ? size : 1 );
     if( !dst )
         return NULL;
-    memcpy( dst, ptr, size );
+    if( size > 0 )
+        memcpy( dst, ptr, size );
     return dst;
 }
 

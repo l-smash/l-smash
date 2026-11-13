@@ -23,6 +23,7 @@
 #include "internal.h" /* must be placed first */
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -32,30 +33,59 @@
 
 int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to )
 {
-    int nc = MultiByteToWideChar( cp, 0, from, -1, 0, 0 );
-    if( nc == 0 )
+    if( !to )
         return 0;
-    *to = lsmash_malloc( nc * sizeof(wchar_t) );
-    MultiByteToWideChar( cp, 0, from, -1, *to, nc );
-    return nc;
+    *to = NULL;
+    if( !from )
+        return 0;
+    int nc = MultiByteToWideChar( cp, 0, from, -1, NULL, 0 );
+    if( nc <= 0 || (size_t)nc > SIZE_MAX / sizeof(wchar_t) )
+        return 0;
+    wchar_t *buf = lsmash_malloc( (size_t)nc * sizeof(wchar_t) );
+    if( !buf )
+        return 0;
+    int ret = MultiByteToWideChar( cp, 0, from, -1, buf, nc );
+    if( ret <= 0 )
+    {
+        lsmash_free( buf );
+        return 0;
+    }
+    *to = buf;
+    return ret;
 }
 
 int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to )
 {
-    int nc = WideCharToMultiByte( cp, 0, from, -1, 0, 0, 0, 0 );
-    if( nc == 0 )
+    if( !to )
         return 0;
-    *to = lsmash_malloc( nc * sizeof(char) );
-    WideCharToMultiByte( cp, 0, from, -1, *to, nc, 0, 0 );
-    return nc;
+    *to = NULL;
+    if( !from )
+        return 0;
+    int nc = WideCharToMultiByte( cp, 0, from, -1, NULL, 0, NULL, NULL );
+    if( nc <= 0 )
+        return 0;
+    char *buf = lsmash_malloc( (size_t)nc * sizeof(char) );
+    if( !buf )
+        return 0;
+    int ret = WideCharToMultiByte( cp, 0, from, -1, buf, nc, NULL, NULL );
+    if( ret <= 0 )
+    {
+        lsmash_free( buf );
+        return 0;
+    }
+    *to = buf;
+    return ret;
 }
 
 FILE *lsmash_win32_fopen( const char *name, const char *mode )
 {
+    if( !name || !mode )
+        return NULL;
     wchar_t *wname = NULL, *wmode = NULL;
-    lsmash_string_to_wchar( CP_UTF8, name, &wname );
-    lsmash_string_to_wchar( CP_UTF8, mode, &wmode );
-    FILE *fp = _wfopen( wname, wmode );
+    FILE *fp = NULL;
+    if( lsmash_string_to_wchar( CP_UTF8, name, &wname ) > 0
+     && lsmash_string_to_wchar( CP_UTF8, mode, &wmode ) > 0 )
+        fp = _wfopen( wname, wmode );
     if( !fp )
         fp = fopen( name, mode );
     lsmash_free( wname );
