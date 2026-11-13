@@ -22,6 +22,7 @@
 #include "common/internal.h"
 
 #include "test_common.h"
+#include "core/box_default.h"
 #include "core/movie.h"
 
 /*---------------------------------------------------------------------------
@@ -2994,6 +2995,329 @@ int test_container_metadata_and_edit_list_roundtrip( void )
         lsmash_destruct_timeline( root, v_track );
         lsmash_close_file( &param );
         lsmash_destroy_root( root );
+    }
+
+    /*-----------------------------------------------------------------------
+     * 23f. Regression tests for media segment compatibility flag inheritance,
+     *      lsmash_set_copyright / lsmash_set_sdp sentinel & duplicate guards,
+     *      and duplicate single-child Box (ctab / iods) stream resilience
+     *-----------------------------------------------------------------------*/
+    {
+        /* 1) Media segment compatibility flags inheritance (brand_count == 0) */
+        const char *compat_init_path = "tests/tmp_test_compat_init.mp4";
+        const char *compat_seg_path  = "tests/tmp_test_compat_seg.m4s";
+        const lsmash_brand_type init_brands[3] = {
+            ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_MP42
+        };
+        lsmash_root_t *seg_root = lsmash_create_root();
+        TEST_ASSERT( seg_root != NULL, "23f: create root for segment compat test" );
+
+        lsmash_file_parameters_t init_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( compat_init_path, 0, &init_param ) == 0, "23f: open compat init segment" );
+        init_param.mode &= ~LSMASH_FILE_MODE_MEDIA;
+        init_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+        init_param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        init_param.brands      = (lsmash_brand_type *)init_brands;
+        init_param.brand_count = 3;
+        lsmash_file_t *init_file = lsmash_set_file( seg_root, &init_param );
+        TEST_ASSERT( init_file != NULL, "23f: set compat init segment" );
+        TEST_ASSERT( init_file->qt_compatible == 0
+                  && init_file->isom_compatible == 1
+                  && init_file->avc_extensions == 1
+                  && init_file->mp4_version1 == 0
+                  && init_file->mp4_version2 == 1
+                  && init_file->itunes_movie == 0
+                  && init_file->max_3gpp_version == 0
+                  && init_file->max_isom_version == 6
+                  && init_file->min_isom_version == 1
+                  && init_file->forbid_tref == 0
+                  && init_file->undefined_64_ver == 0,
+                     "23f: init_file compatibility flags established accurately" );
+
+        uint32_t seg_tid = seg_create_video_track( seg_root );
+        TEST_ASSERT( seg_tid != 0, "23f: create video track in compat init segment" );
+
+        lsmash_file_parameters_t media_seg_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( compat_seg_path, 0, &media_seg_param ) == 0, "23f: open compat media segment" );
+        media_seg_param.mode &= ~LSMASH_FILE_MODE_INITIALIZATION;
+        media_seg_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+        media_seg_param.major_brand = 0;
+        media_seg_param.brands      = NULL;
+        media_seg_param.brand_count = 0;
+        lsmash_file_t *media_seg_file = lsmash_set_file( seg_root, &media_seg_param );
+        TEST_ASSERT( media_seg_file != NULL, "23f: set brandless compat media segment" );
+
+        lsmash_adhoc_remux_t seg_remux = { .buffer_size = 65536 };
+        TEST_ASSERT( lsmash_switch_media_segment( seg_root, media_seg_file, &seg_remux ) == 0,
+                     "23f: switch to brandless media segment inherits initializer compat flags" );
+        TEST_ASSERT( media_seg_file->qt_compatible == 0
+                  && media_seg_file->isom_compatible == 1
+                  && media_seg_file->avc_extensions == 1
+                  && media_seg_file->mp4_version1 == 0
+                  && media_seg_file->mp4_version2 == 1
+                  && media_seg_file->itunes_movie == 0
+                  && media_seg_file->max_3gpp_version == 0
+                  && media_seg_file->max_isom_version == 6
+                  && media_seg_file->min_isom_version == 5
+                  && media_seg_file->forbid_tref == 0
+                  && media_seg_file->undefined_64_ver == 0
+                  && media_seg_file->allow_moof_base == 1
+                  && media_seg_file->media_segment == 1,
+                     "23f: media segment inherits exact initializer compat flags without pointer-byte corruption" );
+        TEST_ASSERT( seg_write_fragment( seg_root, seg_tid, 0 ) == 0, "23f: write media segment fragment" );
+        TEST_ASSERT( lsmash_finish_movie( seg_root, &seg_remux ) == 0, "23f: finish brandless media segment" );
+        lsmash_close_file( &init_param );
+        lsmash_close_file( &media_seg_param );
+        lsmash_destroy_root( seg_root );
+        remove( compat_init_path );
+        remove( compat_seg_path );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23f: 0 bytes leaked after segment compat flag inheritance test" );
+#endif
+
+        /* 2) lsmash_set_copyright & lsmash_set_sdp boundary and sentinel safety */
+        const char *cprt_path = "tests/tmp_test_cprt_boundary.mp4";
+        char notice_bad_track[] = "Invalid Track Copyright";
+        char notice_movie[]     = "Movie Copyright 2026";
+        char notice_track[]     = "Track Copyright 2026";
+        char sdp_movie[]        = "v=0\r\ns=MovieSession\r\n";
+        char sdp_track[]        = "m=video 0 RTP/AVP 96\r\n";
+
+        lsmash_root_t *cprt_root = lsmash_create_root();
+        TEST_ASSERT( cprt_root != NULL, "23f: create root for cprt test" );
+        lsmash_file_parameters_t cprt_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( cprt_path, 0, &cprt_param ) == 0, "23f: open cprt_path" );
+        lsmash_brand_type mp42_brands[2] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_MP42 };
+        cprt_param.major_brand = ISOM_BRAND_TYPE_MP42;
+        cprt_param.brands      = mp42_brands;
+        cprt_param.brand_count = 2;
+        lsmash_file_t *cprt_file = lsmash_set_file( cprt_root, &cprt_param );
+        TEST_ASSERT( cprt_file != NULL, "23f: set cprt_file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( cprt_root, &movie_param ) == 0, "23f: set cprt movie params" );
+
+        uint32_t cprt_tid = lsmash_create_track( cprt_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( cprt_tid != 0, "23f: create video track for cprt test" );
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        TEST_ASSERT( lsmash_set_track_parameters( cprt_root, cprt_tid, &track_param ) == 0, "23f: set cprt track params" );
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale = 1000;
+        TEST_ASSERT( lsmash_set_media_parameters( cprt_root, cprt_tid, &media_param ) == 0, "23f: set cprt media params" );
+        lsmash_video_summary_t *v_sum = create_synth_av01_summary( 64, 64 );
+        uint32_t v_idx = lsmash_add_sample_entry( cprt_root, cprt_tid, v_sum );
+        lsmash_cleanup_summary( (lsmash_summary_t *)v_sum );
+        TEST_ASSERT( v_idx == 1, "23f: add sample entry for cprt test" );
+
+        /* Non-existent track_ID must fail cleanly without polluting the static non-existing trak sentinel */
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, 9999, ISOM_LANGUAGE_CODE_ENGLISH, notice_bad_track ) < 0,
+                     "23f: lsmash_set_copyright rejects non-existent track_ID=9999" );
+        TEST_ASSERT( LSMASH_IS_NON_EXISTING_BOX( lsm_box_default_non_existing_trak()->udta ),
+                     "23f: static non-existing trak sentinel udta pointer remains unpolluted" );
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, 0, ISOM_LANGUAGE_CODE_ENGLISH, NULL ) == LSMASH_ERR_FUNCTION_PARAM,
+                     "23f: lsmash_set_copyright rejects NULL notice" );
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, 0, 0x0001, notice_movie ) == LSMASH_ERR_FUNCTION_PARAM,
+                     "23f: lsmash_set_copyright rejects invalid ISO_language < 0x800" );
+
+        /* Valid Movie and Track cprt setup + duplicate language rejection */
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, 0, ISOM_LANGUAGE_CODE_ENGLISH, notice_movie ) == 0,
+                     "23f: set movie-level cprt" );
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, 0, ISOM_LANGUAGE_CODE_ENGLISH, notice_movie ) < 0,
+                     "23f: reject duplicate language movie-level cprt" );
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, cprt_tid, ISOM_LANGUAGE_CODE_JAPANESE, notice_track ) == 0,
+                     "23f: set track-level cprt" );
+        TEST_ASSERT( lsmash_set_copyright( cprt_root, cprt_tid, ISOM_LANGUAGE_CODE_JAPANESE, notice_track ) < 0,
+                     "23f: reject duplicate language track-level cprt" );
+
+        /* Also verify lsmash_set_sdp sentinel and duplicate sdp/rtp rejection */
+        TEST_ASSERT( lsmash_set_sdp( cprt_root, 9999, sdp_track ) < 0,
+                     "23f: lsmash_set_sdp rejects non-existent track_ID=9999" );
+        TEST_ASSERT( lsmash_set_sdp( cprt_root, 0, sdp_movie ) == 0,
+                     "23f: set movie-level sdp (rtp)" );
+        TEST_ASSERT( lsmash_set_sdp( cprt_root, 0, sdp_movie ) < 0,
+                     "23f: reject duplicate movie-level sdp (rtp) without leak" );
+        TEST_ASSERT( lsmash_set_sdp( cprt_root, cprt_tid, sdp_track ) == 0,
+                     "23f: set track-level sdp" );
+        TEST_ASSERT( lsmash_set_sdp( cprt_root, cprt_tid, sdp_track ) < 0,
+                     "23f: reject duplicate track-level sdp without leak" );
+
+        lsmash_sample_t *s = lsmash_create_sample( 8 );
+        TEST_ASSERT( s != NULL, "23f: create sample for cprt movie" );
+        memset( s->data, 0x42, 8 );
+        s->index = v_idx;
+        s->dts   = 0;
+        s->cts   = 0;
+        s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( cprt_root, cprt_tid, s ) == 0, "23f: append sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( cprt_root, cprt_tid, 40 ) == 0, "23f: flush samples" );
+        TEST_ASSERT( lsmash_finish_movie( cprt_root, NULL ) == 0, "23f: finish cprt movie" );
+        lsmash_close_file( &cprt_param );
+        lsmash_destroy_root( cprt_root );
+
+        /* Read back and verify both Movie and Track cprt boxes */
+        cprt_root = lsmash_create_root();
+        memset( &cprt_param, 0, sizeof(cprt_param) );
+        TEST_ASSERT( lsmash_open_file( cprt_path, 1, &cprt_param ) == 0, "23f: reopen cprt_path" );
+        cprt_file = lsmash_set_file( cprt_root, &cprt_param );
+        TEST_ASSERT( lsmash_read_file( cprt_file, &cprt_param ) >= 0, "23f: read cprt_path" );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( cprt_file->moov->udta )
+                  && cprt_file->moov->udta->cprt_list.entry_count == 1,
+                     "23f: movie udta.cprt persisted" );
+        isom_cprt_t *rd_movie_cprt = (isom_cprt_t *)cprt_file->moov->udta->cprt_list.head->data;
+        TEST_ASSERT( rd_movie_cprt != NULL
+                  && rd_movie_cprt->language == ISOM_LANGUAGE_CODE_ENGLISH
+                  && rd_movie_cprt->notice != NULL
+                  && strcmp( (const char *)rd_movie_cprt->notice, notice_movie ) == 0,
+                     "23f: movie cprt language and notice match" );
+        isom_trak_t *rd_trak = (isom_trak_t *)cprt_file->moov->trak_list.head->data;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( rd_trak )
+                  && LSMASH_IS_EXISTING_BOX( rd_trak->udta )
+                  && rd_trak->udta->cprt_list.entry_count == 1,
+                     "23f: track udta.cprt persisted" );
+        isom_cprt_t *rd_track_cprt = (isom_cprt_t *)rd_trak->udta->cprt_list.head->data;
+        TEST_ASSERT( rd_track_cprt != NULL
+                  && rd_track_cprt->language == ISOM_LANGUAGE_CODE_JAPANESE
+                  && rd_track_cprt->notice != NULL
+                  && strcmp( (const char *)rd_track_cprt->notice, notice_track ) == 0,
+                     "23f: track cprt language and notice match" );
+        lsmash_close_file( &cprt_param );
+        lsmash_destroy_root( cprt_root );
+        remove( cprt_path );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23f: 0 bytes leaked after cprt/sdp boundary and roundtrip test" );
+#endif
+
+        /* 3) Duplicate single-child Box (iods / ctab) stream resilience & 0-leak verification */
+        const char *dup_box_path  = "tests/tmp_test_dup_ctab_iods.mp4";
+        const char *dup_dump_path = "tests/tmp_test_dup_ctab_iods_dump.txt";
+        lsmash_bs_t *bs = lsmash_bs_create();
+        TEST_ASSERT( bs != NULL, "23f: create bs for duplicate ctab/iods stream" );
+
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_MP42 );
+        lsmash_bs_put_be32( bs, 0 );
+
+        uint32_t mvhd_sz  = 108;
+        uint32_t iods1_sz = 21; /* 12 (FullBox) + 2 (tag=0x10, len=7) + 2 (OD_ID) + 5 (PLIs) */
+        uint32_t iods2_sz = 21;
+        uint32_t ctab1_sz = 16 + 2 * 8; /* 2 color entries */
+        uint32_t ctab2_sz = 16 + 3 * 8; /* 3 color entries */
+        uint32_t moov_sz  = 8 + mvhd_sz + iods1_sz + iods2_sz + ctab1_sz + ctab2_sz;
+
+        lsmash_bs_put_be32( bs, moov_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+
+        /* mvhd v0 (108 bytes) */
+        lsmash_bs_put_be32( bs, mvhd_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'v', 'h', 'd' ) );
+        lsmash_bs_put_be32( bs, 0 );          /* version + flags */
+        lsmash_bs_put_be32( bs, 0 );          /* creation_time */
+        lsmash_bs_put_be32( bs, 0 );          /* modification_time */
+        lsmash_bs_put_be32( bs, 600 );        /* timescale */
+        lsmash_bs_put_be32( bs, 600 );        /* duration */
+        lsmash_bs_put_be32( bs, 0x00010000 ); /* rate */
+        lsmash_bs_put_be16( bs, 0x0100 );     /* volume */
+        lsmash_bs_put_be16( bs, 0 );          /* reserved */
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0x00010000 );
+        for( int i = 1; i < 9; i++ )
+            lsmash_bs_put_be32( bs, i == 4 ? 0x00010000 : (i == 8 ? 0x40000000 : 0) );
+        for( int i = 0; i < 6; i++ )
+            lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 1 );          /* next_track_ID */
+
+        /* 1st iods (canonical) */
+        lsmash_bs_put_be32( bs, iods1_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'o', 'd', 's' ) );
+        lsmash_bs_put_be32( bs, 0 );          /* version + flags */
+        lsmash_bs_put_byte( bs, 0x10 );       /* MP4_IOD_Tag */
+        lsmash_bs_put_byte( bs, 7 );          /* length = 7 */
+        lsmash_bs_put_be16( bs, 0x004F );     /* ObjectDescriptorID=1, URL_Flag=0, includeInlineProfileLevelFlag=0, reserved=0xF */
+        lsmash_bs_put_byte( bs, 0xFF );       /* OD_PLI */
+        lsmash_bs_put_byte( bs, 0xFF );       /* scene_PLI */
+        lsmash_bs_put_byte( bs, 0x29 );       /* audio_PLI */
+        lsmash_bs_put_byte( bs, 0x15 );       /* visual_PLI */
+        lsmash_bs_put_byte( bs, 0xFF );       /* graphics_PLI */
+
+        /* 2nd iods (duplicate -> must fall back to unknown_box without overwriting moov->iods or leaking OD) */
+        lsmash_bs_put_be32( bs, iods2_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'i', 'o', 'd', 's' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_byte( bs, 0x10 );
+        lsmash_bs_put_byte( bs, 7 );
+        lsmash_bs_put_be16( bs, 0x008F );
+        lsmash_bs_put_byte( bs, 0x01 );
+        lsmash_bs_put_byte( bs, 0x02 );
+        lsmash_bs_put_byte( bs, 0x03 );
+        lsmash_bs_put_byte( bs, 0x04 );
+        lsmash_bs_put_byte( bs, 0x05 );
+
+        /* 1st ctab (canonical: 2 entries, entry[1].r == 0x1234) */
+        lsmash_bs_put_be32( bs, ctab1_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 't', 'a', 'b' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be16( bs, 0x8000 );
+        lsmash_bs_put_be16( bs, 1 ); /* size = 1 -> 2 entries */
+        lsmash_bs_put_be64( bs, 0x0000111122223333ULL );
+        lsmash_bs_put_be64( bs, 0x0001123456789ABCULL );
+
+        /* 2nd ctab (duplicate -> must fall back to unknown_box without leaking color_table.array) */
+        lsmash_bs_put_be32( bs, ctab2_sz );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 't', 'a', 'b' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be16( bs, 0x8000 );
+        lsmash_bs_put_be16( bs, 2 ); /* size = 2 -> 3 entries */
+        lsmash_bs_put_be64( bs, 0x0000AAAA00000000ULL );
+        lsmash_bs_put_be64( bs, 0x0001BBBB00000000ULL );
+        lsmash_bs_put_be64( bs, 0x0002CCCC00000000ULL );
+
+        uint32_t dup_raw_len = 0;
+        uint8_t *dup_raw = lsmash_bs_export_data( bs, &dup_raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( write_test_file( dup_box_path, dup_raw, dup_raw_len ) == 0,
+                     "23f: write duplicate ctab/iods stream" );
+        lsmash_free( dup_raw );
+
+        lsmash_root_t *dup_root = lsmash_create_root();
+        TEST_ASSERT( dup_root != NULL, "23f: create root for duplicate ctab/iods stream" );
+        lsmash_file_parameters_t dup_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( dup_box_path, 1, &dup_param ) == 0, "23f: open dup_box_path" );
+        dup_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *dup_file = lsmash_set_file( dup_root, &dup_param );
+        TEST_ASSERT( dup_file != NULL, "23f: set dup_file" );
+        /* Note: moov has no trak_list so lsm_importer_find may report invalid mandatory boxes,
+         * while read_children has parsed moov's children cleanly into dup_file->moov. */
+        (void)lsmash_read_file( dup_file, &dup_param );
+        dup_file->root->file  = dup_file;
+        dup_file->initializer = dup_file;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( dup_file->moov )
+                  && LSMASH_IS_EXISTING_BOX( dup_file->moov->iods )
+                  && dup_file->moov->iods->OD != NULL,
+                     "23f: first moov.iods retained intact when duplicate iods is present" );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( dup_file->moov->ctab )
+                  && dup_file->moov->ctab->color_table.size == 1
+                  && dup_file->moov->ctab->color_table.array != NULL
+                  && dup_file->moov->ctab->color_table.array[1].r == 0x1234,
+                     "23f: first moov.ctab retained intact when duplicate ctab is present" );
+        TEST_ASSERT( lsmash_print_movie( dup_root, dup_dump_path ) == 0,
+                     "23f: print_movie dumps canonical and unknown-fallback duplicate ctab/iods cleanly" );
+        remove( dup_dump_path );
+        lsmash_close_file( &dup_param );
+        lsmash_destroy_root( dup_root );
+        remove( dup_box_path );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23f: 0 bytes leaked after reading and destroying duplicate ctab/iods stream" );
+#endif
     }
 
     remove( mp4_path );
