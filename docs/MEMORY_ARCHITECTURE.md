@@ -132,29 +132,46 @@ typedef struct
 
 When `lsmash_resize_multiple_buffers( multiple_buffer, new_buffer_size )` is called:
 1. **Validation & Overflow Protection**:
-   - Rejects `!multiple_buffer`, `!multiple_buffer->buffers`, or `new_buffer_size == 0`.
+   - Rejects `!multiple_buffer`, `!multiple_buffer->buffers`, `!multiple_buffer->number_of_buffers`, or `new_buffer_size == 0`.
    - If `new_buffer_size == old_buffer_size`, returns `multiple_buffer` immediately.
-   - Verifies `(uint64_t)count * new_buffer_size <= UINT32_MAX` to prevent 32-bit multiplication overflow.
-2. **Shrinking (`new_buffer_size < old_buffer_size`)**:
-   - Before calling `lsmash_realloc()`, iterates forward for `i = 1` up to `count - 1` and moves `new_buffer_size` bytes from `buffers + i * old_buffer_size` to `buffers + i * new_buffer_size` using `memmove()`.
-   - Calls `lsmash_realloc( multiple_buffer->buffers, count * new_buffer_size )`. If `lsmash_realloc` fails, restores the original stride in reverse order so the existing buffer bank remains intact before returning `NULL`.
+   - Verifies `(size_t)number_of_buffers <= SIZE_MAX / new_buffer_size` and `(uint64_t)number_of_buffers * new_buffer_size <= UINT32_MAX` to prevent both `size_t` and 32-bit multiplication overflows (shared with `lsmash_create_multiple_buffers()`).
+2. **Transactional Shrinking (`new_buffer_size < old_buffer_size`)**:
+   - Allocates a fresh destination bank (`lsmash_malloc( total_alloc )`) first; if allocation fails, returns `NULL` immediately without modifying `multiple_buffer->buffers` or mutating the stored buffer layout.
+   - Copies the leading `new_buffer_size` bytes of each buffer (`i = 0 .. number_of_buffers - 1`) from `src + (size_t)i * old_buffer_size` via `memcpy()`, then frees the previous allocation (`lsmash_free()`).
 3. **Expanding (`new_buffer_size > old_buffer_size`)**:
-   - Calls `lsmash_realloc( multiple_buffer->buffers, count * new_buffer_size )` first.
-   - Iterates in **reverse order** (`i = count - 1` down to `0`), moving `old_buffer_size` bytes from `temp + i * old_buffer_size` to `temp + i * new_buffer_size` via `memmove()`, and zero-initializing the newly exposed tail `[old_buffer_size .. new_buffer_size - 1]` of each buffer via `memset()`.
+   - Calls `lsmash_realloc( multiple_buffer->buffers, total_alloc )` first (leaving `multiple_buffer->buffers` intact on `NULL` failure).
+   - Iterates in **reverse order** (`i = count - 1` down to `1`), moving `old_buffer_size` bytes from `temp + (size_t)i * old_buffer_size` to `temp + (size_t)i * new_buffer_size` via `memmove()`, and zero-initializing the newly exposed tail `[old_buffer_size .. new_buffer_size - 1]` of every buffer (including buffer `0`) via `memset()`.
 
 ---
 
-## 5. C11 Debug Memory Auditor (`common/alloc.{c,h}`)
+## 5. Allocator Contracts & C11 Debug Memory Auditor (`common/alloc.{c,h}`)
 
-When configured with `--enable-debug-alloc` (or compiled with `-DLSMASH_DEBUG_ALLOC`, which `make test` enables automatically), all `lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, and `lsmash_freep` calls are routed through `common/alloc.c`:
+All four core allocator entry points (`lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`) enforce deterministic zero-size and overflow contracts alongside optional audit instrumentation:
 
-1. **64-Byte Aligned Intrusive Header (`lsm_alloc_header_t`) & Redzone**:
+1. **Release Zero-Size & `NULL` Contracts (`common/alloc.c`)**:
+   - In release builds, `lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, and `lsmash_memdup` guarantee a **non-`NULL` minimum 1-byte allocation on `size == 0`** (`size ? size : 1`) when memory is available, eliminating platform-dependent `malloc(0)` / `realloc(p, 0)` ambiguity; `lsmash_memdup` skips `memcpy()` when `size == 0` and rejects `ptr == NULL`.
+2. **Debug `LSM_ALLOC_MAX_DEBUG_SIZE` Overflow Guard**:
+   - When configured with `--enable-debug-alloc` (or compiled with `-DLSMASH_DEBUG_ALLOC`, which `make test` enables automatically), every debug wrapper checks `size > LSM_ALLOC_MAX_DEBUG_SIZE` (`SIZE_MAX - sizeof(lsm_alloc_header_t) - LSM_ALLOC_REDZONE_SIZE`) up front in `lsmash_malloc_debug`, `lsmash_malloc_zero_debug`, `lsmash_realloc_debug`, and `lsmash_memdup_debug`, returning `NULL` cleanly without integer wraparound or mutating existing `realloc` source blocks.
+3. **64-Byte Aligned Intrusive Header (`lsm_alloc_header_t`) & Redzone**:
    - Prepends a 64-byte header (`magic`, `size`, doubly-linked `prev`/`next`, `__FILE__`, `__LINE__`, `#size`/`#ptr` stringified expression, and 8-byte `front_canary = 0xC0DEC0DEC0DEC0DEULL`) and appends a 16-byte rear redzone filled with `0xA5`.
    - Because `sizeof(lsm_alloc_header_t) == 64`, the returned user pointer preserves 16-byte alignment on 64-bit platforms.
-2. **Uninitialized & Freed Memory Poisoning**:
+4. **Uninitialized & Freed Memory Poisoning**:
    - `lsmash_malloc` fills newly allocated user bytes with `0xCD` (`LSM_ALLOC_POISON_ALLOC`) to immediately expose uninitialized memory reads.
    - `lsmash_free` verifies front and rear canaries, marks `hdr->magic = 0xDEAD7EEDDEAD7EEDULL` to catch double-frees, and overwrites the payload with `0xDD` (`LSM_ALLOC_POISON_FREE`) to catch use-after-free bugs.
-3. **Function-Pointer Compatibility**:
+5. **Function-Pointer Compatibility**:
    - `common/alloc.c` defines `#define LSMASH_ALLOC_IMPLEMENTATION` before including `common/internal.h` and provides real linkable functions for `lsmash_malloc`, `lsmash_free`, etc. alongside the macro wrappers in `common/alloc.h`, so passing `lsmash_free` as an `lsmash_entry_data_eliminator` callback works seamlessly.
-4. **Zero-Leak Verification API**:
+6. **Zero-Leak Verification API**:
    - `lsm_alloc_get_active_count()`, `lsm_alloc_get_active_bytes()`, `lsm_alloc_dump_leaks()`, and `lsm_alloc_verify_no_leaks()` allow every test suite in `tests/test_main.c` to assert that 0 blocks and 0 bytes remain allocated at test completion and after error-path rollbacks.
+
+---
+
+## 6. Container Allocation Bounds & OOM Rollback Contracts (`core/`, `common/osdep.c`)
+
+1. **Box OOM Rollback (`core/movie.c`, `core/read.c`)**:
+   - `lsmash_set_copyright()` and `lsmash_set_sdp()` validate `strlen() < UINT32_MAX`, check for existing `sdp`/`rtp` boxes, and immediately invoke `lsm_box_remove_by_itself()` on incomplete `cprt`, `sdp`, or `rtp` boxes if `lsmash_memdup()` fails, leaving no orphan box without a payload in the tree.
+   - Duplicate single-child boxes (`read_iods`, `read_ctab`, and `metaitem` child boxes `read_mean`, `read_name`, `read_data`) fall back to `read_unknown_box()` when `LSMASH_IS_EXISTING_BOX(...)` already holds, preventing replacement leaks of existing child structs or string allocations.
+2. **Metadata Sentinel & Allocation Wraparound Guards (`core/meta.c`)**:
+   - `meta_add_metadata()` verifies `LSMASH_IS_EXISTING_BOX( file->moov )` at runtime (preventing static `moov` sentinel mutation when `lsmash_set_itunes_metadata()` is called on an active Media Segment) and enforces `UINT32_MAX` string length bounds.
+   - `lsmash_get_itunes_metadata()` delegates string duplication for `mean`, `name`, and `data` payloads to `meta_alloc_cstr_copy()`, which explicitly enforces `len <= SIZE_MAX - 1` before evaluating `(size_t)len + 1`. Even under the non-`NULL` 1-byte `lsmash_malloc(0)` contract, a 32-bit `UINT32_MAX` length cannot wrap `len + 1` to `0` and trigger a heap buffer overflow in `memcpy()`.
+3. **Platform Wide-Char Conversion Guards (`common/osdep.c`, `common/utils.c`)**:
+   - `lsmash_string_to_wchar()`, `lsmash_string_from_wchar()`, and `lsmash_convert_ansi_to_utf8()` initialize output pointers to `NULL`, verify `SIZE_MAX / sizeof(wchar_t)` bounds before multiplying, allocate/free consistently via `lsmash_malloc`/`lsmash_free`, and roll back cleanly if `MultiByteToWideChar()` or `WideCharToMultiByte()` fails.
