@@ -3320,6 +3320,577 @@ int test_container_metadata_and_edit_list_roundtrip( void )
 #endif
     }
 
+    /*-----------------------------------------------------------------------
+     * 23g. Regression tests for summary compressorname symmetry/bounds,
+     *      chapter parsing & UTF-8 BOM truncation bounds, corrupted
+     *      compressorname/chan/ftab printing, and iTunes metadata string copy
+     *-----------------------------------------------------------------------*/
+    {
+        /* 1) lsmash_compare_summary(): symmetric comparison & non-NUL 33-byte safety */
+        lsmash_video_summary_t *sum_a = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+        lsmash_video_summary_t *sum_b = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+        TEST_ASSERT( sum_a != NULL && sum_b != NULL, "23g: create video summaries" );
+        sum_a->sample_type = sum_b->sample_type = ISOM_CODEC_TYPE_AVC1_VIDEO;
+        sum_a->width       = sum_b->width       = 1920;
+        sum_a->height      = sum_b->height      = 1080;
+        sum_a->depth       = sum_b->depth       = 24;
+        sum_a->par_h       = sum_b->par_h       = 1;
+        sum_a->par_v       = sum_b->par_v       = 1;
+
+        /* Empty vs non-empty must differ in both argument orders */
+        sum_a->compressorname[0] = '\0';
+        memcpy( sum_b->compressorname, "\012AVC Coding", 12 );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) != 0,
+                     "23g: empty vs non-empty compressorname differs (a, b)" );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_b, (lsmash_summary_t *)sum_a ) != 0,
+                     "23g: empty vs non-empty compressorname differs (b, a)" );
+
+        /* Prefix vs full name must differ in both argument orders */
+        memset( sum_a->compressorname, 0, sizeof(sum_a->compressorname) );
+        memset( sum_b->compressorname, 0, sizeof(sum_b->compressorname) );
+        memcpy( sum_a->compressorname, "AVC", 4 );
+        memcpy( sum_b->compressorname, "AVC Coding", 11 );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) != 0,
+                     "23g: prefix 'AVC' vs 'AVC Coding' differs (a, b)" );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_b, (lsmash_summary_t *)sum_a ) != 0,
+                     "23g: prefix 'AVC' vs 'AVC Coding' differs (b, a)" );
+
+        /* Pascal prefix vs full Pascal name must also differ symmetrically */
+        memset( sum_a->compressorname, 0, sizeof(sum_a->compressorname) );
+        memset( sum_b->compressorname, 0, sizeof(sum_b->compressorname) );
+        memcpy( sum_a->compressorname, "\003AVC", 5 );
+        memcpy( sum_b->compressorname, "\012AVC Coding", 12 );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) != 0
+                  && lsmash_compare_summary( (lsmash_summary_t *)sum_b, (lsmash_summary_t *)sum_a ) != 0,
+                     "23g: Pascal prefix vs full compressorname differs symmetrically" );
+
+        /* Identical names match */
+        memcpy( sum_a->compressorname, "\012AVC Coding", 12 );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) == 0,
+                     "23g: identical compressorname matches" );
+
+        /* Unterminated 33-byte buffers filled with non-NUL bytes must not OOB read */
+        memset( sum_a->compressorname, 'X', sizeof(sum_a->compressorname) );
+        memset( sum_b->compressorname, 'X', sizeof(sum_b->compressorname) );
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) == 0,
+                     "23g: identical 33-byte non-NUL compressorname compares equal without OOB" );
+        sum_b->compressorname[31] = 'Y';
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) != 0
+                  && lsmash_compare_summary( (lsmash_summary_t *)sum_b, (lsmash_summary_t *)sum_a ) != 0,
+                     "23g: non-NUL 32nd byte difference detected safely" );
+        sum_b->compressorname[31] = '\0';
+        TEST_ASSERT( lsmash_compare_summary( (lsmash_summary_t *)sum_a, (lsmash_summary_t *)sum_b ) != 0
+                  && lsmash_compare_summary( (lsmash_summary_t *)sum_b, (lsmash_summary_t *)sum_a ) != 0,
+                     "23g: 31-byte NUL-terminated vs 33-byte non-NUL differs safely" );
+
+        lsmash_cleanup_summary( (lsmash_summary_t *)sum_a );
+        lsmash_cleanup_summary( (lsmash_summary_t *)sum_b );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23g: 0 bytes leaked after summary compressorname tests" );
+#endif
+
+        /* 2) Chapter parsing: NUL-prefixed lines, missing '=' / ' ' separators,
+         *    and add_bom = 1 UTF-8 boundary truncation preventing uint8_t wraparound */
+        const char *chap_edge_mp4  = "tests/tmp_test_chap_edge.mp4";
+        const char *chap_edge_txt  = "tests/tmp_test_chap_edge.txt";
+        const char *chap_edge_dump = "tests/tmp_test_chap_edge_dump.txt";
+
+        lsmash_root_t *c_root = lsmash_create_root();
+        lsmash_file_parameters_t c_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( chap_edge_mp4, 0, &c_param ) == 0, "23g: open chap_edge_mp4" );
+        lsmash_brand_type mp42_brands[3] = { ISOM_BRAND_TYPE_M4V, ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+        c_param.major_brand = ISOM_BRAND_TYPE_M4V;
+        c_param.brands      = mp42_brands;
+        c_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( c_root, &c_param ) != NULL, "23g: set chap_edge file" );
+        lsmash_movie_parameters_t c_mparam;
+        lsmash_initialize_movie_parameters( &c_mparam );
+        c_mparam.timescale = 1000;
+        TEST_ASSERT( lsmash_set_movie_parameters( c_root, &c_mparam ) == 0, "23g: set chap_edge movie params" );
+        uint32_t c_tid = lsmash_create_track( c_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t c_tp;
+        lsmash_initialize_track_parameters( &c_tp );
+        c_tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        TEST_ASSERT( lsmash_set_track_parameters( c_root, c_tid, &c_tp ) == 0, "23g: set chap_edge track params" );
+        lsmash_media_parameters_t c_mp;
+        lsmash_initialize_media_parameters( &c_mp );
+        c_mp.timescale = 1000;
+        TEST_ASSERT( lsmash_set_media_parameters( c_root, c_tid, &c_mp ) == 0, "23g: set chap_edge media params" );
+        lsmash_video_summary_t *c_vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( c_root, c_tid, c_vsum ) == 1, "23g: add sample entry for chap_edge" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)c_vsum );
+        lsmash_sample_t *c_s = lsmash_create_sample( 8 );
+        memset( c_s->data, 0x33, 8 );
+        c_s->dts = 0; c_s->cts = 0; c_s->index = 1;
+        c_s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( c_root, c_tid, c_s ) == 0, "23g: append chap_edge sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( c_root, c_tid, 10000 ) == 0, "23g: flush chap_edge sample" );
+        TEST_ASSERT( lsmash_update_track_duration( c_root, c_tid, 0 ) == 0, "23g: update chap_edge track duration" );
+
+        /* 2a) Leading NUL / short 0xEF / missing '=' / missing ' ' must not UB or crash */
+        static const uint8_t nul_hdr[5] = { '\0', '\0', 'B', 'A', '\n' };
+        TEST_ASSERT( write_test_file( chap_edge_txt, nul_hdr, sizeof(nul_hdr) ) == 0, "23g: write nul_hdr chapter" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) < 0,
+                     "23g: leading NUL line chapter file rejected cleanly" );
+
+        static const uint8_t short_ef[1] = { 0xEF };
+        TEST_ASSERT( write_test_file( chap_edge_txt, short_ef, sizeof(short_ef) ) == 0, "23g: write 1-byte 0xEF" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) < 0,
+                     "23g: 1-byte 0xEF chapter file rejected cleanly without stack overread" );
+
+        const char *bad_min_sep = "00:00:00.000NoSpaceSeparator\n";
+        TEST_ASSERT( write_test_file( chap_edge_txt, (const uint8_t *)bad_min_sep, strlen( bad_min_sep ) ) == 0,
+                     "23g: write minimum chapter missing space" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) == 0
+                  && lsmash_count_tyrant_chapter( c_root ) == 0,
+                     "23g: minimum chapter missing space exits loop safely without NULL+1 UB" );
+        lsmash_delete_tyrant_chapter( c_root );
+
+        const char *bad_simp_eq =
+            "CHAPTER01=00:00:00.000\n"
+            "CHAPTER01NAME_MISSING_EQUALS\n";
+        TEST_ASSERT( write_test_file( chap_edge_txt, (const uint8_t *)bad_simp_eq, strlen( bad_simp_eq ) ) == 0,
+                     "23g: write simple chapter missing '='" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) == 0
+                  && lsmash_count_tyrant_chapter( c_root ) == 0,
+                     "23g: simple chapter missing '=' exits loop safely without NULL+1 UB" );
+        lsmash_delete_tyrant_chapter( c_root );
+
+        /* Simple chapter containing an embedded NUL-prefixed line and CRLF blank line before entry 2 */
+        static const char nul_mid[] =
+            "CHAPTER01=00:00:00.000\n"
+            "CHAPTER01NAME=First\n"
+            "\0\0ignored_nul_line\n"
+            "\r\n"
+            "CHAPTER02=00:00:02.000\n"
+            "CHAPTER02NAME=Second\n";
+        TEST_ASSERT( write_test_file( chap_edge_txt, (const uint8_t *)nul_mid, sizeof(nul_mid) - 1 ) == 0,
+                     "23g: write chapter file with NUL-prefixed line between entries" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) == 0
+                  && lsmash_count_tyrant_chapter( c_root ) == 2,
+                     "23g: chapter_lumber_line skips NUL-prefixed and blank lines without size_t underflow" );
+        lsmash_delete_tyrant_chapter( c_root );
+
+        /* 2b) 252-256 byte chapter names with UTF-8 boundary crossings and non-UTF-8 fallback */
+        /* First verify add_bom = 0 on a 256-byte non-UTF-8 (0x82 0xA0 repeated) title:
+         * bounded 3-byte lookback must fall back to max_len (255) instead of stripping to 0. */
+        char cp932_chap_buf[512];
+        size_t cp_pos = (size_t)snprintf( cp932_chap_buf, sizeof(cp932_chap_buf),
+                                          "CHAPTER01=00:00:00.000\nCHAPTER01NAME=" );
+        for( size_t k = 0; k < 128; k++ )
+        {
+            cp932_chap_buf[cp_pos++] = (char)0x82;
+            cp932_chap_buf[cp_pos++] = (char)0xA0;
+        }
+        cp932_chap_buf[cp_pos++] = '\n';
+        TEST_ASSERT( write_test_file( chap_edge_txt, (const uint8_t *)cp932_chap_buf, cp_pos ) == 0,
+                     "23g: write 256B non-UTF-8 chapter file" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 0 ) == 0
+                  && lsmash_count_tyrant_chapter( c_root ) == 1,
+                     "23g: set 256B non-UTF-8 chapter with add_bom=0" );
+        {
+            double ts0 = -1.0;
+            const char *raw_cp = lsmash_get_tyrant_chapter( c_root, 1, &ts0 );
+            TEST_ASSERT( raw_cp && strlen( raw_cp ) == 255
+                      && (uint8_t)raw_cp[0] == 0x82 && (uint8_t)raw_cp[254] == 0x82,
+                         "23g: add_bom=0 non-UTF-8 0x80..0xBF run falls back to 255B instead of stripping to 0" );
+        }
+        lsmash_delete_tyrant_chapter( c_root );
+
+        char chap_bom_buf[4096];
+        size_t pos = 0;
+        /* Chapter 1: 254 ASCII 'A' -> truncated to 252 + 3B BOM == 255 bytes */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER01=00:00:00.000\nCHAPTER01NAME=" );
+        memset( chap_bom_buf + pos, 'A', 254 );
+        pos += 254;
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 2: 251 'B' + 3-byte UTF-8 (0xE3 0x81 0x82) = 254 bytes -> cut at 251 (+3B BOM == 254) */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER02=00:00:01.000\nCHAPTER02NAME=" );
+        memset( chap_bom_buf + pos, 'B', 251 );
+        pos += 251;
+        chap_bom_buf[pos++] = (char)0xE3;
+        chap_bom_buf[pos++] = (char)0x81;
+        chap_bom_buf[pos++] = (char)0x82;
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 3: 249 'C' + 4-byte UTF-8 (0xF0 0x9F 0x98 0x80) + "XY" = 255 bytes -> cut at 249 (+3B BOM == 252) */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER03=00:00:02.000\nCHAPTER03NAME=" );
+        memset( chap_bom_buf + pos, 'C', 249 );
+        pos += 249;
+        chap_bom_buf[pos++] = (char)0xF0;
+        chap_bom_buf[pos++] = (char)0x9F;
+        chap_bom_buf[pos++] = (char)0x98;
+        chap_bom_buf[pos++] = (char)0x80;
+        chap_bom_buf[pos++] = 'X';
+        chap_bom_buf[pos++] = 'Y';
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 4: 249 'D' + 3-byte UTF-8 (0xE3 0x81 0x82) + "ZZ" = 254 bytes -> keeps full 252 (+3B BOM == 255) */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER04=00:00:03.000\nCHAPTER04NAME=" );
+        memset( chap_bom_buf + pos, 'D', 249 );
+        pos += 249;
+        chap_bom_buf[pos++] = (char)0xE3;
+        chap_bom_buf[pos++] = (char)0x81;
+        chap_bom_buf[pos++] = (char)0x82;
+        chap_bom_buf[pos++] = 'Z';
+        chap_bom_buf[pos++] = 'Z';
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 5: exact len == max_len == 252 (249 'E' + 0xE3 0x81 0x82) -> unchanged 252 (+3B BOM == 255) */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER05=00:00:04.000\nCHAPTER05NAME=" );
+        memset( chap_bom_buf + pos, 'E', 249 );
+        pos += 249;
+        chap_bom_buf[pos++] = (char)0xE3;
+        chap_bom_buf[pos++] = (char)0x81;
+        chap_bom_buf[pos++] = (char)0x82;
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 6: 252 'F' + 3-byte UTF-8 lead at str[252] (0xE3 0x81 0x82) = 255 bytes -> keeps all 252 'F' */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER06=00:00:05.000\nCHAPTER06NAME=" );
+        memset( chap_bom_buf + pos, 'F', 252 );
+        pos += 252;
+        chap_bom_buf[pos++] = (char)0xE3;
+        chap_bom_buf[pos++] = (char)0x81;
+        chap_bom_buf[pos++] = (char)0x82;
+        chap_bom_buf[pos++] = '\n';
+
+        /* Chapter 7: 256B repeated 0x82 0xA0 (all bytes 0x80..0xBF, non-UTF-8) -> falls back to 252 (+3B BOM == 255) */
+        pos += (size_t)snprintf( chap_bom_buf + pos, sizeof(chap_bom_buf) - pos,
+                                 "CHAPTER07=00:00:06.000\nCHAPTER07NAME=" );
+        for( size_t k = 0; k < 128; k++ )
+        {
+            chap_bom_buf[pos++] = (char)0x82;
+            chap_bom_buf[pos++] = (char)0xA0;
+        }
+        chap_bom_buf[pos++] = '\n';
+
+        TEST_ASSERT( write_test_file( chap_edge_txt, (const uint8_t *)chap_bom_buf, pos ) == 0,
+                     "23g: write 252-256B UTF-8 & non-UTF-8 chapter file" );
+        TEST_ASSERT( lsmash_set_tyrant_chapter( c_root, (char *)chap_edge_txt, 1 ) == 0,
+                     "23g: set 252-256B chapters with add_bom=1" );
+        TEST_ASSERT( lsmash_finish_movie( c_root, NULL ) == 0, "23g: finish chap_edge_mp4" );
+        lsmash_close_file( &c_param );
+        lsmash_destroy_root( c_root );
+
+        /* Reopen, verify UTF-8 boundary lengths without uint8_t wraparound, and dump */
+        lsmash_root_t *c_rd_root = lsmash_create_root();
+        lsmash_file_parameters_t c_rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( chap_edge_mp4, 1, &c_rd_param ) == 0, "23g: reopen chap_edge_mp4" );
+        c_rd_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *c_rd_file = lsmash_set_file( c_rd_root, &c_rd_param );
+        TEST_ASSERT( lsmash_read_file( c_rd_file, &c_rd_param ) >= 0, "23g: read chap_edge_mp4" );
+        TEST_ASSERT( lsmash_count_tyrant_chapter( c_rd_root ) == 7, "23g: chapter count == 7 (no wraparound)" );
+        double ch_ts = -1.0;
+        const char *ch1 = lsmash_get_tyrant_chapter( c_rd_root, 1, &ch_ts );
+        const char *ch2 = lsmash_get_tyrant_chapter( c_rd_root, 2, &ch_ts );
+        const char *ch3 = lsmash_get_tyrant_chapter( c_rd_root, 3, &ch_ts );
+        const char *ch4 = lsmash_get_tyrant_chapter( c_rd_root, 4, &ch_ts );
+        const char *ch5 = lsmash_get_tyrant_chapter( c_rd_root, 5, &ch_ts );
+        const char *ch6 = lsmash_get_tyrant_chapter( c_rd_root, 6, &ch_ts );
+        const char *ch7 = lsmash_get_tyrant_chapter( c_rd_root, 7, &ch_ts );
+        TEST_ASSERT( ch1 && strlen( ch1 ) == 252 && ch1[0] == 'A' && ch1[251] == 'A',
+                     "23g: 254B ASCII chapter with BOM truncated to 252B body (stored 255B)" );
+        TEST_ASSERT( ch2 && strlen( ch2 ) == 251 && ch2[0] == 'B' && ch2[250] == 'B',
+                     "23g: 254B 3-byte UTF-8 boundary chapter truncated cleanly at 251B" );
+        TEST_ASSERT( ch3 && strlen( ch3 ) == 249 && ch3[0] == 'C' && ch3[248] == 'C',
+                     "23g: 255B 4-byte UTF-8 boundary chapter truncated cleanly at 249B" );
+        TEST_ASSERT( ch4 && strlen( ch4 ) == 252
+                  && (uint8_t)ch4[249] == 0xE3 && (uint8_t)ch4[250] == 0x81 && (uint8_t)ch4[251] == 0x82,
+                     "23g: 254B fitting 3-byte UTF-8 chapter preserves full 252B body" );
+        TEST_ASSERT( ch5 && strlen( ch5 ) == 252
+                  && ch5[0] == 'E' && ch5[248] == 'E'
+                  && (uint8_t)ch5[249] == 0xE3 && (uint8_t)ch5[250] == 0x81 && (uint8_t)ch5[251] == 0x82,
+                     "23g: exact 252B UTF-8 chapter preserved unchanged" );
+        TEST_ASSERT( ch6 && strlen( ch6 ) == 252 && ch6[0] == 'F' && ch6[251] == 'F',
+                     "23g: UTF-8 lead byte at str[max_len] returns exact max_len without off-by-one cut" );
+        TEST_ASSERT( ch7 && strlen( ch7 ) == 252
+                  && (uint8_t)ch7[0] == 0x82 && (uint8_t)ch7[1] == 0xA0
+                  && (uint8_t)ch7[250] == 0x82 && (uint8_t)ch7[251] == 0xA0,
+                     "23g: add_bom=1 non-UTF-8 0x80..0xBF run falls back to 252B instead of stripping to 0" );
+        TEST_ASSERT( lsmash_print_movie( c_rd_root, chap_edge_dump ) == 0,
+                     "23g: lsmash_print_movie dumps BOM-clamped chapters cleanly" );
+        remove( chap_edge_dump );
+
+        /* Verify NULL chpl->list guard in both lsmash_print_chapter_list and print_chpl */
+        {
+            lsmash_entry_list_t *saved_chpl_list = c_rd_file->moov->udta->chpl->list;
+            c_rd_file->moov->udta->chpl->list = NULL;
+            TEST_ASSERT( lsmash_print_chapter_list( c_rd_root ) < 0,
+                         "23g: lsmash_print_chapter_list rejects NULL chpl->list safely" );
+            TEST_ASSERT( lsmash_print_movie( c_rd_root, chap_edge_dump ) < 0,
+                         "23g: print_chpl rejects NULL chpl->list safely" );
+            c_rd_file->moov->udta->chpl->list = saved_chpl_list;
+            remove( chap_edge_dump );
+        }
+        lsmash_close_file( &c_rd_param );
+        lsmash_destroy_root( c_rd_root );
+        remove( chap_edge_mp4 );
+        remove( chap_edge_txt );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23g: 0 bytes leaked after chapter boundary tests" );
+#endif
+
+        /* 3) Corrupted compressorname (> 31 length & non-zero padding) + print_chan NULL guard */
+        const char *comp_mov  = "tests/tmp_test_comp_print.mov";
+        const char *comp_mp4  = "tests/tmp_test_comp_print.mp4";
+        const char *comp_dump = "tests/tmp_test_comp_print_dump.txt";
+
+        /* 3a) QTFF (.mov) branch: compressorname[0] = 200, compressorname[0] = 5 + garbage, and chan NULL guard */
+        lsmash_root_t *p_root = lsmash_create_root();
+        lsmash_file_parameters_t p_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( comp_mov, 0, &p_param ) == 0, "23g: open comp_mov" );
+        lsmash_brand_type qt_brands[1] = { ISOM_BRAND_TYPE_QT };
+        p_param.major_brand = ISOM_BRAND_TYPE_QT;
+        p_param.brands      = qt_brands;
+        p_param.brand_count = 1;
+        lsmash_file_t *p_wr_file = lsmash_set_file( p_root, &p_param );
+        TEST_ASSERT( p_wr_file != NULL, "23g: set comp_mov file" );
+        lsmash_movie_parameters_t p_mparam;
+        lsmash_initialize_movie_parameters( &p_mparam );
+        TEST_ASSERT( lsmash_set_movie_parameters( p_root, &p_mparam ) == 0, "23g: set comp_mov movie params" );
+
+        /* Track 1: compressorname[0] = 200 (> 31), 31 non-NUL bytes */
+        uint32_t ptid1 = lsmash_create_track( p_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t p_tp;
+        lsmash_initialize_track_parameters( &p_tp );
+        p_tp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( p_root, ptid1, &p_tp );
+        lsmash_media_parameters_t p_mp;
+        lsmash_initialize_media_parameters( &p_mp );
+        p_mp.timescale = 1000;
+        lsmash_set_media_parameters( p_root, ptid1, &p_mp );
+        lsmash_video_summary_t *pv1 = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+        pv1->sample_type = QT_CODEC_TYPE_APCH_VIDEO;
+        pv1->width = 64; pv1->height = 64; pv1->depth = 24;
+        pv1->compressorname[0] = (char)200;
+        memcpy( pv1->compressorname + 1, "0123456789ABCDEFGHIJKLMNOPQRSTU", 31 );
+        TEST_ASSERT( lsmash_add_sample_entry( p_root, ptid1, pv1 ) == 1, "23g: add QT comp=200 entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)pv1 );
+        lsmash_sample_t *ps1 = lsmash_create_sample( 8 );
+        memset( ps1->data, 0x11, 8 );
+        ps1->dts = 0; ps1->cts = 0; ps1->index = 1; ps1->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( p_root, ptid1, ps1 ) == 0, "23g: append sample 1" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( p_root, ptid1, 1000 ) == 0, "23g: flush sample 1" );
+
+        /* Track 2: compressorname[0] = 5 ("Hello"), non-zero padding garbage in [6..31] */
+        uint32_t ptid2 = lsmash_create_track( p_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_set_track_parameters( p_root, ptid2, &p_tp );
+        lsmash_set_media_parameters( p_root, ptid2, &p_mp );
+        lsmash_video_summary_t *pv2 = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+        pv2->sample_type = QT_CODEC_TYPE_APCH_VIDEO;
+        pv2->width = 64; pv2->height = 64; pv2->depth = 24;
+        pv2->compressorname[0] = 5;
+        memcpy( pv2->compressorname + 1, "HelloGARBAGE_BYTES_AFTER_LENGTH", 31 );
+        TEST_ASSERT( lsmash_add_sample_entry( p_root, ptid2, pv2 ) == 1, "23g: add QT comp=5+garbage entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)pv2 );
+        lsmash_sample_t *ps2 = lsmash_create_sample( 8 );
+        memset( ps2->data, 0x22, 8 );
+        ps2->dts = 0; ps2->cts = 0; ps2->index = 1; ps2->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( p_root, ptid2, ps2 ) == 0, "23g: append sample 2" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( p_root, ptid2, 1000 ) == 0, "23g: flush sample 2" );
+
+        /* Track 3: QTFF LPCM audio with chan box to exercise print_chan NULL guard */
+        uint32_t ptid3 = lsmash_create_track( p_root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+        lsmash_set_track_parameters( p_root, ptid3, &p_tp );
+        lsmash_media_parameters_t a_mp;
+        lsmash_initialize_media_parameters( &a_mp );
+        a_mp.timescale = 48000;
+        lsmash_set_media_parameters( p_root, ptid3, &a_mp );
+        lsmash_audio_summary_t *pa = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+        pa->sample_type      = QT_CODEC_TYPE_LPCM_AUDIO;
+        pa->frequency        = 48000;
+        pa->channels         = 2;
+        pa->sample_size      = 16;
+        pa->samples_in_frame = 1;
+        pa->bytes_per_frame  = 4;
+        lsmash_codec_specific_t *qfmt = lsmash_create_codec_specific_data(
+            LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS,
+            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        ((lsmash_qt_audio_format_specific_flags_t *)qfmt->data.structured)->format_flags =
+            QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER | QT_AUDIO_FORMAT_FLAG_PACKED;
+        lsmash_add_codec_specific_data( (lsmash_summary_t *)pa, qfmt );
+        lsmash_destroy_codec_specific_data( qfmt );
+        lsmash_codec_specific_t *qcl = lsmash_create_codec_specific_data(
+            LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT,
+            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        ((lsmash_qt_audio_channel_layout_t *)qcl->data.structured)->channelLayoutTag = QT_CHANNEL_LAYOUT_STEREO;
+        lsmash_add_codec_specific_data( (lsmash_summary_t *)pa, qcl );
+        lsmash_destroy_codec_specific_data( qcl );
+        TEST_ASSERT( lsmash_add_sample_entry( p_root, ptid3, pa ) == 1, "23g: add QT audio entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)pa );
+        /* Attach chan directly on the QT audio entry if codec-specific setup skipped it so
+         * the written MOV genuinely carries a chan box for read_chan + print_chan coverage. */
+        isom_trak_t *a_trak_w = (isom_trak_t *)p_wr_file->moov->trak_list.tail->data;
+        isom_audio_entry_t *a_entry_w = (isom_audio_entry_t *)a_trak_w->mdia->minf->stbl->stsd->list.head->data;
+        if( LSMASH_IS_NON_EXISTING_BOX( (isom_chan_t *)lsm_box_get_extension_box_format( &a_entry_w->extensions, QT_BOX_TYPE_CHAN ) ) )
+        {
+            isom_chan_t *chan_w = lsm_box_add_chan( a_entry_w );
+            TEST_ASSERT( LSMASH_IS_EXISTING_BOX( chan_w ), "23g: attach chan box on QT audio entry" );
+            chan_w->channelLayoutTag = QT_CHANNEL_LAYOUT_STEREO;
+        }
+        lsmash_sample_t *pas = lsmash_create_sample( 4 );
+        memset( pas->data, 0, 4 );
+        pas->dts = 0; pas->cts = 0; pas->index = 1; pas->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( p_root, ptid3, pas ) == 0, "23g: append audio sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( p_root, ptid3, 1 ) == 0, "23g: flush audio sample" );
+
+        TEST_ASSERT( lsmash_finish_movie( p_root, NULL ) == 0, "23g: finish comp_mov" );
+        lsmash_close_file( &p_param );
+        lsmash_destroy_root( p_root );
+
+        lsmash_root_t *p_rd_root = lsmash_create_root();
+        lsmash_file_parameters_t p_rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( comp_mov, 1, &p_rd_param ) == 0, "23g: reopen comp_mov" );
+        p_rd_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *p_rd_file = lsmash_set_file( p_rd_root, &p_rd_param );
+        TEST_ASSERT( lsmash_read_file( p_rd_file, &p_rd_param ) >= 0, "23g: read comp_mov" );
+
+        /* Mutate chan->numberChannelDescriptions > 0 with channelDescriptions == NULL to verify print_chan NULL guard */
+        isom_trak_t *a_trak = (isom_trak_t *)p_rd_file->moov->trak_list.tail->data;
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( a_trak ), "23g: get audio trak" );
+        isom_audio_entry_t *a_entry = (isom_audio_entry_t *)a_trak->mdia->minf->stbl->stsd->list.head->data;
+        isom_chan_t *chan = (isom_chan_t *)lsm_box_get_extension_box_format( &a_entry->extensions, QT_BOX_TYPE_CHAN );
+        TEST_ASSERT( LSMASH_IS_EXISTING_BOX( chan ), "23g: chan box exists on QT audio entry" );
+        chan->numberChannelDescriptions = 2;
+        chan->channelDescriptions       = NULL;
+
+        TEST_ASSERT( lsmash_print_movie( p_rd_root, comp_dump ) == 0,
+                     "23g: lsmash_print_movie dumps corrupted QT compressorname and NULL chan safely" );
+        chan->numberChannelDescriptions = 0;
+
+        /* Verify dump output clamped compressorname to 31 bytes and excluded trailing garbage */
+        FILE *dfp = fopen( comp_dump, "rb" );
+        TEST_ASSERT( dfp != NULL, "23g: open QT comp_dump" );
+        char dump_buf[16384];
+        size_t dump_len = fread( dump_buf, 1, sizeof(dump_buf) - 1, dfp );
+        fclose( dfp );
+        dump_buf[dump_len] = '\0';
+        TEST_ASSERT( strstr( dump_buf, "compressorname_length = 200\n" ) != NULL,
+                     "23g: QT raw unsigned compressorname_length = 200 printed without sign extension" );
+        TEST_ASSERT( strstr( dump_buf, "compressorname = 0123456789ABCDEFGHIJKLMNOPQRSTU\n" ) != NULL,
+                     "23g: QT compressorname clamped to 31 bytes" );
+        TEST_ASSERT( strstr( dump_buf, "compressorname_length = 5\n" ) != NULL,
+                     "23g: QT compressorname_length = 5 printed" );
+        TEST_ASSERT( strstr( dump_buf, "compressorname = Hello\n" ) != NULL,
+                     "23g: QT compressorname truncated to Pascal length 5" );
+        TEST_ASSERT( strstr( dump_buf, "GARBAGE" ) == NULL,
+                     "23g: QT non-zero padding garbage after Pascal length is not leaked into dump" );
+
+        remove( comp_dump );
+        lsmash_close_file( &p_rd_param );
+        lsmash_destroy_root( p_rd_root );
+        remove( comp_mov );
+
+        /* 3b) ISOBMFF (.mp4) branch: compressorname[0] = 200 & non-zero padding */
+        lsmash_root_t *iso_root = lsmash_create_root();
+        lsmash_file_parameters_t iso_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( comp_mp4, 0, &iso_param ) == 0, "23g: open comp_mp4" );
+        iso_param.major_brand = ISOM_BRAND_TYPE_MP42;
+        iso_param.brands      = mp42_brands;
+        iso_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( iso_root, &iso_param ) != NULL, "23g: set comp_mp4 file" );
+        TEST_ASSERT( lsmash_set_movie_parameters( iso_root, &p_mparam ) == 0, "23g: set comp_mp4 movie params" );
+        uint32_t itid = lsmash_create_track( iso_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_set_track_parameters( iso_root, itid, &p_tp );
+        lsmash_set_media_parameters( iso_root, itid, &p_mp );
+        lsmash_video_summary_t *iv = create_synth_av01_summary( 64, 64 );
+        iv->compressorname[0] = (char)200;
+        memcpy( iv->compressorname + 1, "0123456789ABCDEFGHIJKLMNOPQRSTU", 31 );
+        TEST_ASSERT( lsmash_add_sample_entry( iso_root, itid, iv ) == 1, "23g: add ISOBMFF comp=200 entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)iv );
+        lsmash_sample_t *is = lsmash_create_sample( 8 );
+        memset( is->data, 0x44, 8 );
+        is->dts = 0; is->cts = 0; is->index = 1; is->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+        TEST_ASSERT( lsmash_append_sample( iso_root, itid, is ) == 0, "23g: append ISOBMFF sample" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( iso_root, itid, 1000 ) == 0, "23g: flush ISOBMFF sample" );
+        TEST_ASSERT( lsmash_finish_movie( iso_root, NULL ) == 0, "23g: finish comp_mp4" );
+        lsmash_close_file( &iso_param );
+        lsmash_destroy_root( iso_root );
+
+        lsmash_root_t *iso_rd_root = lsmash_create_root();
+        lsmash_file_parameters_t iso_rd_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( comp_mp4, 1, &iso_rd_param ) == 0, "23g: reopen comp_mp4" );
+        iso_rd_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *iso_rd_file = lsmash_set_file( iso_rd_root, &iso_rd_param );
+        TEST_ASSERT( lsmash_read_file( iso_rd_file, &iso_rd_param ) >= 0, "23g: read comp_mp4" );
+        TEST_ASSERT( lsmash_print_movie( iso_rd_root, comp_dump ) == 0,
+                     "23g: lsmash_print_movie dumps corrupted ISOBMFF compressorname safely" );
+        dfp = fopen( comp_dump, "rb" );
+        TEST_ASSERT( dfp != NULL, "23g: open ISOBMFF comp_dump" );
+        dump_len = fread( dump_buf, 1, sizeof(dump_buf) - 1, dfp );
+        fclose( dfp );
+        dump_buf[dump_len] = '\0';
+        TEST_ASSERT( strstr( dump_buf, "compressorname_length = 200\n" ) != NULL
+                  && strstr( dump_buf, "compressorname = 0123456789ABCDEFGHIJKLMNOPQRSTU\n" ) != NULL,
+                     "23g: ISOBMFF compressorname clamped to 31 bytes without sign extension" );
+        remove( comp_dump );
+        lsmash_close_file( &iso_rd_param );
+        lsmash_destroy_root( iso_rd_root );
+        remove( comp_mp4 );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23g: 0 bytes leaked after corrupted compressorname & chan print tests" );
+#endif
+
+        /* 4) lsmash_set_itunes_metadata() sentinel guard when active file has non-existing moov */
+        const char *meta_init_path = "tests/tmp_test_meta_seg_init.mp4";
+        const char *meta_seg_path  = "tests/tmp_test_meta_seg.m4s";
+        const lsmash_brand_type meta_seg_brands[3] = {
+            ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_MP42
+        };
+        lsmash_root_t *m_seg_root = lsmash_create_root();
+        lsmash_file_parameters_t m_init_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( meta_init_path, 0, &m_init_param ) == 0, "23g: open meta_init_path" );
+        m_init_param.mode &= ~LSMASH_FILE_MODE_MEDIA;
+        m_init_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+        m_init_param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        m_init_param.brands      = (lsmash_brand_type *)meta_seg_brands;
+        m_init_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( m_seg_root, &m_init_param ) != NULL, "23g: set meta init segment" );
+        uint32_t m_seg_tid = seg_create_video_track( m_seg_root );
+        TEST_ASSERT( m_seg_tid != 0, "23g: create track for meta segment test" );
+
+        lsmash_file_parameters_t m_seg_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( meta_seg_path, 0, &m_seg_param ) == 0, "23g: open meta_seg_path" );
+        m_seg_param.mode &= ~LSMASH_FILE_MODE_INITIALIZATION;
+        m_seg_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+        lsmash_file_t *m_seg_file = lsmash_set_file( m_seg_root, &m_seg_param );
+        TEST_ASSERT( m_seg_file != NULL, "23g: set meta media segment" );
+        lsmash_adhoc_remux_t m_remux = { .buffer_size = 65536 };
+        TEST_ASSERT( lsmash_switch_media_segment( m_seg_root, m_seg_file, &m_remux ) == 0,
+                     "23g: switch to media segment (active file has non-existing moov)" );
+
+        lsmash_itunes_metadata_t seg_md = { 0 };
+        seg_md.item         = ITUNES_METADATA_ITEM_TITLE;
+        seg_md.type         = ITUNES_METADATA_TYPE_STRING;
+        seg_md.value.string = "SegmentTitle";
+        TEST_ASSERT( lsmash_set_itunes_metadata( m_seg_root, seg_md ) < 0,
+                     "23g: lsmash_set_itunes_metadata rejects media segment lacking moov cleanly" );
+        TEST_ASSERT( LSMASH_IS_NON_EXISTING_BOX( lsm_box_default_non_existing_moov()->udta ),
+                     "23g: static non-existing moov sentinel udta remains unpolluted" );
+
+        TEST_ASSERT( seg_write_fragment( m_seg_root, m_seg_tid, 0 ) == 0, "23g: write fragment after metadata check" );
+        TEST_ASSERT( lsmash_finish_movie( m_seg_root, &m_remux ) == 0, "23g: finish meta media segment" );
+        lsmash_close_file( &m_init_param );
+        lsmash_close_file( &m_seg_param );
+        lsmash_destroy_root( m_seg_root );
+        remove( meta_init_path );
+        remove( meta_seg_path );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "23g: 0 bytes leaked after metadata non-existing moov sentinel test" );
+#endif
+    }
+
     remove( mp4_path );
     remove( bom_path );
     remove( qt_path );
