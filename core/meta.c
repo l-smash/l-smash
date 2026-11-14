@@ -35,8 +35,11 @@ static isom_data_t *meta_add_metadata( lsmash_file_t *file,
                                        lsmash_itunes_metadata_item item,
                                        char *meaning_string, char *name_string )
 {
-    assert( LSMASH_IS_EXISTING_BOX( file->moov ) );
-    if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov ) )
+        return lsm_box_default_non_existing_data();
+    size_t meaning_len = meaning_string ? strlen( meaning_string ) : 0;
+    size_t name_len    = name_string    ? strlen( name_string )    : 0;
+    if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (meaning_len == 0 || meaning_len > UINT32_MAX || name_len > UINT32_MAX))
      || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )
       && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( file->moov ) ))
      || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta )
@@ -59,16 +62,16 @@ static isom_data_t *meta_add_metadata( lsmash_file_t *file,
         if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mean( metaitem ) ) )
             goto fail;
         isom_mean_t *mean = metaitem->mean;
-        mean->meaning_string_length = strlen( meaning_string );    /* No null terminator */
+        mean->meaning_string_length = (uint32_t)meaning_len;    /* No null terminator */
         mean->meaning_string        = lsmash_memdup( meaning_string, mean->meaning_string_length );
         if( !mean->meaning_string )
             goto fail;
-        if( name_string && name_string[0] )
+        if( name_len > 0 )
         {
             if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_name( metaitem ) ) )
                 goto fail;
             isom_name_t *name = metaitem->name;
-            name->name_length = strlen( name_string );    /* No null terminator */
+            name->name_length = (uint32_t)name_len;     /* No null terminator */
             name->name        = lsmash_memdup( name_string, name->name_length );
             if( !name->name )
                 goto fail;
@@ -88,9 +91,10 @@ static int meta_set_itunes_metadata_string( lsmash_file_t *file,
 {
     if( !value.string )
         return LSMASH_ERR_FUNCTION_PARAM;
-    uint32_t value_length = strlen( value.string );
-    if( value_length == 0 )
+    size_t raw_length = strlen( value.string );
+    if( raw_length == 0 || raw_length > UINT32_MAX )
         return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t value_length = (uint32_t)raw_length;
     if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
         item = ITUNES_METADATA_ITEM_LONG_DESCRIPTION;
     isom_data_t *data = meta_add_metadata( file, item, meaning, name );
@@ -399,6 +403,19 @@ static lsmash_itunes_metadata_type meta_get_itunes_metadata_type( lsmash_itunes_
     return ITUNES_METADATA_TYPE_NONE;
 }
 
+static char *meta_alloc_cstr_copy( const uint8_t *src, uint32_t len )
+{
+    if( (len > 0 && !src) || len > SIZE_MAX - 1 )
+        return NULL;
+    uint8_t *dst = lsmash_malloc( (size_t)len + 1 );
+    if( !dst )
+        return NULL;
+    if( len > 0 )
+        memcpy( dst, src, len );
+    dst[len] = 0;
+    return (char *)dst;
+}
+
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata )
 {
     if( lsm_movie_check_initializer_present( root ) < 0 || !metadata )
@@ -434,12 +451,9 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     isom_mean_t *mean = metaitem->mean;
     if( LSMASH_IS_EXISTING_BOX( mean ) && mean->meaning_string && mean->meaning_string_length > 0 )
     {
-        uint8_t *temp = lsmash_malloc( mean->meaning_string_length + 1 );
-        if( !temp )
+        metadata->meaning = meta_alloc_cstr_copy( mean->meaning_string, mean->meaning_string_length );
+        if( !metadata->meaning )
             goto fail;
-        memcpy( temp, mean->meaning_string, mean->meaning_string_length );
-        temp[ mean->meaning_string_length ] = 0;
-        metadata->meaning = (char *)temp;
     }
     else
         metadata->meaning = NULL;
@@ -447,12 +461,9 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     isom_name_t *name = metaitem->name;
     if( LSMASH_IS_EXISTING_BOX( name ) && name->name && name->name_length > 0 )
     {
-        uint8_t *temp = lsmash_malloc( name->name_length + 1 );
-        if( !temp )
+        metadata->name = meta_alloc_cstr_copy( name->name, name->name_length );
+        if( !metadata->name )
             goto fail;
-        memcpy( temp, name->name, name->name_length );
-        temp[ name->name_length ] = 0;
-        metadata->name = (char *)temp;
     }
     else
         metadata->name = NULL;
@@ -461,15 +472,10 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     switch( metadata->type )
     {
         case ITUNES_METADATA_TYPE_STRING :
-        {
-            uint8_t *temp = lsmash_malloc( data->value_length + 1 );
-            if( !temp )
+            metadata->value.string = meta_alloc_cstr_copy( data->value, data->value_length );
+            if( !metadata->value.string )
                 goto fail;
-            memcpy( temp, data->value, data->value_length );
-            temp[ data->value_length ] = 0;
-            metadata->value.string = (char *)temp;
             break;
-        }
         case ITUNES_METADATA_TYPE_INTEGER :
             if( data->value_length > 8 )
             {

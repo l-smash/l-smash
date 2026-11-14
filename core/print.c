@@ -995,6 +995,14 @@ static int print_stsd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     return 0;
 }
 
+static void print_visual_compressorname( FILE *fp, int indent, const char *compressorname )
+{
+    uint8_t raw_len  = (uint8_t)compressorname[0];
+    uint8_t disp_len = LSMASH_MIN( raw_len, 31 );
+    lsmash_ifprintf( fp, indent, "compressorname_length = %"PRIu8"\n", raw_len );
+    lsmash_ifprintf( fp, indent, "compressorname = %.*s\n", (int)disp_len, compressorname + 1 );
+}
+
 static int print_visual_description( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     isom_visual_entry_t *visual = (isom_visual_entry_t *)box;
@@ -1017,8 +1025,7 @@ static int print_visual_description( FILE *fp, lsmash_file_t *file, isom_box_t *
         lsmash_ifprintf( fp, indent, "vertresolution = %f\n", lsmash_fixed2double( visual->vertresolution, 16 ) );
         lsmash_ifprintf( fp, indent, "dataSize = %"PRIu32"\n", visual->dataSize );
         lsmash_ifprintf( fp, indent, "frame_count = %"PRIu16"\n", visual->frame_count );
-        lsmash_ifprintf( fp, indent, "compressorname_length = %"PRIu8"\n", visual->compressorname[0] );
-        lsmash_ifprintf( fp, indent, "compressorname = %s\n", visual->compressorname + 1 );
+        print_visual_compressorname( fp, indent, visual->compressorname );
         lsmash_ifprintf( fp, indent, "depth = 0x%04"PRIx16, visual->depth );
         if( visual->depth == 32 )
             fprintf( fp, " (colour with alpha)\n" );
@@ -1043,8 +1050,7 @@ static int print_visual_description( FILE *fp, lsmash_file_t *file, isom_box_t *
         lsmash_ifprintf( fp, indent, "vertresolution = %f\n", lsmash_fixed2double( visual->vertresolution, 16 ) );
         lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx32"\n", visual->dataSize );
         lsmash_ifprintf( fp, indent, "frame_count = %"PRIu16"\n", visual->frame_count );
-        lsmash_ifprintf( fp, indent, "compressorname_length = %"PRIu8"\n", visual->compressorname[0] );
-        lsmash_ifprintf( fp, indent, "compressorname = %s\n", visual->compressorname + 1 );
+        print_visual_compressorname( fp, indent, visual->compressorname );
         lsmash_ifprintf( fp, indent, "depth = 0x%04"PRIx16, visual->depth );
         if( visual->depth == 0x0018 )
             fprintf( fp, " (colour with no alpha)\n" );
@@ -1401,7 +1407,7 @@ static int print_chan( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     lsmash_ifprintf( fp, indent, "channelLayoutTag = 0x%08"PRIx32"\n", chan->channelLayoutTag );
     lsmash_ifprintf( fp, indent, "channelBitmap = 0x%08"PRIx32"\n", chan->channelBitmap );
     lsmash_ifprintf( fp, indent, "numberChannelDescriptions = %"PRIu32"\n", chan->numberChannelDescriptions );
-    if( chan->numberChannelDescriptions )
+    if( chan->numberChannelDescriptions && chan->channelDescriptions )
     {
         for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
         {
@@ -1493,8 +1499,8 @@ static int print_text_description( FILE *fp, lsmash_file_t *file, isom_box_t *bo
     lsmash_ifprintf( fp, indent, "scrpSize = %"PRId16"\n", text->scrpSize );
     lsmash_ifprintf( fp, indent, "scrpColor\n" );
     print_ifprintf_rgb_color( fp, indent + 1, text->scrpColor );
-    if( text->font_name_length )
-        lsmash_ifprintf( fp, indent, "font_name = %s\n", text->font_name );
+    if( text->font_name_length && text->font_name )
+        lsmash_ifprintf( fp, indent, "font_name = %.*s\n", (int)text->font_name_length, text->font_name );
     return 0;
 }
 
@@ -1538,10 +1544,12 @@ static int print_ftab( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     for( lsmash_entry_t *entry = ftab->list->head; entry; entry = entry->next )
     {
         isom_font_record_t *data = (isom_font_record_t *)entry->data;
+        if( !data )
+            continue;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu16"]\n", i++ );
         lsmash_ifprintf( fp, indent, "font_ID = %"PRIu16"\n", data->font_ID );
-        if( data->font_name_length )
-            lsmash_ifprintf( fp, indent, "font_name = %s\n", data->font_name );
+        if( data->font_name_length && data->font_name )
+            lsmash_ifprintf( fp, indent, "font_name = %.*s\n", (int)data->font_name_length, data->font_name );
         --indent;
     }
     return 0;
@@ -1964,6 +1972,8 @@ static int print_udta( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
 
 static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
+    if( !((isom_chpl_t *)box)->list )
+        return LSMASH_ERR_INVALID_DATA;
     isom_chpl_t *chpl = (isom_chpl_t *)box;
     uint32_t timescale;
     if( !chpl->version )
@@ -1988,22 +1998,28 @@ static int print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+        if( !data )
+            continue;
         int64_t start_time = data->start_time / timescale;
         int hh =  start_time / 3600;
         int mm = (start_time /   60) % 60;
         int ss =  start_time         % 60;
         int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
         int with_bom = 0;
-        const char *chapter_name = data->chapter_name;
-        if( data->chapter_name_length >= 3
+        const char *chapter_name = data->chapter_name ? data->chapter_name : "";
+        uint8_t     name_len     = data->chapter_name ? data->chapter_name_length : 0;
+        if( name_len >= 3
          && !memcmp( chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
         {
             chapter_name += 3;
-            with_bom = 1;
+            name_len     -= 3;
+            with_bom      = 1;
         }
         lsmash_ifprintf( fp, indent++, "chapter[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "start_time = %02d:%02d:%02d.%03d\n", hh, mm, ss, ms );
-        lsmash_ifprintf( fp, indent--, with_bom ? "chapter_name = %s ( it has BOM in it )\n" : "chapter_name = %s\n", chapter_name );
+        lsmash_ifprintf( fp, indent--,
+                         with_bom ? "chapter_name = %.*s ( it has BOM in it )\n" : "chapter_name = %.*s\n",
+                         (int)name_len, chapter_name );
     }
     return 0;
 }

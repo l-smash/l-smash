@@ -53,38 +53,42 @@ static int chapter_get_start_time( char *chap_time, isom_chapter_entry_t *data )
     return 0;
 }
 
-static int chapter_lumber_line( char *buff, int bufsize, FILE *chapter  )
+/* Truncate str to at most max_len bytes without splitting a valid UTF-8
+ * multi-byte character across the boundary.  If str[max_len] is not a UTF-8
+ * continuation byte (0x80..0xBF), the preceding character is already complete
+ * and max_len is returned unchanged.  Otherwise, scan back at most 3 bytes to
+ * locate the UTF-8 lead byte; if no valid multi-byte lead byte precedes the
+ * split (e.g. legacy non-UTF-8 local encodings such as CP932 where 0x80..0xBF
+ * bytes can repeat arbitrarily), fall back to max_len so the title is never
+ * stripped down to 0 bytes. */
+static size_t chapter_utf8_truncate_len( const char *str, size_t max_len )
 {
-    char *tail;
-    /* remove newline codes and skip empty line */
-    do
+    size_t len = strlen( str );
+    if( len <= max_len )
+        return len;
+    if( ((uint8_t)str[max_len] & 0xC0) != 0x80 )
+        return max_len;
+    size_t cut  = max_len;
+    size_t back = 0;
+    while( cut > 0 && back < 3 && (((uint8_t)str[cut - 1] & 0xC0) == 0x80) )
     {
-        if( fgets( buff, bufsize, chapter ) == NULL )
-            return LSMASH_ERR_NAMELESS;
-        tail = &buff[ strlen( buff ) - 1 ];
-        while( tail >= buff && (*tail == '\n' || *tail == '\r') )
-            *tail-- = '\0';
-    } while( tail < buff );
-    return 0;
+        --cut;
+        ++back;
+    }
+    if( cut == 0 )
+        return max_len;
+    uint8_t lead    = (uint8_t)str[cut - 1];
+    size_t  seq_len = (lead >= 0xC2 && lead <= 0xDF) ? 2
+                    : (lead >= 0xE0 && lead <= 0xEF) ? 3
+                    : (lead >= 0xF0 && lead <= 0xF4) ? 4 : 0;
+    if( seq_len > back + 1 )
+        return cut - 1;
+    return max_len;
 }
 
-static int chapter_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
+static int chapter_set_entry_name( isom_chapter_entry_t *data, const char *chapter_name )
 {
-    char buff[CHAPTER_BUFSIZE];
-    /* get start_time */
-    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
-        return LSMASH_ERR_NAMELESS;
-    char *chapter_time = strchr( buff, '=' );   /* find separator */
-    if( !chapter_time++ )
-        return LSMASH_ERR_INVALID_DATA;
-    if( chapter_get_start_time( chapter_time, data ) < 0 )
-        return LSMASH_ERR_INVALID_DATA;
-    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
-        return LSMASH_ERR_NAMELESS;
-    char *chapter_name = strchr( buff, '=' );   /* find separator */
-    if( !chapter_name++ )
-        return LSMASH_ERR_INVALID_DATA;
-    int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
+    size_t len = chapter_utf8_truncate_len( chapter_name, UINT8_MAX );
     data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -93,9 +97,45 @@ static int chapter_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *dat
     return 0;
 }
 
+static int chapter_lumber_line( char *buff, int bufsize, FILE *chapter )
+{
+    size_t len;
+    /* remove newline codes and skip empty line */
+    do
+    {
+        if( fgets( buff, bufsize, chapter ) == NULL )
+            return LSMASH_ERR_NAMELESS;
+        len = strlen( buff );
+        while( len > 0 && (buff[len - 1] == '\n' || buff[len - 1] == '\r') )
+            buff[--len] = '\0';
+    } while( len == 0 );
+    return 0;
+}
+
+static int chapter_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
+{
+    char buff[CHAPTER_BUFSIZE] = { 0 };
+    /* get start_time */
+    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
+        return LSMASH_ERR_NAMELESS;
+    char *chapter_time = strchr( buff, '=' );   /* find separator */
+    if( !chapter_time )
+        return LSMASH_ERR_INVALID_DATA;
+    ++chapter_time;
+    if( chapter_get_start_time( chapter_time, data ) < 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
+        return LSMASH_ERR_NAMELESS;
+    char *chapter_name = strchr( buff, '=' );   /* find separator */
+    if( !chapter_name )
+        return LSMASH_ERR_INVALID_DATA;
+    ++chapter_name;
+    return chapter_set_entry_name( data, chapter_name );
+}
+
 static int chapter_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
-    char buff[CHAPTER_BUFSIZE];
+    char buff[CHAPTER_BUFSIZE] = { 0 };
     if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* read newline */
         return LSMASH_ERR_NAMELESS;
     char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
@@ -103,15 +143,10 @@ static int chapter_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *da
         return LSMASH_ERR_INVALID_DATA;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
-    if( !chapter_name++ )
+    if( !chapter_name )
         return LSMASH_ERR_INVALID_DATA;
-    int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
-    data->chapter_name = (char *)lsmash_malloc( len + 1 );
-    if( !data->chapter_name )
-        return LSMASH_ERR_MEMORY_ALLOC;
-    memcpy( data->chapter_name, chapter_name, len );
-    data->chapter_name[len] = '\0';
-    return 0;
+    ++chapter_name;
+    return chapter_set_entry_name( data, chapter_name );
 }
 
 typedef int (*fn_get_chapter_data)( FILE *, isom_chapter_entry_t * );
@@ -124,7 +159,7 @@ static fn_get_chapter_data chapter_check_chap_line( char *file_name )
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         return NULL;
     }
-    char buff[CHAPTER_BUFSIZE];
+    char buff[CHAPTER_BUFSIZE] = { 0 };
     fn_get_chapter_data fnc = NULL;
     if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
     {
@@ -146,19 +181,20 @@ static int chapter_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap
     assert( LSMASH_IS_EXISTING_BOX( chpl ) );
     if( !chap_data->chapter_name || !chpl->list )
         return LSMASH_ERR_FUNCTION_PARAM;
+    size_t name_len = chapter_utf8_truncate_len( chap_data->chapter_name, UINT8_MAX );
     isom_chpl_entry_t *data = lsmash_malloc( sizeof(isom_chpl_entry_t) );
     if( !data )
         return LSMASH_ERR_MEMORY_ALLOC;
     data->start_time          = chap_data->start_time;
-    data->chapter_name_length = strlen( chap_data->chapter_name );
-    data->chapter_name        = (char *)lsmash_malloc( data->chapter_name_length + 1 );
+    data->chapter_name_length = (uint8_t)name_len;
+    data->chapter_name        = (char *)lsmash_malloc( name_len + 1 );
     if( !data->chapter_name )
     {
         lsmash_free( data );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
-    memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
-    data->chapter_name[ data->chapter_name_length ] = '\0';
+    memcpy( data->chapter_name, chap_data->chapter_name, name_len );
+    data->chapter_name[name_len] = '\0';
     if( lsmash_list_add_entry( chpl->list, data ) < 0 )
     {
         lsmash_free( data->chapter_name );
@@ -197,10 +233,13 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
     {
         if( add_bom )
         {
-            char *chapter_name_with_bom = (char *)lsmash_malloc( strlen( data.chapter_name ) + 1 + UTF8_BOM_LENGTH );
+            size_t body_len = chapter_utf8_truncate_len( data.chapter_name, UINT8_MAX - UTF8_BOM_LENGTH );
+            char *chapter_name_with_bom = (char *)lsmash_malloc( body_len + 1 + UTF8_BOM_LENGTH );
             if( !chapter_name_with_bom )
                 goto fail2;
-            sprintf( chapter_name_with_bom, "%s%s", UTF8_BOM, data.chapter_name );
+            memcpy( chapter_name_with_bom, UTF8_BOM, UTF8_BOM_LENGTH );
+            memcpy( chapter_name_with_bom + UTF8_BOM_LENGTH, data.chapter_name, body_len );
+            chapter_name_with_bom[UTF8_BOM_LENGTH + body_len] = '\0';
             lsmash_free( data.chapter_name );
             data.chapter_name = chapter_name_with_bom;
         }
@@ -316,7 +355,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto fail;
     }
     /* Parse the file and write text samples. */
-    isom_chapter_entry_t data;
+    isom_chapter_entry_t data = { 0 };
     while( !fnc( chapter, &data ) )
     {
         /* set start_time */
@@ -424,6 +463,8 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
     if( LSMASH_IS_EXISTING_BOX( file->moov->udta->chpl ) )
     {
         isom_chpl_t *chpl = file->moov->udta->chpl;
+        if( !chpl->list )
+            return LSMASH_ERR_NAMELESS;
         uint32_t timescale;
         if( chpl->version == 0 )
         {
@@ -438,23 +479,27 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
         {
             isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+            if( !data )
+                continue;
             int64_t start_time = data->start_time / timescale;
             int hh =  start_time / 3600;
             int mm = (start_time /   60) % 60;
             int ss =  start_time         % 60;
             int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
-            const char *chapter_name = data->chapter_name;
-            if( data->chapter_name_length >= UTF8_BOM_LENGTH
+            const char *chapter_name = data->chapter_name ? data->chapter_name : "";
+            uint8_t     name_len     = data->chapter_name ? data->chapter_name_length : 0;
+            if( name_len >= UTF8_BOM_LENGTH
              && !memcmp( chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
             {
                 chapter_name += UTF8_BOM_LENGTH;
+                name_len     -= UTF8_BOM_LENGTH;
 #ifdef _WIN32
                 if( i == 1 )
                     printf( UTF8_BOM );    /* add BOM on Windows */
 #endif
             }
             printf( "CHAPTER%02"PRIu32"=%02d:%02d:%02d.%03d\n", i, hh, mm, ss, ms );
-            printf( "CHAPTER%02"PRIu32"NAME=%s\n", i++, chapter_name );
+            printf( "CHAPTER%02"PRIu32"NAME=%.*s\n", i++, (int)name_len, chapter_name );
         }
         return 0;
     }

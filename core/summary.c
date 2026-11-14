@@ -209,6 +209,12 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
     return NULL;
 }
 
+static size_t summary_strnlen( const char *s, size_t maxlen )
+{
+    const char *nul = (const char *)memchr( s, '\0', maxlen );
+    return nul ? (size_t)(nul - s) : maxlen;
+}
+
 int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
 {
     if( !a || !b )
@@ -220,12 +226,15 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
     {
         lsmash_video_summary_t *in_video  = (lsmash_video_summary_t *)a;
         lsmash_video_summary_t *out_video = (lsmash_video_summary_t *)b;
+        size_t in_len  = summary_strnlen( in_video->compressorname,  sizeof(in_video->compressorname)  - 1 );
+        size_t out_len = summary_strnlen( out_video->compressorname, sizeof(out_video->compressorname) - 1 );
         if( in_video->width  != out_video->width
          || in_video->height != out_video->height
          || in_video->depth  != out_video->depth
          || in_video->par_h  != out_video->par_h
          || in_video->par_v  != out_video->par_v
-         || memcmp( in_video->compressorname, out_video->compressorname, strlen( in_video->compressorname ) )
+         || in_len           != out_len
+         || (in_len && memcmp( in_video->compressorname, out_video->compressorname, in_len ))
          || in_video->clap.width.n             != out_video->clap.width.n
          || in_video->clap.width.d             != out_video->clap.width.d
          || in_video->clap.height.n            != out_video->clap.height.n
